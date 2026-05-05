@@ -4,9 +4,21 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
+import { Text, TextInput } from 'react-native';
 import 'react-native-reanimated';
 
+import { MobileFrame } from '@/components/MobileFrame';
 import { useColorScheme } from '@/components/useColorScheme';
+import { fontFamily } from '@/constants/Typography';
+
+// 모든 Text/TextInput 기본 폰트를 Pretendard로 (웹) / 시스템 (네이티브)
+const TextAny = Text as any;
+TextAny.defaultProps = TextAny.defaultProps || {};
+TextAny.defaultProps.style = [{ fontFamily }, TextAny.defaultProps.style];
+
+const InputAny = TextInput as any;
+InputAny.defaultProps = InputAny.defaultProps || {};
+InputAny.defaultProps.style = [{ fontFamily }, InputAny.defaultProps.style];
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -50,10 +62,22 @@ function RootLayoutNav() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-      </Stack>
+      <MobileFrame>
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+          <Stack.Screen
+            name="search"
+            options={{
+              headerShown: false,
+              presentation: 'modal',
+              animation: 'slide_from_bottom',
+            }}
+          />
+          <Stack.Screen name="restaurant/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+        </Stack>
+      </MobileFrame>
     </ThemeProvider>
   );
 }

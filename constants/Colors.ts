@@ -1,56 +1,86 @@
 // Food Detector - Design Tokens
+// Brand: Green + Yellow color system (food safety domain)
 
-const tintColorLight = '#F97316';
-const tintColorDark = '#FB923C';
+const tintColorLight = '#2ECC71';
+const tintColorDark = '#27AE60';
 
 export const palette = {
-  // Neutral
+  // ===== Brand Colors =====
+  primaryGreen: '#2ECC71',
+  subGreen: '#27AE60',
+  lightGreen: '#D5F5E3',
+  
+  primaryYellow: '#F1C40F',
+  subYellow: '#FFD662',
+  lightYellow: '#FFF4CC',
+  
+  // ===== Status Colors =====
+  alertRed: '#E74C3C',
+  alertRedLight: '#FADBD8',
+  
+  infoBlue: '#3498DB',
+  infoBlueLight: '#D6EAF8',
+  
+  // ===== Surface =====
   white: '#FFFFFF',
-  bg: '#FAFAF9',
-  bgCard: '#F5F5F4',
-  border: '#E5E7EB',
-  borderDark: '#D1D5DB',
-  text1: '#111827',
-  text2: '#6B7280',
-  text3: '#9CA3AF',
-
-  // Brand
-  accent: '#F97316',
-  accentLight: '#FFEDD5',
-  accentDark: '#EA580C',
-
-  // Cheese Grades
-  gold: '#EAB308',
-  goldLight: '#FEF08A',
+  bg: '#FFFDF8',
+  bgCard: '#FAFAF7',
+  surface: '#FFFFFF',
+  
+  // ===== Text =====
+  text1: '#222222',
+  text2: '#666666',
+  text3: '#999999',
+  textPrimary: '#222222',
+  textSecondary: '#666666',
+  
+  // ===== Border =====
+  border: '#E5E5E5',
+  borderDark: '#CCCCCC',
+  
+  // ===== Cheese Grades =====
+  // Gold = Primary Yellow (브랜드와 일관)
+  gold: '#F1C40F',
+  goldLight: '#FFF4CC',
   silver: '#94A3B8',
   silverLight: '#E2E8F0',
   bronze: '#CD7F32',
   bronzeLight: '#F5DEB3',
-
-  // Risk Levels (5 stages)
-  riskGreen: '#22C55E',
-  riskGreenLight: '#DCFCE7',
-  riskYellow: '#FBBF24',
-  riskYellowLight: '#FEF3C7',
-  riskOrange: '#F97316',
-  riskOrangeLight: '#FFEDD5',
-  riskRed: '#EF4444',
-  riskRedLight: '#FEE2E2',
-
-  // Info
-  info: '#3B82F6',
-  infoLight: '#DBEAFE',
-
-  // Owner Mode
+  
+  // ===== Risk Levels (5 stages) =====
+  riskGreen: '#2ECC71',          // 1, 2 평온/양호
+  riskGreenLight: '#D5F5E3',
+  riskYellow: '#F1C40F',         // 3 주의
+  riskYellowLight: '#FFF4CC',
+  riskOrange: '#FFD662',         // 4 경계 (Sub Yellow)
+  riskOrangeLight: '#FFF8E1',
+  riskRed: '#E74C3C',            // 5 위험
+  riskRedLight: '#FADBD8',
+  
+  // ===== Legacy compatibility (기존 코드 호환) =====
+  accent: '#2ECC71',             // ⭐ Orange → Green으로 변경
+  accentLight: '#D5F5E3',
+  accentDark: '#27AE60',
+  
+  warn: '#F1C40F',
+  warnLight: '#FFF4CC',
+  ok: '#2ECC71',
+  okLight: '#D5F5E3',
+  danger: '#E74C3C',
+  dangerLight: '#FADBD8',
+  info: '#3498DB',
+  infoLight: '#D6EAF8',
+  
+  // ===== Owner Mode =====
   purple: '#8B5CF6',
   purpleLight: '#EDE9FE',
-
-  // Mascot
-  mascotBg: '#FFF8F0',
-  mascotBorder: '#FED7AA',
+  
+  // ===== Mascot =====
+  mascotBg: '#FFFDF8',           // 배경과 동일하게 자연스럽게
+  mascotBorder: '#FFD662',       // Sub Yellow로 부드럽게
 } as const;
 
-// Risk Level System (5 stages)
+// ===== Risk Level System (5 stages) =====
 export const riskLevels = {
   1: {
     label: 'Calm',
@@ -99,7 +129,7 @@ export const riskLevels = {
   },
 } as const;
 
-// Cheese Grade System (5 grades)
+// ===== Cheese Grade System =====
 export const cheeseGrades = {
   GOLDEN: {
     label: 'Golden Cheese',
@@ -141,14 +171,14 @@ export const cheeseGrades = {
     label: 'Warning',
     labelKr: '요주의',
     description: '식탐정이 경고한 식당',
-    color: palette.riskRed,
-    bgColor: palette.riskRedLight,
+    color: palette.alertRed,
+    bgColor: palette.alertRedLight,
     image: null,
     minScore: 0,
   },
 } as const;
 
-// Expo Template Compatibility
+// ===== Expo Template Compatibility =====
 export default {
   light: {
     text: palette.text1,

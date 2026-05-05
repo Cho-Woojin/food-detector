@@ -1,4 +1,4 @@
-import FontAwesome from '@expo/vector-icons/FontAwesome';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs } from 'expo-router';
 import React from 'react';
 
@@ -6,15 +6,12 @@ import { useClientOnlyValue } from '@/components/useClientOnlyValue';
 import { palette } from '@/constants/Colors';
 
 function TabBarIcon(props: {
-  name: React.ComponentProps<typeof FontAwesome>['name'];
+  name: React.ComponentProps<typeof Ionicons>['name'];
   color: string;
 }) {
-  return <FontAwesome size={24} style={{ marginBottom: -3 }} {...props} />;
+  return <Ionicons size={24} style={{ marginBottom: -3 }} {...props} />;
 }
 
-/**
- * 식탐정 4탭 구조
- */
 export default function TabLayout() {
   return (
     <Tabs
@@ -26,16 +23,16 @@ export default function TabLayout() {
           backgroundColor: palette.white,
           borderTopColor: palette.border,
         },
-        headerStyle: {
-          backgroundColor: palette.white,
-        },
+        headerStyle: { backgroundColor: palette.white },
         headerTintColor: palette.text1,
       }}>
       <Tabs.Screen
         name="index"
         options={{
-          title: '검색',
-          tabBarIcon: ({ color }) => <TabBarIcon name="search" color={color} />,
+          title: '홈',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name={focused ? 'home' : 'home-outline'} color={color} />
+          ),
           headerShown: false,
         }}
       />
@@ -43,21 +40,30 @@ export default function TabLayout() {
         name="map"
         options={{
           title: '지도',
-          tabBarIcon: ({ color }) => <TabBarIcon name="map" color={color} />,
+          headerShown: false,
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name={focused ? 'map' : 'map-outline'} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="favorites"
         options={{
           title: '좋아요',
-          tabBarIcon: ({ color }) => <TabBarIcon name="heart" color={color} />,
+          headerShown: false,
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name={focused ? 'heart' : 'heart-outline'} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: '내정보',
-          tabBarIcon: ({ color }) => <TabBarIcon name="user" color={color} />,
+          headerShown: false,
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name={focused ? 'person' : 'person-outline'} color={color} />
+          ),
         }}
       />
     </Tabs>
