@@ -12,6 +12,7 @@ interface KakaoMapProps {
   centerLat?: number;
   centerLng?: number;
   zoom?: number;
+  selectedId?: string | null;
   onMarkerClick?: (restaurant: Restaurant) => void;
 }
 
@@ -24,10 +25,12 @@ export type KakaoMapHandle = {
 
 // 등급별 단순 dot 마커: 식탐정 그린 농도 + 크기로 등급 표현
 const GRADE_STYLE: Record<string, { color: string; size: number; border: number }> = {
-  GOLDEN: { color: '#16A34A', size: 22, border: 2.5 }, // 진한 그린 — 최상위
-  SILVER: { color: '#4ADE80', size: 18, border: 2 },   // 옅은 그린 — 중간
-  BRONZE: { color: '#94A3B8', size: 16, border: 2 },   // 회색  — 하위
+  GOLDEN: { color: '#16A34A', size: 18, border: 2 },   // 진한 그린 — 최상위
+  SILVER: { color: '#4ADE80', size: 14, border: 1.5 }, // 옅은 그린 — 중간
+  BRONZE: { color: '#94A3B8', size: 12, border: 1.5 }, // 회색  — 하위
 };
+// 선택된 마커 강조 — 등급 색 그대로지만 크기 +50% + 두꺼운 흰 보더
+const SELECTED_BOOST = 1.6;
 
 /** 단순한 색상 dot SVG → data URL (서버에서도 안전) */
 function dotMarkerSrc(fill: string, size: number, border: number): string {
@@ -35,20 +38,32 @@ function dotMarkerSrc(fill: string, size: number, border: number): string {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
+type MarkerEntry = {
+  id: string;
+  marker: any;
+  lat: number;
+  lng: number;
+  grade: string;
+  visible: boolean;
+  normalImage: any;
+  highlightImage: any;
+};
+
 const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
   {
     restaurants,
     centerLat = 37.5735,
     centerLng = 126.9788,
     zoom = 4,
+    selectedId,
     onMarkerClick,
   },
   ref
 ) {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<any>(null);
-  const clustererRef = useRef<any>(null);
-  const markersRef = useRef<{ marker: any; score: number }[]>([]);
+  const markersRef = useRef<MarkerEntry[]>([]);
+  const selectedMarkerRef = useRef<MarkerEntry | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -106,101 +121,137 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
   
   // 카카오맵 초기화
   useEffect(() => {
-    // 첫 mount 시 restaurants는 빈 배열 — 빈 상태로 Map을 두 번 만들면
-    // 같은 div에 중복 Map이 생성돼 마커가 보이지 않을 수 있다. 데이터가 들어온 뒤 한 번만 init.
+    // 데이터 들어온 뒤 한 번만 init (빈 배열로 Map 중복 생성 방지)
     if (sortedRestaurants.length === 0) return;
+
     const initMap = async () => {
       try {
         setLoading(true);
         setError(null);
-        
+
         const kakao = await loadKakaoMap();
-        
         if (!mapRef.current) return;
-        
-        // 지도 인스턴스 생성
-        const options = {
+
+        const map = new kakao.maps.Map(mapRef.current, {
           center: new kakao.maps.LatLng(centerLat, centerLng),
           level: zoom,
-        };
-        const map = new kakao.maps.Map(mapRef.current, options);
+        });
         mapInstanceRef.current = map;
 
-        // 클러스터러 — 5,000+ 마커를 동시에 그리면 브라우저가 멈추므로 줌 레벨에 따라 자동 묶음
-        const clusterer = new kakao.maps.MarkerClusterer({
-          map,
-          averageCenter: true,
-          minLevel: 5,            // 줌 레벨 5 이상(축소)에서 클러스터링
-          disableClickZoom: false,
-          gridSize: 60,
-          calculator: [10, 50, 200], // 묶음 크기 단계
-          styles: [
-            { width: '32px', height: '32px', background: 'rgba(34,197,94,0.85)', borderRadius: '16px', color: '#fff', textAlign: 'center', lineHeight: '32px', fontSize: '12px', fontWeight: '700' },
-            { width: '40px', height: '40px', background: 'rgba(22,163,74,0.85)', borderRadius: '20px', color: '#fff', textAlign: 'center', lineHeight: '40px', fontSize: '13px', fontWeight: '700' },
-            { width: '52px', height: '52px', background: 'rgba(21,128,61,0.9)',  borderRadius: '26px', color: '#fff', textAlign: 'center', lineHeight: '52px', fontSize: '14px', fontWeight: '800' },
-            { width: '64px', height: '64px', background: 'rgba(20,83,45,0.92)',  borderRadius: '32px', color: '#fff', textAlign: 'center', lineHeight: '64px', fontSize: '15px', fontWeight: '800' },
-          ],
-        });
-        clustererRef.current = clusterer;
-
-        // 마커 생성 (점수 높은 순으로 already sorted)
-        const allMarkers: { marker: any; score: number }[] = [];
-        const kakaoMarkers: any[] = [];
-
-        sortedRestaurants.forEach((rest) => {
-          if (!rest.lat || !rest.lng) return;
+        // ===== 마커 풀 생성 (한 번만) =====
+        const entries: MarkerEntry[] = [];
+        for (const rest of sortedRestaurants) {
+          if (!rest.lat || !rest.lng) continue;
           const src = markerSrc[rest.grade];
-          if (!src) return; // 치즈 등급 외(WARNING/INVESTIGATING)는 표시 안 함
+          if (!src) continue;
 
-          const position = new kakao.maps.LatLng(rest.lat, rest.lng);
-          const size = GRADE_STYLE[rest.grade]?.size ?? 9;
+          const baseSize = GRADE_STYLE[rest.grade]?.size ?? 12;
+          const baseBorder = GRADE_STYLE[rest.grade]?.border ?? 1.5;
+          const fill = GRADE_STYLE[rest.grade]?.color ?? '#94A3B8';
 
-          const markerImage = new kakao.maps.MarkerImage(
+          const normalImage = new kakao.maps.MarkerImage(
             src,
-            new kakao.maps.Size(size, size),
-            { offset: new kakao.maps.Point(size / 2, size / 2) }
+            new kakao.maps.Size(baseSize, baseSize),
+            { offset: new kakao.maps.Point(baseSize / 2, baseSize / 2) }
           );
 
+          // 강조 이미지: 같은 색 + 1.6배 + 두꺼운 흰 보더
+          const hSize = Math.round(baseSize * SELECTED_BOOST);
+          const highlightImage = new kakao.maps.MarkerImage(
+            dotMarkerSrc(fill, hSize, baseBorder + 1.5),
+            new kakao.maps.Size(hSize, hSize),
+            { offset: new kakao.maps.Point(hSize / 2, hSize / 2) }
+          );
+
+          const position = new kakao.maps.LatLng(rest.lat, rest.lng);
           const marker = new kakao.maps.Marker({
             position,
-            image: markerImage,
+            image: normalImage,
             title: rest.name,
           });
 
+          const entry: MarkerEntry = {
+            id: rest.id,
+            marker,
+            lat: rest.lat,
+            lng: rest.lng,
+            grade: rest.grade,
+            visible: false,
+            normalImage,
+            highlightImage,
+          };
+
+          // 클릭: 자동 줌인 + 강조 + 콜백
           kakao.maps.event.addListener(marker, 'click', () => {
+            map.panTo(position);
+            if (map.getLevel() > 3) map.setLevel(3);
+            highlight(entry);
             onMarkerClick?.(rest);
           });
 
-          allMarkers.push({ marker, score: rest.score ?? 0 });
-          kakaoMarkers.push(marker);
-        });
+          entries.push(entry);
+        }
+        markersRef.current = entries;
 
-        // 클러스터러에 일괄 추가 (개별 marker.setMap 호출 안 함)
-        clusterer.addMarkers(kakaoMarkers);
-        markersRef.current = allMarkers;
+        // ===== Viewport 기반 표시 (visible bounds 안의 마커만 setMap) =====
+        const applyViewport = () => {
+          const bounds = map.getBounds();
+          const sw = bounds.getSouthWest();
+          const ne = bounds.getNorthEast();
+          const south = sw.getLat(), west = sw.getLng();
+          const north = ne.getLat(), east = ne.getLng();
 
-        if (__DEV__) console.log(`[KakaoMap] ${allMarkers.length}개 핀 생성 + 클러스터링`);
+          for (const e of entries) {
+            const inView = e.lat >= south && e.lat <= north && e.lng >= west && e.lng <= east;
+            if (inView && !e.visible) {
+              e.marker.setMap(map);
+              e.visible = true;
+            } else if (!inView && e.visible) {
+              e.marker.setMap(null);
+              e.visible = false;
+            }
+          }
+        };
+
+        applyViewport();
+        kakao.maps.event.addListener(map, 'idle', applyViewport);
+
+        // 외부에서 selectedId가 들어왔다면 해당 마커 강조 + 이동
+        if (selectedId) {
+          const target = entries.find((e) => e.id === selectedId);
+          if (target) {
+            const pos = new kakao.maps.LatLng(target.lat, target.lng);
+            map.panTo(pos);
+            if (map.getLevel() > 3) map.setLevel(3);
+            highlight(target);
+          }
+        }
+
+        if (__DEV__) console.log(`[KakaoMap] ${entries.length}개 핀 생성 (viewport 렌더)`);
         setLoading(false);
-
       } catch (err: any) {
         if (__DEV__) console.error('[KakaoMap] 초기화 실패:', err);
         setError(err.message || '지도 로드 실패');
         setLoading(false);
       }
     };
-    
+
+    const highlight = (entry: MarkerEntry) => {
+      const prev = selectedMarkerRef.current;
+      if (prev && prev !== entry) prev.marker.setImage(prev.normalImage);
+      entry.marker.setImage(entry.highlightImage);
+      selectedMarkerRef.current = entry;
+    };
+
     initMap();
 
-    // 클린업
     return () => {
-      if (clustererRef.current) {
-        clustererRef.current.clear();
-        clustererRef.current = null;
-      }
+      for (const e of markersRef.current) e.marker.setMap(null);
       markersRef.current = [];
+      selectedMarkerRef.current = null;
       mapInstanceRef.current = null;
     };
-  }, [sortedRestaurants, centerLat, centerLng, zoom, onMarkerClick, markerSrc]);
+  }, [sortedRestaurants, centerLat, centerLng, zoom, onMarkerClick, markerSrc, selectedId]);
   
   return (
     <View style={styles.container}>

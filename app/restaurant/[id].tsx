@@ -131,7 +131,9 @@ export default function RestaurantDetail() {
           variant="ghost"
           size="md"
           leftIcon="map"
-          onPress={() => router.replace('/(tabs)/map')}>
+          onPress={() =>
+            router.replace({ pathname: '/(tabs)/map', params: { id: restaurant.id } } as any)
+          }>
           지도 보기
         </Button>
         <View style={{ flex: 1 }}>

@@ -7,7 +7,7 @@ import { color, elevation, radius, spacing, typography } from '@/constants/token
 import { GuKey, Restaurant } from '@/constants/Restaurant';
 import { loadRestaurantsByGu } from '@/utils/loadData';
 import { recomputeFromRaw } from '@/utils/adapter';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Image,
@@ -24,6 +24,8 @@ const ALL_GUS: GuKey[] = ['종로구', '강남구', '마포구'];
 
 export default function MapScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ id?: string }>();
+  const targetId = typeof params.id === 'string' ? params.id : undefined;
   const mapHandleRef = useRef<KakaoMapHandle>(null);
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [selected, setSelected] = useState<Restaurant | null>(null);
@@ -54,6 +56,16 @@ export default function MapScreen() {
       cancelled = true;
     };
   }, []);
+
+  // 식당 상세 → 지도 보기로 진입 시 해당 식당으로 자동 이동 + 선택
+  useEffect(() => {
+    if (!targetId || restaurants.length === 0) return;
+    const target = restaurants.find((r) => r.id === targetId);
+    if (target) {
+      setSelected(target);
+      setCenter({ lat: target.lat, lng: target.lng });
+    }
+  }, [targetId, restaurants]);
 
   const handleLocate = () => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
@@ -100,7 +112,8 @@ export default function MapScreen() {
               restaurants={restaurants}
               centerLat={center.lat}
               centerLng={center.lng}
-              zoom={5}
+              zoom={targetId ? 3 : 5}
+              selectedId={targetId ?? selected?.id ?? null}
               onMarkerClick={setSelected}
             />
           ) : (
