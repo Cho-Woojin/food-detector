@@ -6,6 +6,7 @@ import { SearchBar } from '@/components/ui';
 import { color, elevation, radius, spacing, typography } from '@/constants/tokens';
 import { GuKey, Restaurant } from '@/constants/Restaurant';
 import { loadRestaurantsByGu } from '@/utils/loadData';
+import { recomputeFromRaw } from '@/utils/adapter';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -34,9 +35,15 @@ export default function MapScreen() {
       try {
         const all = await Promise.all(ALL_GUS.map((g) => loadRestaurantsByGu(g)));
         if (cancelled) return;
+        // 좌표 있는 식당만 + 5축 기반 재계산 점수/등급 적용
+        // (raw JSON의 grade/score는 신뢰할 수 없어 일관성 위해 재계산)
         const merged = all
           .flat()
           .filter((r) => r.lat && r.lng)
+          .map((r) => {
+            const { score, grade } = recomputeFromRaw(r);
+            return { ...r, score, grade };
+          })
           .filter((r) => r.grade === 'GOLDEN' || r.grade === 'SILVER' || r.grade === 'BRONZE');
         setRestaurants(merged);
       } catch (e) {

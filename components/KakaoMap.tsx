@@ -1,7 +1,6 @@
 // components/KakaoMap.tsx
 // 카카오맵 React 컴포넌트 (Web 환경 전용)
 
-import { Cheese } from '@/constants/Assets';
 import { color, spacing, typography } from '@/constants/tokens';
 import { Restaurant } from '@/constants/Restaurant';
 import { loadKakaoMap } from '@/utils/kakaoMap';
@@ -23,43 +22,30 @@ export type KakaoMapHandle = {
   setLevel: (lv: number) => void;
 };
 
-// 등급별 마커 사이즈 (점수 높은 등급일수록 큼)
-const GRADE_SIZES: Record<string, number> = {
-  GOLDEN: 44,
-  SILVER: 34,
-  BRONZE: 28,
+// 등급별 단순 dot 마커: 색상 + 크기로만 등급 표현
+const GRADE_STYLE: Record<string, { color: string; size: number }> = {
+  GOLDEN: { color: '#22C55E', size: 14 }, // brand green — 최상위
+  SILVER: { color: '#94A3B8', size: 11 }, // 회색 — 중간
+  BRONZE: { color: '#CD7F32', size: 9 },  // 갈색 — 하위
 };
 
 /**
- * Expo metro web에서 require된 PNG는 보통 `{ uri }` 형태이거나 string URL.
- * SSR(정적 prerender) 단계에서는 RNImage.resolveAssetSource가 없을 수 있어
- * 모든 가능한 형태를 안전하게 풀어 string URL만 반환.
- */
-function resolveAssetUri(asset: unknown): string {
-  if (!asset) return '';
-  if (typeof asset === 'string') return asset;
-  if (typeof asset === 'object') {
-    const a = asset as Record<string, any>;
-    if (typeof a.uri === 'string') return a.uri;
-    if (typeof a.default === 'string') return a.default;
-    if (a.default && typeof a.default.uri === 'string') return a.default.uri;
-  }
-  return '';
-}
-
-/**
  * 줌 레벨 → 표시할 최소 점수 임계값.
- * 멀리서(레벨↑) 볼수록 점수 높은 식당만 보이게 해서 밀도를 자동 해소한다.
- *  · 1-3 (가까이): 모두
- *  · 4-5      : 80점 이상 (BRONZE 상위 + SILVER + GOLDEN)
- *  · 6-7      : 88점 이상 (SILVER 상위 + GOLDEN)
- *  · 8+ (멀리): 90점 이상 (GOLDEN만)
+ * 멀리서(레벨↑) 볼수록 상위 점수만 표시해 밀도를 해소.
+ *  · 1-5 (도시 ~ 동네): 모두 표시
+ *  · 6-7 (구 단위)     : 75점 이상 (BRONZE 상위 + SILVER + GOLDEN)
+ *  · 8+  (광역)        : 85점 이상 (SILVER + GOLDEN)
  */
 function scoreThreshold(level: number): number {
-  if (level <= 3) return 0;
-  if (level <= 5) return 80;
-  if (level <= 7) return 88;
-  return 90;
+  if (level <= 5) return 0;
+  if (level <= 7) return 75;
+  return 85;
+}
+
+/** 단순한 색상 dot SVG → data URL (서버에서도 안전) */
+function dotMarkerSrc(fill: string, size: number): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 1.5}" fill="${fill}" stroke="white" stroke-width="1.5"/></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
@@ -84,13 +70,12 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
     [restaurants]
   );
 
-  // 클라이언트에서만 PNG asset URI 평가 (SSR 단계 회피)
-  const cheeseUri = useMemo<Record<string, string>>(() => {
-    if (typeof window === 'undefined') return { GOLDEN: '', SILVER: '', BRONZE: '' };
+  // 등급별 SVG 마커 (서버/클라 모두 안전)
+  const markerSrc = useMemo<Record<string, string>>(() => {
     return {
-      GOLDEN: resolveAssetUri(Cheese.gold),
-      SILVER: resolveAssetUri(Cheese.silver),
-      BRONZE: resolveAssetUri(Cheese.bronze),
+      GOLDEN: dotMarkerSrc(GRADE_STYLE.GOLDEN.color, GRADE_STYLE.GOLDEN.size),
+      SILVER: dotMarkerSrc(GRADE_STYLE.SILVER.color, GRADE_STYLE.SILVER.size),
+      BRONZE: dotMarkerSrc(GRADE_STYLE.BRONZE.color, GRADE_STYLE.BRONZE.size),
     };
   }, []);
 
@@ -157,14 +142,14 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
 
         sortedRestaurants.forEach((rest) => {
           if (!rest.lat || !rest.lng) return;
-          const uri = cheeseUri[rest.grade];
-          if (!uri) return; // 치즈 등급 외(WARNING/INVESTIGATING)는 표시 안 함
+          const src = markerSrc[rest.grade];
+          if (!src) return; // 치즈 등급 외(WARNING/INVESTIGATING)는 표시 안 함
 
           const position = new kakao.maps.LatLng(rest.lat, rest.lng);
-          const size = GRADE_SIZES[rest.grade] ?? 28;
+          const size = GRADE_STYLE[rest.grade]?.size ?? 9;
 
           const markerImage = new kakao.maps.MarkerImage(
-            uri,
+            src,
             new kakao.maps.Size(size, size),
             { offset: new kakao.maps.Point(size / 2, size / 2) }
           );
@@ -214,7 +199,7 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
       markersRef.current = [];
       mapInstanceRef.current = null;
     };
-  }, [sortedRestaurants, centerLat, centerLng, zoom, onMarkerClick, cheeseUri]);
+  }, [sortedRestaurants, centerLat, centerLng, zoom, onMarkerClick, markerSrc]);
   
   return (
     <View style={styles.container}>
