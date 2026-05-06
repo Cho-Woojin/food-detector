@@ -1,115 +1,156 @@
-import { Icon, IconName } from '@/components/Icon';
-import { Typewriter } from '@/components/Typewriter';
-import { Cheese, Logos, Mascots } from '@/constants/Assets';
-import { buildRiskMessage, palette, riskLevels } from '@/constants/Colors';
-import { ensureRecomputedIndex } from '@/utils/dataStore';
-import { router } from 'expo-router';
+import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import React, { useEffect, useState } from 'react';
-import {
-  Image,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { Icon } from '@/components/Icon';
+import { Cheese, Logos, Mascots } from '@/constants/Assets';
+import { riskLevels } from '@/constants/Colors';
+import { color, elevation, radius, spacing, typography, type RiskLevel } from '@/constants/tokens';
+import {
+  Card,
+  Chip,
+  IconButton,
+  MetricCard,
+  SearchBar,
+  SectionHeader,
+} from '@/components/ui';
+import { ensureRecomputedIndex } from '@/utils/dataStore';
+
+const DISTRICT = '강남구';
+const RISK_LEVEL: RiskLevel = 3;
+const ENV = { temp: 28.6, humidity: 65, foodPoisoning: '주의' };
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-
-  const district = '강남구';
-  const riskLevel = 3 as 1 | 2 | 3 | 4 | 5;
-  const risk = riskLevels[riskLevel];
-  const env = { temp: 28.6, humidity: 65, foodPoisoning: '주의' };
+  const risk = riskLevels[RISK_LEVEL];
 
   const [goldenCheese, setGoldenCheese] = useState<
     { id: string; name: string; score: number; district: string }[]
+  >([]);
+  const [districtPicks, setDistrictPicks] = useState<
+    { id: string; name: string; score: number; category: string; grade: 'GOLDEN' | 'SILVER' | 'BRONZE' }[]
   >([]);
 
   useEffect(() => {
     let cancelled = false;
     ensureRecomputedIndex().then((rows) => {
       if (cancelled) return;
-      const cards = rows
+
+      const golden = rows
         .filter((r) => r.gr === 'GOLDEN')
         .sort((a, b) => b.s - a.s)
         .slice(0, 6)
         .map((r) => ({ id: r.i, name: r.n, score: r.s, district: r.g }));
-      setGoldenCheese(cards);
+      setGoldenCheese(golden);
+
+      const picks = rows
+        .filter((r) => r.g === DISTRICT && (r.gr === 'GOLDEN' || r.gr === 'SILVER' || r.gr === 'BRONZE'))
+        .sort((a, b) => b.s - a.s)
+        .slice(0, 3)
+        .map((r) => ({
+          id: r.i,
+          name: r.n,
+          score: r.s,
+          category: r.c,
+          grade: r.gr as 'GOLDEN' | 'SILVER' | 'BRONZE',
+        }));
+      setDistrictPicks(picks);
     });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const goSearch = () => router.push('/search');
-
   return (
     <View style={styles.root}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.content, { paddingTop: 8 + insets.top }]}
+        contentContainerStyle={[styles.content, { paddingTop: spacing.s + insets.top }]}
         showsVerticalScrollIndicator={false}>
 
-        {/* 1. 헤더 */}
         <Header />
 
-        {/* 2. 검색바 */}
-        <Pressable onPress={goSearch} style={styles.searchBar}>
-          <Icon name="search" size={18} color={palette.accent} />
-          <Text style={styles.searchPlaceholder}>식당 이름을 입력하세요</Text>
-          <Icon name="camera" size={18} color={palette.text2} />
-        </Pressable>
-
-        {/* 3. 위험 지수 카드 (마스코트 absolute) */}
-        <RiskCard
-          district={district}
-          riskLevel={riskLevel}
-          color={risk.color}
-          bgColor={risk.bgColor}
-          labelKr={risk.labelKr}
-          message={buildRiskMessage(riskLevel, district, env)}
-          mascotKey={risk.mascot}
-          env={env}
+        <SearchBar
+          variant="button"
+          placeholder="식당명·메뉴·자치구"
+          onPress={() => router.push('/search')}
+          accessibilityLabel="식당 검색"
+          style={{ marginBottom: spacing.l }}
         />
 
-        {/* 4. 골든 치즈 식당 (가로 스크롤) */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>골든 치즈 식당</Text>
-          <Pressable style={styles.sectionMore}>
-            <Text style={styles.sectionMoreText}>더보기</Text>
-            <Icon name="forward" size={11} color={palette.text3} />
-          </Pressable>
-        </View>
+        {/* Risk card */}
+        <RiskCard
+          district={DISTRICT}
+          riskLevel={RISK_LEVEL}
+          accent={risk.color}
+          bgColor={risk.bgColor}
+          labelKr={risk.labelKr}
+          mascotKey={risk.mascot}
+          env={ENV}
+        />
+
+        {/* 1. Today's menu guide — 위험 단계 기반 추천 (액션 가이드) */}
+        <SectionHeader title="오늘 추천 메뉴" subtitle="위험 단계 기반" marginTop="xxl" />
+        <TodayMenuCard riskLevel={RISK_LEVEL} district={DISTRICT} />
+
+        {/* 2. 내 동네 추천 — 사용자 자치구 안 인기 식당 */}
+        {districtPicks.length > 0 ? (
+          <>
+            <SectionHeader
+              title={`${DISTRICT} 인기 식당`}
+              subtitle="내 동네에서 평가 높은 식당"
+              trailing={{ label: '전체보기', icon: 'forward' }}
+              marginTop="xxl"
+            />
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.cardScroll}>
+              {districtPicks.map((r) => (
+                <RestaurantCard
+                  key={r.id}
+                  name={r.name}
+                  score={r.score}
+                  meta={r.category}
+                  grade={r.grade}
+                  onPress={() => router.push(`/restaurant/${r.id}` as any)}
+                />
+              ))}
+            </ScrollView>
+          </>
+        ) : null}
+
+        {/* 3. 골든 치즈 — 식탐정 90점+ 인증 식당 (전국 베스트) */}
+        <SectionHeader
+          title="골든 치즈 식당"
+          subtitle="식탐정이 90점 이상으로 인증한 식당"
+          trailing={{ label: '더보기', icon: 'forward' }}
+          marginTop="xxl"
+        />
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.goldenScroll}>
+          contentContainerStyle={styles.cardScroll}>
           {goldenCheese.map((r) => (
-            <Pressable
+            <RestaurantCard
               key={r.id}
+              name={r.name}
+              score={r.score}
+              meta={r.district}
+              grade="GOLDEN"
               onPress={() => router.push(`/restaurant/${r.id}` as any)}
-              style={styles.goldCard}>
-              <View style={styles.goldThumb}>
-                <Image source={Cheese.gold} style={styles.goldThumbCheese} resizeMode="contain" />
-              </View>
-              <Text style={styles.goldName} numberOfLines={1}>{r.name}</Text>
-              <Text style={styles.goldMeta} numberOfLines={1}>
-                {r.score}점 · {r.district}
-              </Text>
-            </Pressable>
+            />
           ))}
         </ScrollView>
 
-        <View style={{ height: 32 }} />
+        <View style={{ height: spacing.xxxl }} />
       </ScrollView>
     </View>
   );
 }
 
-// ===== 섹션 컴포넌트 =====
+// ===== Header =====
 
 function Header() {
   return (
@@ -118,361 +159,251 @@ function Header() {
         <Image source={Logos.symbol} style={styles.logoImage} resizeMode="contain" />
         <Text style={styles.logo}>식탐정</Text>
       </View>
-      <Pressable style={styles.bellBtn}>
-        <Icon name="bell" size={20} color={palette.text1} />
-      </Pressable>
+      <View style={{ position: 'relative' }}>
+        <IconButton
+          icon="bell"
+          size="md"
+          tone="fill"
+          accessibilityLabel="알림"
+          onPress={() => {}}
+        />
+        <View style={styles.notiDot} />
+      </View>
     </View>
   );
 }
+
+// ===== Risk Card =====
 
 function RiskCard(props: {
   district: string;
-  riskLevel: number;
-  color: string;
+  riskLevel: RiskLevel;
+  accent: string;
   bgColor: string;
   labelKr: string;
-  message: string;
   mascotKey: keyof typeof Mascots;
   env: { temp: number; humidity: number; foodPoisoning: string };
 }) {
-  const { district, riskLevel, color, bgColor, labelKr, message, mascotKey, env } = props;
+  const { district, riskLevel, accent, bgColor, labelKr, mascotKey, env } = props;
 
   return (
-    <View>
-      {/* 말풍선 — 카드 위쪽, 좌측. 꼬리는 우측의 마스코트를 향함 */}
-      <View style={[styles.bubble, { borderColor: color }]}>
-        <Typewriter
-          key={message}
-          text={message}
-          speed={45}
-          startDelay={500}
-          style={styles.bubbleText}
-          cursorStyle={{ color, fontWeight: '700' }}
-        />
-        <View style={[styles.bubbleTailBorder, { borderLeftColor: color }]} />
-        <View style={[styles.bubbleTail, { borderLeftColor: palette.white }]} />
-      </View>
+    <View style={styles.cardWrapper}>
+      <Card variant="tinted" bgColor={bgColor} padding="xxl" radius="xl" style={(elevation.card as any)}>
+        <Text style={styles.cardHeading}>오늘의 식중독 위험 단계</Text>
+        <View style={styles.locationRow}>
+          <Icon name="location" size={13} color={color.text.secondary} />
+          <Text style={styles.locationText}>{district}</Text>
+        </View>
 
-      {/* 카드 (상단 + 하단, 마스코트가 사이에 위치) */}
-      <View style={styles.cardWrapper}>
-        {/* 상단 카드 — 위험 단계 색상 틴트 */}
-        <View style={[styles.cardTop, { backgroundColor: bgColor, borderColor: color }]}>
-          <View style={styles.cardLeft}>
-            <View style={styles.titleRow}>
-              <Icon name="location" size={12} color={palette.text2} />
-              <Text style={styles.title}>{district} 오늘의 식중독 위험 단계</Text>
-            </View>
-
-            {/* 큰 단계 라벨 (점수 제거) */}
-            <Text style={[styles.bigStageLabel, { color }]}>{labelKr}</Text>
-            <Text style={[styles.bigStageSub, { color }]}>{riskLevel}단계 / 5단계</Text>
+        <View style={styles.stageRow}>
+          <View style={styles.stageCol}>
+            <Text style={[styles.bigStageLabel, { color: accent }]}>{labelKr}</Text>
+            <Text style={[styles.bigStageSub, { color: accent }]}>{riskLevel}단계 / 5단계</Text>
             <Text style={styles.time}>12:00 기준</Text>
           </View>
+          <Image source={Mascots[mascotKey]} style={styles.bigMascot} resizeMode="contain" />
         </View>
+      </Card>
 
-        {/* 마스코트 — 상단/하단 사이에 absolute로 떠있음 */}
-        <Image
-          source={Mascots[mascotKey]}
-          style={styles.mascot}
-          resizeMode="contain"
-        />
-
-        {/* 하단 카드 — 환경 지표 (각 메트릭 개별 톤 색상) */}
-        <View style={styles.cardBottom}>
-          <ColoredMetric
-            icon="thermometer"
-            label="기온"
-            value={`${env.temp}°C`}
-            tone={tempTone(env.temp)}
-          />
-          <ColoredMetric
-            icon="water"
-            label="습도"
-            value={`${env.humidity}%`}
-            tone={humidityTone(env.humidity)}
-          />
-          <ColoredMetric
-            icon="bug"
-            label="식중독 발생"
-            value={env.foodPoisoning}
-            tone={statusTone(env.foodPoisoning)}
-          />
-        </View>
+      <View style={styles.metricsRow}>
+        <MetricCard icon="thermometer" label="기온" value={`${env.temp}°C`} tone={tempTone(env.temp)} />
+        <MetricCard icon="water" label="습도" value={`${env.humidity}%`} tone={humidityTone(env.humidity)} />
+        <MetricCard icon="bug" label="식중독 발생" value={env.foodPoisoning} tone={statusTone(env.foodPoisoning)} />
       </View>
     </View>
   );
 }
 
-// ===== 톤 =====
-type Tone = 'green' | 'yellow' | 'red';
+// ===== Restaurant Card (shared across home sections) =====
 
-function tempTone(t: number): Tone {
-  if (t >= 30) return 'red';
-  if (t >= 25) return 'yellow';
-  return 'green';
-}
-function humidityTone(h: number): Tone {
-  if (h >= 80) return 'red';
-  if (h >= 60) return 'yellow';
-  return 'green';
-}
-function statusTone(s: string): Tone {
-  if (s.includes('위험')) return 'red';
-  if (s.includes('주의') || s.includes('경계')) return 'yellow';
-  return 'green';
-}
-const TONE_BG: Record<Tone, string> = {
-  green: palette.lightGreen,
-  yellow: palette.lightYellow,
-  red: palette.alertRedLight,
-};
-const TONE_FG: Record<Tone, string> = {
-  green: palette.primaryGreen,
-  yellow: '#A16207',
-  red: palette.alertRed,
-};
-
-function ColoredMetric({
-  icon,
-  label,
-  value,
-  tone,
+function RestaurantCard({
+  name,
+  score,
+  meta,
+  grade,
+  onPress,
 }: {
-  icon: IconName;
-  label: string;
-  value: string;
-  tone: Tone;
+  name: string;
+  score: number;
+  meta: string;
+  grade: 'GOLDEN' | 'SILVER' | 'BRONZE';
+  onPress: () => void;
 }) {
+  const cheeseSrc = grade === 'GOLDEN' ? Cheese.gold : grade === 'SILVER' ? Cheese.silver : Cheese.bronze;
+  const cheeseFg = color.cheese[grade].fg;
   return (
-    <View style={[styles.coloredMetric, { backgroundColor: TONE_BG[tone] }]}>
-      <Icon name={icon} size={14} color={TONE_FG[tone]} />
-      <Text style={[styles.coloredMetricLabel, { color: TONE_FG[tone] }]}>{label}</Text>
-      <Text style={[styles.coloredMetricValue, { color: TONE_FG[tone] }]}>{value}</Text>
-    </View>
+    <Card
+      variant="elevated"
+      padding="m"
+      radius="l"
+      pressable
+      onPress={onPress}
+      accessibilityLabel={`${name} 상세 보기`}
+      style={styles.restaurantCard}>
+      <View style={styles.cardCheeseRow}>
+        <Image source={cheeseSrc} style={styles.cardCheese} resizeMode="contain" />
+      </View>
+      <Text style={styles.cardName} numberOfLines={1}>{name}</Text>
+      <View style={styles.cardMetaRow}>
+        <Text style={[styles.cardScore, { color: cheeseFg }]}>{score}점</Text>
+        <Text style={styles.cardMetaSep}>·</Text>
+        <Text style={styles.cardMeta} numberOfLines={1}>{meta}</Text>
+      </View>
+    </Card>
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: palette.white },
-  scroll: { flex: 1 },
-  content: { paddingHorizontal: 18, paddingTop: 8 },
+// ===== Today Menu Guide Card =====
 
-  // ===== 헤더 =====
+const MENU_BY_LEVEL: Record<RiskLevel, { recommend: string[]; avoid: string[]; tip: string }> = {
+  1: { recommend: ['회', '비빔국수', '냉채', '구이'], avoid: [], tip: '오늘은 마음 편히 골라봐요.' },
+  2: { recommend: ['비빔밥', '국수', '구이'], avoid: [], tip: '평소처럼 즐겨도 좋아요.' },
+  3: { recommend: ['칼국수', '국밥', '전골', '찜'], avoid: ['회', '육회'], tip: '따끈한 가열 메뉴를 추천해요.' },
+  4: { recommend: ['국밥', '전골', '찜', '구이'], avoid: ['사시미', '육회', '생굴'], tip: '충분히 가열한 메뉴가 안전해요.' },
+  5: { recommend: ['집밥', '전골'], avoid: ['회', '육회', '생굴', '뷔페'], tip: '오늘은 직접 조리하면 가장 안전해요.' },
+};
+
+function TodayMenuCard({ riskLevel, district }: { riskLevel: RiskLevel; district: string }) {
+  const guide = MENU_BY_LEVEL[riskLevel];
+  return (
+    <Card variant="elevated" padding="l" radius="l">
+      <View style={styles.menuHeader}>
+        <View style={styles.aiBadge}>
+          <Icon name="sparkles" size={11} color={color.text.onBrand} />
+          <Text style={styles.aiBadgeText}>AI</Text>
+        </View>
+        <Text style={styles.menuTitle}>{district}에 어울리는 메뉴</Text>
+      </View>
+      <Text style={styles.menuTip}>{guide.tip}</Text>
+
+      <View style={styles.menuBlock}>
+        <Text style={styles.menuBlockLabel}>추천 메뉴</Text>
+        <View style={styles.chipsRow}>
+          {guide.recommend.map((m) => (
+            <Chip key={m} variant="info" size="sm" tone="success">{m}</Chip>
+          ))}
+        </View>
+      </View>
+
+      {guide.avoid.length > 0 ? (
+        <View style={styles.menuBlock}>
+          <Text style={styles.menuBlockLabel}>오늘은 다음 기회에</Text>
+          <View style={styles.chipsRow}>
+            {guide.avoid.map((m) => (
+              <Chip key={m} variant="info" size="sm" tone="danger">{m}</Chip>
+            ))}
+          </View>
+        </View>
+      ) : null}
+    </Card>
+  );
+}
+
+// ===== Tone helpers =====
+
+type Tone = 'success' | 'warning' | 'danger';
+function tempTone(t: number): Tone {
+  if (t >= 30) return 'danger';
+  if (t >= 25) return 'warning';
+  return 'success';
+}
+function humidityTone(h: number): Tone {
+  if (h >= 80) return 'danger';
+  if (h >= 60) return 'warning';
+  return 'success';
+}
+function statusTone(s: string): Tone {
+  if (s.includes('위험')) return 'danger';
+  if (s.includes('주의') || s.includes('경계')) return 'warning';
+  return 'success';
+}
+
+// ===== Styles =====
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: color.surface.canvas },
+  scroll: { flex: 1 },
+  content: { paddingHorizontal: spacing.l, paddingTop: spacing.s, paddingBottom: spacing.xxl },
+
+  // Header
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 4,
-    marginBottom: 12,
+    minHeight: 44,
+    marginBottom: spacing.m,
   },
-  logoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  logoRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.s },
   logoImage: { width: 28, height: 28 },
-  logo: { fontSize: 20, fontWeight: '800', color: palette.text1, letterSpacing: -0.3 },
-  bellBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: palette.bgCard,
+  logo: { ...typography.headline, color: color.text.primary, letterSpacing: -0.3 },
+  notiDot: {
+    position: 'absolute', top: 8, right: 8,
+    width: 8, height: 8, borderRadius: radius.pill,
+    backgroundColor: color.status.danger,
+    borderWidth: 1.5, borderColor: color.surface.subtle,
   },
 
-  // ===== 검색바 =====
-  searchBar: {
+  // Risk card wrapper
+  cardWrapper: { position: 'relative' },
+  cardHeading: { ...typography.headline, color: color.text.primary },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.xxs },
+  locationText: { ...typography.subheadline, color: color.text.secondary },
+
+  stageRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: palette.white,
-    borderWidth: 1.5,
-    borderColor: palette.accent,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    height: 50,
-    gap: 10,
-    marginBottom: 16,
+    gap: spacing.m,
+    marginTop: spacing.l,
   },
-  searchPlaceholder: { flex: 1, fontSize: 14, color: palette.text3 },
+  stageCol: { flex: 1, minHeight: 160, justifyContent: 'center' },
+  bigMascot: { width: 160, height: 160 },
+  bigStageLabel: { ...typography.display, marginTop: spacing.s },
+  bigStageSub: { ...typography.subheadlineEmphasized, marginTop: spacing.xs },
+  time: { ...typography.caption, color: color.text.tertiary, marginTop: spacing.s },
 
-  // ===== 위험 카드 + 큰 마스코트 (카드 위로 튀어나오고 우측 일부 덮음) =====
-  cardWrapper: {
-    position: 'relative',
-    marginTop: 0, // 상단 여백 제거
-    marginBottom: 18,
-  },
-  // 카드 상단 — radius 20, padding 20, soft shadow
-  cardTop: {
-    backgroundColor: palette.white,
-    padding: 20,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderTopWidth: 1,
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderColor: palette.border,
-    ...Platform.select({
-      web: { boxShadow: '0 2px 8px rgba(0,0,0,0.05)' },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 2,
-      },
-    }),
-  },
-  cardLeft: {
-    paddingRight: 150, // 마스코트 영역 보호
-  },
-  // 카드 하단 — 마스코트 다음 렌더, 솔리드 흰 배경으로 덮음
-  cardBottom: {
-    flexDirection: 'row',
-    backgroundColor: palette.white,
-    padding: 20,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-    borderTopWidth: 1,
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: palette.border,
-    gap: 8,
-    position: 'relative',
-    zIndex: 5,
-    ...Platform.select({
-      web: { boxShadow: '0 2px 8px rgba(0,0,0,0.05)' },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 2,
-      },
-    }),
-    ...Platform.select({
-      web: { boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.04,
-        shadowRadius: 3,
-        elevation: 1,
-      },
-    }),
-  },
-
-  // 말풍선 (카드 밖 위쪽, 좌측 정렬, 꼬리는 우측 마스코트 향함)
   bubble: {
-    alignSelf: 'flex-start',
-    maxWidth: '62%',
-    backgroundColor: palette.white,
-    borderWidth: 1.5,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 12,
-    marginLeft: 8,
-    marginTop: 0, // 상단 여백 제거
-    position: 'relative',
-    zIndex: 11,
+    backgroundColor: color.surface.subtle,
+    borderWidth: 1,
+    borderRadius: radius.l,
+    paddingHorizontal: spacing.m,
+    paddingVertical: spacing.s,
+    marginTop: spacing.m,
   },
-  bubbleText: { fontSize: 13, color: palette.text1, fontWeight: '600', lineHeight: 19 },
-  bubbleTail: {
-    position: 'absolute',
-    right: -8,
-    top: 16,
-    width: 0,
-    height: 0,
-    borderTopWidth: 8,
-    borderBottomWidth: 8,
-    borderLeftWidth: 9,
-    borderTopColor: 'transparent',
-    borderBottomColor: 'transparent',
-    borderLeftColor: palette.white,
-    zIndex: 2,
-  },
-  bubbleTailBorder: {
-    position: 'absolute',
-    right: -10,
-    top: 15,
-    width: 0,
-    height: 0,
-    borderTopWidth: 9,
-    borderBottomWidth: 9,
-    borderLeftWidth: 10,
-    borderTopColor: 'transparent',
-    borderBottomColor: 'transparent',
-    borderLeftColor: palette.border,
-    zIndex: 1,
+  bubbleText: { ...typography.captionEmphasized, color: color.text.primary },
+
+  metricsRow: {
+    flexDirection: 'row',
+    gap: spacing.s,
+    marginTop: spacing.m,
   },
 
-  titleRow: {
+  // Restaurant card (shared, horizontal scroll)
+  cardScroll: { gap: spacing.m, paddingRight: spacing.xs, paddingVertical: spacing.xs },
+  restaurantCard: { width: 160 },
+  cardCheeseRow: { alignItems: 'center', justifyContent: 'center', marginBottom: spacing.m },
+  cardCheese: { width: 64, height: 64 },
+  cardName: { ...typography.subheadlineEmphasized, color: color.text.primary, marginBottom: spacing.xs },
+  cardMetaRow: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.xs },
+  cardScore: { ...typography.captionEmphasized },
+  cardMetaSep: { ...typography.caption, color: color.text.tertiary },
+  cardMeta: { ...typography.caption, color: color.text.secondary, flex: 1 },
+
+  // Today menu
+  menuHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.s, marginBottom: spacing.s },
+  aiBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginBottom: 8,
+    gap: 3,
+    backgroundColor: color.brand.primary,
+    paddingHorizontal: spacing.s,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
   },
-  title: { fontSize: 13, color: palette.text2, fontWeight: '600' },
-
-  // 큰 단계 라벨 (점수 대신)
-  bigStageLabel: {
-    fontSize: 48,
-    fontWeight: '800',
-    letterSpacing: -1.5,
-    marginTop: 8,
-    lineHeight: 52,
-  },
-  bigStageSub: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginTop: 6,
-  },
-  time: { color: palette.text3, fontSize: 12, marginTop: 8 },
-
-  // 마스코트 — absolute. zIndex 미지정 → DOM 렌더 순서로 결정 (cardBottom이 위로 덮음)
-  mascot: {
-    position: 'absolute',
-    right: 0,
-    top: -60,
-    width: 220,
-    height: 230,
-  },
-
-  // 환경 지표 metric
-  // 톤별 색상 메트릭 박스 (각 값에 따라 배경색 차등)
-  coloredMetric: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-    gap: 4,
-  },
-  coloredMetricLabel: { fontSize: 10, fontWeight: '600' },
-  coloredMetricValue: { fontSize: 13, fontWeight: '800', marginTop: 2 },
-
-  // ===== 섹션 헤더 =====
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: palette.text1 },
-  sectionMore: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  sectionMoreText: { fontSize: 11, color: palette.text3 },
-
-  // ===== 골든 치즈 가로 스크롤 =====
-  goldenScroll: { gap: 10, paddingRight: 4 },
-  goldCard: { width: 130 },
-  goldThumb: {
-    width: 130,
-    height: 90,
-    borderRadius: 10,
-    backgroundColor: palette.lightGreen,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  goldThumbCheese: { width: 50, height: 50 },
-  goldName: { fontSize: 13, fontWeight: '700', color: palette.text1, marginBottom: 3 },
-  goldMeta: { fontSize: 10, color: palette.text3 },
+  aiBadgeText: { ...typography.footnote, fontWeight: '800', color: color.text.onBrand, letterSpacing: 0.5 },
+  menuTitle: { ...typography.bodyEmphasized, color: color.text.primary },
+  menuTip: { ...typography.caption, color: color.text.secondary, marginBottom: spacing.m },
+  menuBlock: { marginTop: spacing.s },
+  menuBlockLabel: { ...typography.captionEmphasized, color: color.text.primary, marginBottom: spacing.s },
+  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.s },
 });
+

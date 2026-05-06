@@ -53,13 +53,13 @@ export const loadKakaoMap = (): Promise<any> => {
     script.onload = () => {
       // SDK 로드되면 maps 명시적 초기화
       window.kakao.maps.load(() => {
-        console.log('[KakaoMap] SDK 로드 완료');
+        if (__DEV__) console.log('[KakaoMap] SDK 로드 완료');
         resolve(window.kakao);
       });
     };
-    
+
     script.onerror = (error) => {
-      console.error('[KakaoMap] SDK 로드 실패:', error);
+      if (__DEV__) console.error('[KakaoMap] SDK 로드 실패:', error);
       loadPromise = null;
       reject(new Error('카카오맵 SDK 로드 실패. 도메인 등록을 확인하세요.'));
     };

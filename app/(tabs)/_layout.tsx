@@ -3,35 +3,45 @@ import { Tabs } from 'expo-router';
 import React from 'react';
 
 import { useClientOnlyValue } from '@/components/useClientOnlyValue';
-import { palette } from '@/constants/Colors';
+import { color, glass, typography } from '@/constants/tokens';
 
 function TabBarIcon(props: {
   name: React.ComponentProps<typeof Ionicons>['name'];
   color: string;
 }) {
-  return <Ionicons size={24} style={{ marginBottom: -3 }} {...props} />;
+  return <Ionicons size={24} {...props} />;
 }
 
 export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: palette.accent,
-        tabBarInactiveTintColor: palette.text3,
+        tabBarActiveTintColor: color.brand.primary,
+        tabBarInactiveTintColor: color.status.neutral,
         headerShown: useClientOnlyValue(false, true),
         tabBarStyle: {
-          backgroundColor: palette.white,
-          borderTopColor: palette.border,
+          ...glass.regular,
+          borderTopColor: color.border.default,
+          borderTopWidth: 0.5,
+          height: 76,
+          paddingTop: 10,
+          paddingBottom: 14,
         },
-        headerStyle: { backgroundColor: palette.white },
-        headerTintColor: palette.text1,
+        tabBarLabelStyle: {
+          ...typography.footnote,
+          lineHeight: 16,
+          marginTop: 2,
+        },
+        headerStyle: { backgroundColor: color.surface.subtle },
+        headerTintColor: color.text.primary,
+        headerTitleStyle: typography.headline,
       }}>
       <Tabs.Screen
         name="index"
         options={{
           title: '홈',
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon name={focused ? 'home' : 'home-outline'} color={color} />
+          tabBarIcon: ({ color: c, focused }) => (
+            <TabBarIcon name={focused ? 'home' : 'home-outline'} color={c} />
           ),
           headerShown: false,
         }}
@@ -41,8 +51,8 @@ export default function TabLayout() {
         options={{
           title: '지도',
           headerShown: false,
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon name={focused ? 'map' : 'map-outline'} color={color} />
+          tabBarIcon: ({ color: c, focused }) => (
+            <TabBarIcon name={focused ? 'map' : 'map-outline'} color={c} />
           ),
         }}
       />
@@ -51,8 +61,8 @@ export default function TabLayout() {
         options={{
           title: '좋아요',
           headerShown: false,
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon name={focused ? 'heart' : 'heart-outline'} color={color} />
+          tabBarIcon: ({ color: c, focused }) => (
+            <TabBarIcon name={focused ? 'heart' : 'heart-outline'} color={c} />
           ),
         }}
       />
@@ -61,8 +71,8 @@ export default function TabLayout() {
         options={{
           title: '내정보',
           headerShown: false,
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon name={focused ? 'person' : 'person-outline'} color={color} />
+          tabBarIcon: ({ color: c, focused }) => (
+            <TabBarIcon name={focused ? 'person' : 'person-outline'} color={c} />
           ),
         }}
       />

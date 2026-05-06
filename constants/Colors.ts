@@ -1,113 +1,119 @@
-// Food Detector - Design Tokens
-// Brand: Green + Yellow color system (food safety domain)
+// Food Detector — legacy color exports.
+// @deprecated Prefer `@/constants/tokens` for new code. Keys here are kept for
+// backward compatibility during Phase 1 of the redesign migration; values are
+// mapped to the unified token system.
 
-const tintColorLight = '#2ECC71';
-const tintColorDark = '#27AE60';
+import { color } from './tokens/color';
+
+// Re-export tokens so call sites can gradually move to the new API.
+export { color, spacing, radius, typography, elevation, motion, glass, mascotSize, minTouchSize } from './tokens';
+export type { RiskLevel, CheeseGradeKey, SpacingKey, RadiusKey, TypographyKey, ElevationKey, MascotSizeKey } from './tokens';
+
+const tintColorLight = color.brand.primary;
+const tintColorDark = color.brand.primaryHover;
 
 export const palette = {
-  // ===== Brand Colors =====
-  primaryGreen: '#2ECC71',
-  subGreen: '#27AE60',
-  lightGreen: '#D5F5E3',
-  
-  primaryYellow: '#F1C40F',
-  subYellow: '#FFD662',
-  lightYellow: '#FFF4CC',
-  
-  // ===== Status Colors =====
-  alertRed: '#E74C3C',
-  alertRedLight: '#FADBD8',
-  
-  infoBlue: '#3498DB',
-  infoBlueLight: '#D6EAF8',
-  
+  // ===== Brand =====
+  primaryGreen: color.brand.primary,
+  subGreen:     color.brand.primaryHover,
+  lightGreen:   '#D5F5E3',
+
+  primaryYellow: color.brand.secondary,
+  subYellow:     '#FFD662',
+  lightYellow:   color.brand.secondarySoft,
+
+  // ===== Status =====
+  alertRed:      color.status.danger,
+  alertRedLight: 'rgba(255,59,48,0.12)',
+
+  infoBlue:      color.status.info,
+  infoBlueLight: color.status.infoSoft,
+
   // ===== Surface =====
-  white: '#FFFFFF',
-  bg: '#FFFDF8',
-  bgCard: '#FAFAF7',
-  surface: '#FFFFFF',
-  
+  white:   color.surface.subtle,
+  bg:      color.surface.mascotBg,
+  bgCard:  '#FAFAF7',
+  surface: color.surface.subtle,
+
   // ===== Text =====
-  text1: '#222222',
-  text2: '#666666',
-  text3: '#999999',
-  textPrimary: '#222222',
-  textSecondary: '#666666',
-  
+  text1:          color.text.primary,
+  text2:          color.text.secondary,
+  text3:          color.text.tertiary,
+  textPrimary:    color.text.primary,
+  textSecondary:  color.text.secondary,
+
   // ===== Border =====
-  border: '#E5E5E5',
-  borderDark: '#CCCCCC',
-  
-  // ===== Cheese Grades =====
-  // Gold = Primary Yellow (브랜드와 일관)
-  gold: '#F1C40F',
-  goldLight: '#FFF4CC',
-  silver: '#94A3B8',
-  silverLight: '#E2E8F0',
-  bronze: '#CD7F32',
-  bronzeLight: '#F5DEB3',
-  
-  // ===== Risk Levels (5 stages) =====
-  riskGreen: '#2ECC71',          // 1, 2 평온/양호
-  riskGreenLight: '#D5F5E3',
-  riskYellow: '#F1C40F',         // 3 주의
-  riskYellowLight: '#FFF4CC',
-  riskOrange: '#FFD662',         // 4 경계 (Sub Yellow)
-  riskOrangeLight: '#FFF8E1',
-  riskRed: '#E74C3C',            // 5 위험
-  riskRedLight: '#FADBD8',
-  
-  // ===== Legacy compatibility (기존 코드 호환) =====
-  accent: '#2ECC71',             // ⭐ Orange → Green으로 변경
+  border:     color.border.default,
+  borderDark: color.border.strong,
+
+  // ===== Cheese grades =====
+  gold:        color.cheese.GOLDEN.fg,
+  goldLight:   color.cheese.GOLDEN.bg,
+  silver:      color.cheese.SILVER.fg,
+  silverLight: color.cheese.SILVER.bg,
+  bronze:      color.cheese.BRONZE.fg,
+  bronzeLight: color.cheese.BRONZE.bg,
+
+  // ===== Risk levels (mapped to HIG system colors) =====
+  riskGreen:       color.status.success,
+  riskGreenLight:  color.status.successSoft,
+  riskYellow:      color.risk[3].fg,
+  riskYellowLight: color.risk[3].bg,
+  riskOrange:      color.status.warning,
+  riskOrangeLight: color.status.warningSoft,
+  riskRed:         color.status.danger,
+  riskRedLight:    color.status.dangerSoft,
+
+  // ===== Legacy aliases =====
+  accent:      color.brand.primary,
   accentLight: '#D5F5E3',
-  accentDark: '#27AE60',
-  
-  warn: '#F1C40F',
-  warnLight: '#FFF4CC',
-  ok: '#2ECC71',
-  okLight: '#D5F5E3',
-  danger: '#E74C3C',
-  dangerLight: '#FADBD8',
-  info: '#3498DB',
-  infoLight: '#D6EAF8',
-  
-  // ===== Owner Mode =====
-  purple: '#8B5CF6',
-  purpleLight: '#EDE9FE',
-  
+  accentDark:  color.brand.primaryHover,
+
+  warn:        color.risk[3].fg,
+  warnLight:   color.risk[3].bg,
+  ok:          color.brand.primary,
+  okLight:     '#D5F5E3',
+  danger:      color.status.danger,
+  dangerLight: color.status.dangerSoft,
+  info:        color.status.info,
+  infoLight:   color.status.infoSoft,
+
+  // ===== Owner mode =====
+  purple:      color.owner.primary,
+  purpleLight: color.owner.primarySoft,
+
   // ===== Mascot =====
-  mascotBg: '#FFFDF8',           // 배경과 동일하게 자연스럽게
-  mascotBorder: '#FFD662',       // Sub Yellow로 부드럽게
+  mascotBg:     color.surface.mascotBg,
+  mascotBorder: '#FFD662',
 } as const;
 
 // ===== Risk Level System (5 stages) =====
-// 단계별 마스코트 표정/포즈 차등 + 메시지 다양화 (시간대/상황별)
 export const riskLevels = {
   1: {
     label: 'Calm',
     labelKr: '평온',
     emoji: '🟢',
-    color: palette.riskGreen,
-    bgColor: palette.riskGreenLight,
-    mascot: 'weather' as const, // 화창
-    message: '특별한 주의 사항 없습니다',
+    color: color.risk[1].fg,
+    bgColor: color.risk[1].bg,
+    mascot: 'weather' as const,
+    message: '오늘은 마음 편히 외식해도 좋아요',
     messages: [
-      '오늘은 마음껏 외식 즐기세요!',
-      '식중독 걱정 없는 좋은 날이에요',
-      '평소처럼 회식·모임 OK!',
+      '오늘은 마음 편히 외식해도 좋아요',
+      '날씨가 식당하기 좋은 컨디션이에요',
+      '평소처럼 회식·모임 즐겨도 좋아요',
     ],
   },
   2: {
     label: 'Good',
     labelKr: '양호',
     emoji: '🟢',
-    color: palette.riskGreen,
-    bgColor: palette.riskGreenLight,
+    color: color.risk[2].fg,
+    bgColor: color.risk[2].bg,
     mascot: 'weather' as const,
-    message: '평소처럼 즐기세요',
+    message: '평소처럼 즐겨도 좋아요',
     messages: [
-      '평소처럼 즐기세요',
-      '특별히 가릴 메뉴 없어요',
+      '평소처럼 즐겨도 좋아요',
+      '대부분의 메뉴를 편하게 골라도 돼요',
       '오늘은 무난한 컨디션이에요',
     ],
   },
@@ -115,49 +121,48 @@ export const riskLevels = {
     label: 'Caution',
     labelKr: '주의',
     emoji: '🟡',
-    color: palette.riskYellow,
-    bgColor: palette.riskYellowLight,
-    mascot: 'warning' as const, // 주의 표정
-    message: '가열 메뉴 위주로 추천드려요',
+    color: color.risk[3].fg,
+    bgColor: color.risk[3].bg,
+    mascot: 'warning' as const,
+    message: '익힌 메뉴 위주로 골라봐요',
     messages: [
-      '가열 메뉴 위주로 추천드려요',
-      '오늘 회식이라면 조리 메뉴로!',
-      '여름철 회·날 음식은 잠시 미루세요',
-      '점심엔 따뜻한 국물 어떠세요?',
+      '익힌 메뉴 위주로 골라봐요',
+      '회식이라면 조리 메뉴를 추천해요',
+      '점심엔 따뜻한 국물이 잘 맞아요',
+      '날 음식은 다음 기회에 즐겨봐요',
     ],
   },
   4: {
     label: 'Alert',
     labelKr: '경계',
     emoji: '🟠',
-    color: palette.riskOrange,
-    bgColor: palette.riskOrangeLight,
+    color: color.risk[4].fg,
+    bgColor: color.risk[4].bg,
     mascot: 'warning' as const,
-    message: '날 음식과 해산물은 피하세요',
+    message: '익힌 음식으로 안전하게 드세요',
     messages: [
-      '날 음식과 해산물은 피하세요',
-      '오늘은 충분히 익힌 음식 위주로!',
-      '뷔페·샐러드바 권장하지 않아요',
-      '실온 보관 음식 주의하세요',
+      '익힌 음식으로 안전하게 드세요',
+      '오늘은 충분히 가열한 메뉴를 추천해요',
+      '뷔페보다는 단품 조리 메뉴가 안전해요',
+      '실온 보관 음식은 다음에 만나봐요',
     ],
   },
   5: {
     label: 'Danger',
     labelKr: '위험',
     emoji: '🔴',
-    color: palette.riskRed,
-    bgColor: palette.riskRedLight,
-    mascot: 'empty' as const, // 위험 단계는 더 어두운 표정
-    message: '오늘은 외식 자제 권장',
+    color: color.risk[5].fg,
+    bgColor: color.risk[5].bg,
+    mascot: 'empty' as const,
+    message: '오늘은 직접 조리하면 더 안전해요',
     messages: [
-      '오늘은 외식 자제 권장',
-      '집에서 직접 조리하는 게 안전해요',
-      '회식·모임은 다음으로 미루세요',
+      '오늘은 직접 조리하면 더 안전해요',
+      '집밥으로 가볍게 챙기는 날이에요',
+      '회식·모임은 다음 기회에 즐겨봐요',
     ],
   },
 } as const;
 
-// 시간/날짜 기반으로 동일 단계 내에서 메시지 선택 (안정적 회전)
 export function pickRiskMessage(level: 1 | 2 | 3 | 4 | 5): string {
   const stage = riskLevels[level];
   const list = stage.messages as readonly string[];
@@ -167,8 +172,6 @@ export function pickRiskMessage(level: 1 | 2 | 3 | 4 | 5): string {
   return list[seed % list.length];
 }
 
-// ===== 환경 컨텍스트 기반 마스코트 메시지 빌더 =====
-// "오늘 {district}는 {env}하니, {avoid}는 피하고 {recommend}를 추천합니다" 형태
 export type EnvContext = {
   temp: number;
   humidity: number;
@@ -181,29 +184,29 @@ type Builder = (district: string, env: EnvContext) => string;
 
 const RISK_TEMPLATES: Record<1 | 2 | 3 | 4 | 5, Builder[]> = {
   1: [
-    (d) => `오늘 ${d}는 식중독 위험이 낮아요. 평소처럼 외식 즐기세요!`,
-    (d, e) => `${d} 환경은 ${envSummary(e)}로 안정적이에요. 회·해산물도 OK.`,
-    (d) => `${d} 오늘은 마음껏 회식·모임 다녀오셔도 좋아요.`,
+    (d) => `오늘 ${d}는 외식하기 좋은 컨디션이에요. 평소처럼 즐겨봐요.`,
+    (d, e) => `${d} 환경은 ${envSummary(e)}로 안정적이에요. 회·해산물도 편하게 골라봐요.`,
+    (d) => `${d} 오늘은 마음 편히 회식·모임 다녀와도 좋아요.`,
   ],
   2: [
-    (d) => `오늘 ${d}는 양호한 컨디션이에요. 가리지 말고 즐기세요.`,
-    (d, e) => `${d}는 ${envSummary(e)}로 무난해요. 평소처럼 외식 OK.`,
+    (d) => `오늘 ${d}는 무난한 날이에요. 평소처럼 즐겨봐요.`,
+    (d, e) => `${d}는 ${envSummary(e)}로 무난해요. 대부분 메뉴 편하게 골라도 좋아요.`,
   ],
   3: [
-    (d, e) => `오늘 ${d}는 ${envSummary(e)}로 세균 번식 좋은 조건이에요. 회무침·날 음식은 피하고, 따뜻한 가열 메뉴를 추천해요.`,
-    (d) => `${d} 오늘 환경상 실온 보관 음식이 위험해요. 비빔국수·냉채는 피하고 칼국수·국밥을 추천드려요.`,
-    (d, e) => `오늘 ${d}는 ${e.temp}°C로 무덥습니다. 차가운 비빔류는 피하고 가열 메뉴 위주로!`,
-    (d) => `${d} 회식이라면 회보다 구이·전골 추천이에요.`,
+    (d, e) => `${d}는 ${envSummary(e)}로 세균이 잘 번식해요. 칼국수·국밥처럼 따뜻한 가열 메뉴를 추천해요.`,
+    (d) => `${d} 오늘은 가열한 메뉴가 안전해요. 비빔국수·냉채는 다음 기회에 만나봐요.`,
+    (d, e) => `오늘 ${d}는 ${e.temp}°C로 무더워요. 따끈한 국물 메뉴가 잘 어울려요.`,
+    (d) => `${d} 회식이라면 구이·전골을 추천해요.`,
   ],
   4: [
-    (d, e) => `오늘 ${d}는 ${envSummary(e)}로 식중독 위험이 높아요. 회·해산물·뷔페는 피하고, 충분히 가열한 국물 메뉴를 추천해요.`,
-    (d) => `${d} 오늘 환경상 날 음식 위험이 큽니다. 사시미·육회·생굴은 피하고 찌개·전골을 추천드려요.`,
-    (d, e) => `${d}는 ${envSummary(e)}로 경계 단계예요. 샐러드바·뷔페 회 코너는 오늘 자제해주세요.`,
+    (d, e) => `${d}는 ${envSummary(e)}로 식중독 가능성이 커요. 충분히 가열한 국물 메뉴를 추천해요.`,
+    (d) => `${d} 오늘은 잘 익힌 메뉴가 안전해요. 사시미·육회·생굴은 다음 기회에 만나봐요.`,
+    (d, e) => `${d}는 ${envSummary(e)}로 경계 단계예요. 단품 조리 메뉴가 더 안전해요.`,
   ],
   5: [
-    (d) => `오늘 ${d}는 식중독 위험이 매우 높아요. 회·날계란·실온 음식 모두 피하고 즉석 조리한 가열 메뉴만 드세요.`,
-    (d) => `${d} 외식 자제 권장. 집에서 직접 조리하시는 게 가장 안전해요.`,
-    (d, e) => `${d}는 ${envSummary(e)}로 위험 단계입니다. 오늘은 모임을 다음으로 미루세요.`,
+    (d) => `오늘 ${d}는 위험 단계예요. 즉석 조리한 가열 메뉴를 추천해요.`,
+    (d) => `${d} 오늘은 집에서 직접 조리하면 가장 안전해요.`,
+    (d, e) => `${d}는 ${envSummary(e)}로 위험 단계예요. 모임은 다음 기회에 즐겨봐요.`,
   ],
 };
 
@@ -224,8 +227,8 @@ export const cheeseGrades = {
     label: 'Golden Cheese',
     labelKr: '골든 치즈',
     description: '식탐정이 극찬한 식당',
-    color: palette.gold,
-    bgColor: palette.goldLight,
+    color: color.cheese.GOLDEN.fg,
+    bgColor: color.cheese.GOLDEN.bg,
     image: 'gold' as const,
     minScore: 90,
   },
@@ -233,8 +236,8 @@ export const cheeseGrades = {
     label: 'Silver Cheese',
     labelKr: '실버 치즈',
     description: '식탐정이 인정한 식당',
-    color: palette.silver,
-    bgColor: palette.silverLight,
+    color: color.cheese.SILVER.fg,
+    bgColor: color.cheese.SILVER.bg,
     image: 'silver' as const,
     minScore: 80,
   },
@@ -242,8 +245,8 @@ export const cheeseGrades = {
     label: 'Bronze Cheese',
     labelKr: '브론즈 치즈',
     description: '식탐정이 주목한 식당',
-    color: palette.bronze,
-    bgColor: palette.bronzeLight,
+    color: color.cheese.BRONZE.fg,
+    bgColor: color.cheese.BRONZE.bg,
     image: 'bronze' as const,
     minScore: 70,
   },
@@ -251,8 +254,8 @@ export const cheeseGrades = {
     label: 'Investigating',
     labelKr: '수사 중',
     description: '식탐정이 지켜보는 식당',
-    color: palette.text2,
-    bgColor: palette.bgCard,
+    color: color.cheese.INVESTIGATING.fg,
+    bgColor: color.cheese.INVESTIGATING.bg,
     image: null,
     minScore: 60,
   },
@@ -260,27 +263,27 @@ export const cheeseGrades = {
     label: 'Warning',
     labelKr: '요주의',
     description: '식탐정이 경고한 식당',
-    color: palette.alertRed,
-    bgColor: palette.alertRedLight,
+    color: color.cheese.WARNING.fg,
+    bgColor: color.cheese.WARNING.bg,
     image: null,
     minScore: 0,
   },
 } as const;
 
-// ===== Expo Template Compatibility =====
+// ===== Expo template compatibility =====
 export default {
   light: {
-    text: palette.text1,
-    background: palette.bg,
+    text: color.text.primary,
+    background: color.surface.canvas,
     tint: tintColorLight,
-    tabIconDefault: palette.text3,
+    tabIconDefault: color.text.tertiary,
     tabIconSelected: tintColorLight,
   },
   dark: {
-    text: palette.white,
+    text: '#FFFFFF',
     background: '#000000',
     tint: tintColorDark,
-    tabIconDefault: palette.text3,
+    tabIconDefault: color.text.tertiary,
     tabIconSelected: tintColorDark,
   },
 };

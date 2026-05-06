@@ -1,5 +1,6 @@
 import { Mascots, Onboarding } from '@/constants/Assets';
-import { palette } from '@/constants/Colors';
+import { color, mascotSize, motion, radius, spacing, typography } from '@/constants/tokens';
+import { Button } from '@/components/ui';
 import { Stack, router } from 'expo-router';
 import { useRef, useState } from 'react';
 import {
@@ -13,30 +14,34 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const SLIDES = [
   {
     image: Onboarding.investigate,
     fallback: Mascots.search,
-    title: '식탐정이 추적합니다',
-    body: '인증 마크가 아니라\n지금도 믿을 수 있는 식당을 알려드려요',
+    title: '식탐정이 추적해요',
+    body: '인증 마크가 아니라\n지금 믿을 수 있는 식당을 알려줘요',
   },
   {
     image: null,
     fallback: Mascots.weather,
-    title: '오늘의 위험을 알려드려요',
-    body: '식약처 식중독 예측 + 서울시 환경 데이터로\n오늘 안전한 메뉴를 제안합니다',
+    title: '오늘의 위험을 알려줘요',
+    body: '기상·식약처 데이터로\n오늘 안전한 메뉴를 추천해요',
   },
   {
     image: Onboarding.celebrate,
     fallback: Mascots.ceremony,
-    title: '골든 치즈 등급',
-    body: '5축 위생 평가로 검증한 식당에\n식탐정이 직접 등급을 부여합니다',
+    title: '치즈 등급으로 한눈에',
+    body: '식탐정이 다섯 가지 기준으로 검증한 식당에\n직접 등급을 매겨요',
   },
 ];
 
 const PHONE_WIDTH = 430;
+const DOT_INACTIVE_W = 6;
+const DOT_ACTIVE_W = 24;
+const DOT_H = 6;
 
 export default function Onboarding3() {
   const insets = useSafeAreaInsets();
@@ -66,10 +71,15 @@ export default function Onboarding3() {
         <View style={{ width: 60 }} />
         <View style={styles.dots}>
           {SLIDES.map((_, i) => (
-            <View key={i} style={[styles.dot, i === page && styles.dotActive]} />
+            <Dot key={i} active={i === page} />
           ))}
         </View>
-        <Pressable onPress={() => router.replace('/(tabs)')} style={styles.skipBtn}>
+        <Pressable
+          onPress={() => router.replace('/(tabs)')}
+          accessibilityRole="button"
+          accessibilityLabel="온보딩 건너뛰기"
+          hitSlop={12}
+          style={styles.skipBtn}>
           <Text style={styles.skipText}>건너뛰기</Text>
         </Pressable>
       </View>
@@ -95,61 +105,64 @@ export default function Onboarding3() {
         ))}
       </ScrollView>
 
-      <View style={[styles.cta, { paddingBottom: 16 + insets.bottom }]}>
-        <Pressable onPress={goNext} style={styles.ctaBtn}>
-          <Text style={styles.ctaBtnText}>
-            {page === SLIDES.length - 1 ? '식탐정 시작하기' : '다음'}
-          </Text>
-        </Pressable>
+      <View style={[styles.cta, { paddingBottom: spacing.l + insets.bottom }]}>
+        <Button variant="primary" size="lg" fullWidth onPress={goNext}>
+          {page === SLIDES.length - 1 ? '식탐정 시작하기' : '다음'}
+        </Button>
       </View>
     </View>
   );
 }
 
+function Dot({ active }: { active: boolean }) {
+  const style = useAnimatedStyle(() => ({
+    width: withTiming(active ? DOT_ACTIVE_W : DOT_INACTIVE_W, { duration: motion.duration.base }),
+  }));
+  return (
+    <Animated.View
+      style={[
+        styles.dot,
+        { backgroundColor: active ? color.brand.primary : color.border.default },
+        style,
+      ]}
+    />
+  );
+}
+
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: palette.white },
+  root: { flex: 1, backgroundColor: color.surface.subtle },
 
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: spacing.l,
+    paddingVertical: spacing.m,
   },
   dots: { flexDirection: 'row', gap: 6 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: palette.border },
-  dotActive: { width: 18, backgroundColor: palette.accent },
-  skipBtn: { width: 60, alignItems: 'flex-end' },
-  skipText: { fontSize: 13, color: palette.text3 },
+  dot: { width: DOT_INACTIVE_W, height: DOT_H, borderRadius: radius.pill, backgroundColor: color.border.default },
+  skipBtn: { width: 60, alignItems: 'flex-end', minHeight: 44, justifyContent: 'center' },
+  skipText: { ...typography.caption, color: color.text.tertiary },
 
   slidesScroll: { flex: 1 },
   slide: {
     flex: 1,
-    paddingHorizontal: 28,
+    paddingHorizontal: spacing.xxxl,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  slideImage: { width: 240, height: 240, marginBottom: 32 },
+  slideImage: { width: mascotSize.hero, height: mascotSize.hero, marginBottom: spacing.xxxl },
   slideTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: palette.text1,
-    marginBottom: 12,
+    ...typography.title,
+    color: color.text.primary,
+    marginBottom: spacing.m,
     textAlign: 'center',
   },
   slideBody: {
-    fontSize: 14,
-    color: palette.text2,
+    ...typography.body,
+    color: color.text.secondary,
     textAlign: 'center',
-    lineHeight: 22,
   },
 
-  cta: { paddingHorizontal: 20, paddingTop: 12 },
-  ctaBtn: {
-    backgroundColor: palette.accent,
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  ctaBtnText: { fontSize: 15, fontWeight: '700', color: palette.white },
+  cta: { paddingHorizontal: spacing.xl, paddingTop: spacing.m },
 });

@@ -1,23 +1,25 @@
-import { Icon } from '@/components/Icon';
-import { Cheese, Mascots } from '@/constants/Assets';
-import { palette } from '@/constants/Colors';
-import { Grade } from '@/constants/MockData';
-import { RecomputedRow, ensureRecomputedIndex } from '@/utils/dataStore';
-import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Icon } from '@/components/Icon';
+import { Cheese } from '@/constants/Assets';
+import { Grade } from '@/constants/MockData';
+import { color, radius, spacing, typography } from '@/constants/tokens';
+import { Chip, EmptyState, IconButton, SearchBar, SectionHeader } from '@/components/ui';
+import { RecomputedRow, ensureRecomputedIndex } from '@/utils/dataStore';
 
 const RECENT_SEED = ['행복한', '국수', '돈까스'];
-const POPULAR = ['강남 한식', '냉면', '돈까스', '국수', '한식', '중식'];
+const POPULAR = [
+  { kw: '강남 한식',   trend: 'up' },
+  { kw: '냉면',        trend: 'up' },
+  { kw: '돈까스',      trend: 'flat' },
+  { kw: '국수',        trend: 'down' },
+  { kw: '한식',        trend: 'flat' },
+  { kw: '중식',        trend: 'down' },
+] as const;
+
+const CATEGORIES = ['한식', '중식', '일식', '양식', '분식', '카페', '회·해산물', '구이'];
 
 type IndexRow = RecomputedRow;
 
@@ -43,24 +45,42 @@ export default function SearchScreen() {
   const trimmed = query.trim();
   const isTyping = trimmed.length > 0;
 
-  const suggestions = useMemo(() => {
+  const restaurantHits = useMemo(() => {
     if (!isTyping || !index) return [];
     const tokens = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
     const out: IndexRow[] = [];
     for (const r of index) {
-      const haystack = `${r.n} ${r.c} ${r.g}`.toLowerCase();
+      const haystack = `${r.n}`.toLowerCase();
       if (tokens.every((t) => haystack.includes(t))) {
         out.push(r);
-        if (out.length >= 20) break;
+        if (out.length >= 8) break;
       }
     }
-    // 점수순 정렬, 등급 우선
     return out.sort((a, b) => {
       if (a.gr === 'GOLDEN' && b.gr !== 'GOLDEN') return -1;
       if (b.gr === 'GOLDEN' && a.gr !== 'GOLDEN') return 1;
       return b.s - a.s;
     });
   }, [trimmed, isTyping, index]);
+
+  const districtHits = useMemo(() => {
+    if (!isTyping || !index) return [];
+    const set = new Set<string>();
+    for (const r of index) {
+      if (r.g.toLowerCase().includes(trimmed.toLowerCase())) {
+        set.add(r.g);
+        if (set.size >= 5) break;
+      }
+    }
+    return Array.from(set);
+  }, [trimmed, isTyping, index]);
+
+  const categoryHits = useMemo(() => {
+    if (!isTyping) return [];
+    return CATEGORIES.filter((c) => c.includes(trimmed)).slice(0, 6);
+  }, [trimmed, isTyping]);
+
+  const totalHits = restaurantHits.length + districtHits.length + categoryHits.length;
 
   const submit = (q: string) => {
     if (!q.trim()) return;
@@ -74,110 +94,151 @@ export default function SearchScreen() {
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <Stack.Screen options={{ headerShown: false }} />
 
+      {/* Header — unified search bar */}
       <View style={styles.header}>
-        <View style={styles.inputWrap}>
-          <Icon name="search" size={16} color={palette.accent} />
-          <TextInput
-            ref={inputRef}
-            value={query}
-            onChangeText={setQuery}
-            placeholder="식당 이름, 카테고리, 자치구"
-            placeholderTextColor={palette.text3}
-            returnKeyType="search"
-            onSubmitEditing={() => submit(query)}
-            autoFocus
-            style={styles.input}
-          />
-          {query.length > 0 && (
-            <Pressable onPress={() => setQuery('')} hitSlop={6} style={styles.clearBtn}>
-              <Icon name="close" size={14} color={palette.white} />
-            </Pressable>
-          )}
-        </View>
-        <Pressable onPress={() => router.back()} hitSlop={8}>
+        <SearchBar
+          variant="input"
+          ref={inputRef}
+          value={query}
+          onChangeText={setQuery}
+          placeholder="식당명·메뉴·자치구"
+          returnKeyType="search"
+          onSubmitEditing={() => submit(query)}
+          autoFocus
+          accessibilityLabel="검색어 입력"
+          style={{ flex: 1 }}
+          trailing={
+            query.length > 0 ? (
+              <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityRole="button" accessibilityLabel="검색어 지우기" style={styles.clearBtn}>
+                <Icon name="close" size={12} color={color.text.onBrand} />
+              </Pressable>
+            ) : null
+          }
+        />
+        <Pressable onPress={() => router.back()} hitSlop={8} accessibilityRole="button" accessibilityLabel="검색 닫기">
           <Text style={styles.cancel}>취소</Text>
         </Pressable>
       </View>
 
       <ScrollView
-        style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="always"
         showsVerticalScrollIndicator={false}>
-
-        {!index && (
+        {!index ? (
           <Text style={styles.loading}>인덱스 불러오는 중…</Text>
-        )}
+        ) : isTyping ? (
+          <>
+            {totalHits === 0 ? (
+              <EmptyState
+                mascot="empty"
+                mascotSize="md"
+                title="다른 키워드로 찾아봐요"
+                body="식당명·메뉴·동네 이름으로 검색해 보세요"
+                cta={{ label: '카테고리 탐색', onPress: () => setQuery(''), variant: 'secondary' }}
+              />
+            ) : (
+              <>
+                {restaurantHits.length > 0 ? (
+                  <View style={styles.group}>
+                    <Text style={styles.groupTitle}>식당</Text>
+                    {restaurantHits.map((r) => (
+                      <Pressable
+                        key={r.i}
+                        onPress={() => router.push(`/restaurant/${r.i}` as any)}
+                        accessibilityRole="button"
+                        style={({ pressed }) => [styles.suggestRow, pressed && { backgroundColor: color.fill.tertiary }]}>
+                        <Icon name="search" size={14} color={color.text.tertiary} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.suggestName}>{highlight(r.n, trimmed)}</Text>
+                          <Text style={styles.suggestMeta}>{r.g} · {r.c}{r.s > 0 ? ` · ${r.s}점` : ''}</Text>
+                        </View>
+                        {gradeCheese(r.gr)}
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
 
-        {isTyping ? (
-          <View>
-            {index && suggestions.length > 0 && (
-              <Text style={styles.resultCount}>
-                상위 {suggestions.length}건 (전체 26,793곳에서 검색)
-              </Text>
+                {districtHits.length > 0 ? (
+                  <View style={styles.group}>
+                    <Text style={styles.groupTitle}>자치구</Text>
+                    <View style={styles.chipsRow}>
+                      {districtHits.map((d) => (
+                        <Chip key={d} variant="recent" size="sm" onPress={() => setQuery(d)} leftIcon="location">
+                          {d}
+                        </Chip>
+                      ))}
+                    </View>
+                  </View>
+                ) : null}
+
+                {categoryHits.length > 0 ? (
+                  <View style={styles.group}>
+                    <Text style={styles.groupTitle}>카테고리</Text>
+                    <View style={styles.chipsRow}>
+                      {categoryHits.map((c) => (
+                        <Chip key={c} variant="recent" size="sm" onPress={() => setQuery(c)}>
+                          {c}
+                        </Chip>
+                      ))}
+                    </View>
+                  </View>
+                ) : null}
+              </>
             )}
-            {suggestions.map((r) => (
-              <Pressable
-                key={r.i}
-                onPress={() => router.push(`/restaurant/${r.i}` as any)}
-                style={styles.suggestRow}>
-                <Icon name="search" size={14} color={palette.text3} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.suggestName}>{highlight(r.n, trimmed)}</Text>
-                  <Text style={styles.suggestMeta}>
-                    {r.g} · {r.c} {r.s > 0 ? `· ${r.s}점` : ''}
-                  </Text>
-                </View>
-                {gradeCheese(r.gr)}
-              </Pressable>
-            ))}
-            {index && suggestions.length === 0 && (
-              <View style={styles.empty}>
-                <Image source={Mascots.empty} style={styles.emptyMascot} resizeMode="contain" />
-                <Text style={styles.emptyTitle}>일치하는 식당이 없어요</Text>
-                <Text style={styles.emptyBody}>다른 키워드로 다시 검색해보세요</Text>
-              </View>
-            )}
-          </View>
+          </>
         ) : (
           <>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>최근 검색</Text>
-              {recent.length > 0 && (
-                <Pressable onPress={clearRecent} hitSlop={6}>
-                  <Text style={styles.sectionAction}>전체 삭제</Text>
-                </Pressable>
-              )}
-            </View>
+            <SectionHeader
+              title="최근 검색"
+              trailing={recent.length > 0 ? { label: '전체 삭제', onPress: clearRecent } : undefined}
+              marginBottom="s"
+            />
             {recent.length > 0 ? (
               <View style={styles.chipsRow}>
                 {recent.map((kw) => (
-                  <View key={kw} style={styles.recentChip}>
-                    <Pressable onPress={() => setQuery(kw)}>
-                      <Text style={styles.recentChipText}>{kw}</Text>
-                    </Pressable>
-                    <Pressable onPress={() => removeRecent(kw)} hitSlop={6}>
-                      <Icon name="close" size={11} color={palette.text3} />
-                    </Pressable>
-                  </View>
+                  <Chip
+                    key={kw}
+                    variant="recent"
+                    size="sm"
+                    onPress={() => setQuery(kw)}
+                    onRemove={() => removeRecent(kw)}>
+                    {kw}
+                  </Chip>
                 ))}
               </View>
             ) : (
-              <Text style={styles.recentEmpty}>최근 검색 기록이 없어요</Text>
+              <EmptyState mascot="search" mascotSize="sm" title="검색하면 여기에 기록이 쌓여요" paddingY="l" />
             )}
 
-            <View style={[styles.sectionHeader, { marginTop: 24 }]}>
-              <Text style={styles.sectionTitle}>인기 검색어</Text>
-              <Text style={styles.sectionTime}>오늘 12:00 기준</Text>
-            </View>
-            <View style={styles.popularList}>
-              {POPULAR.map((kw, i) => (
-                <Pressable key={kw} onPress={() => setQuery(kw)} style={styles.popularRow}>
-                  <Text style={[styles.popularRank, i < 3 && { color: palette.accent }]}>
+            <SectionHeader
+              title="인기 검색어"
+              subtitle="오늘 12:00 기준"
+              marginTop="xxl"
+              marginBottom="s"
+            />
+            <View>
+              {POPULAR.map((p, i) => (
+                <Pressable
+                  key={p.kw}
+                  onPress={() => setQuery(p.kw)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${p.kw} 검색`}
+                  style={({ pressed }) => [styles.popularRow, pressed && { backgroundColor: color.fill.tertiary }]}>
+                  <Text style={[styles.popularRank, i < 3 && { color: color.brand.primary }]}>
                     {i + 1}
                   </Text>
-                  <Text style={styles.popularText}>{kw}</Text>
+                  <Text style={styles.popularText}>{p.kw}</Text>
+                  <TrendArrow trend={p.trend} />
                 </Pressable>
+              ))}
+            </View>
+
+            <SectionHeader title="카테고리로 찾기" marginTop="xxl" marginBottom="m" />
+            <View style={styles.chipsRow}>
+              {CATEGORIES.map((c) => (
+                <Chip key={c} variant="recent" size="md" onPress={() => setQuery(c)}>
+                  {c}
+                </Chip>
               ))}
             </View>
           </>
@@ -186,6 +247,17 @@ export default function SearchScreen() {
         <View style={{ height: 32 }} />
       </ScrollView>
     </View>
+  );
+}
+
+function TrendArrow({ trend }: { trend: 'up' | 'down' | 'flat' }) {
+  if (trend === 'flat') {
+    return <Text style={[styles.trendText, { color: color.text.tertiary }]}>—</Text>;
+  }
+  return (
+    <Text style={[styles.trendText, { color: trend === 'up' ? color.status.danger : color.status.info }]}>
+      {trend === 'up' ? '▲' : '▼'}
+    </Text>
   );
 }
 
@@ -203,7 +275,7 @@ function highlight(text: string, term: string) {
   return (
     <>
       {text.slice(0, idx)}
-      <Text style={{ color: palette.accent, fontWeight: '700' }}>
+      <Text style={{ color: color.brand.primary, fontWeight: '700' }}>
         {text.slice(idx, idx + term.length)}
       </Text>
       {text.slice(idx + term.length)}
@@ -212,81 +284,66 @@ function highlight(text: string, term: string) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: palette.white },
+  root: { flex: 1, backgroundColor: color.surface.subtle },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    gap: 12,
+    paddingHorizontal: spacing.l,
+    paddingVertical: spacing.m,
+    gap: spacing.m,
     borderBottomWidth: 1,
-    borderBottomColor: palette.border,
+    borderBottomColor: color.border.default,
   },
   inputWrap: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: palette.bgCard,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 40,
+    gap: spacing.s,
+    backgroundColor: color.fill.secondary,
+    borderRadius: radius.l,
+    paddingHorizontal: spacing.m,
+    height: 48,
   },
-  input: { flex: 1, fontSize: 14, color: palette.text1, paddingVertical: 0 },
+  input: { flex: 1, ...typography.body, color: color.text.primary, paddingVertical: 0 },
   clearBtn: {
-    width: 18, height: 18, borderRadius: 9, backgroundColor: palette.text3,
+    width: 22, height: 22, borderRadius: radius.pill, backgroundColor: color.text.tertiary,
     alignItems: 'center', justifyContent: 'center',
   },
-  cancel: { fontSize: 14, color: palette.text1, fontWeight: '500' },
+  cancel: { ...typography.bodyEmphasized, color: color.text.primary },
 
-  scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 16, paddingTop: 14 },
+  scrollContent: { paddingHorizontal: spacing.l, paddingTop: spacing.l },
 
-  loading: { fontSize: 12, color: palette.text3, paddingVertical: 24, textAlign: 'center' },
-  resultCount: { fontSize: 11, color: palette.text3, marginBottom: 8 },
+  loading: { ...typography.caption, color: color.text.tertiary, paddingVertical: spacing.xxl, textAlign: 'center' },
 
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    marginBottom: 10,
-  },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: palette.text1 },
-  sectionAction: { fontSize: 12, color: palette.text3 },
-  sectionTime: { fontSize: 11, color: palette.text3 },
+  group: { marginBottom: spacing.xl },
+  groupTitle: { ...typography.captionEmphasized, color: color.text.secondary, marginBottom: spacing.s },
 
-  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  recentChip: {
+  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.s },
+
+  popularRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.white,
+    gap: spacing.l,
+    paddingVertical: spacing.m,
+    minHeight: 44,
+    borderRadius: radius.s,
   },
-  recentChipText: { fontSize: 12, color: palette.text1, fontWeight: '500' },
-  recentEmpty: { fontSize: 12, color: palette.text3, paddingVertical: 12 },
-
-  popularList: { gap: 4 },
-  popularRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 10,
-  },
-  popularRank: { fontSize: 14, fontWeight: '800', color: palette.text2, width: 20 },
-  popularText: { fontSize: 14, color: palette.text1, fontWeight: '500' },
+  popularRank: { ...typography.bodyEmphasized, color: color.text.secondary, width: 20 },
+  popularText: { ...typography.body, color: color.text.primary, flex: 1 },
+  trendText: { ...typography.captionEmphasized },
 
   suggestRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: palette.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.m,
+    paddingVertical: spacing.m,
+    minHeight: 56,
+    borderBottomWidth: 1,
+    borderBottomColor: color.border.default,
+    paddingHorizontal: spacing.xs,
+    borderRadius: radius.s,
   },
-  suggestName: { fontSize: 14, color: palette.text1, fontWeight: '500' },
-  suggestMeta: { fontSize: 11, color: palette.text3, marginTop: 2 },
+  suggestName: { ...typography.body, color: color.text.primary },
+  suggestMeta: { ...typography.footnote, color: color.text.tertiary, marginTop: spacing.xxs },
   suggestCheese: { width: 28, height: 28 },
-
-  empty: { alignItems: 'center', paddingVertical: 60 },
-  emptyMascot: { width: 110, height: 110, marginBottom: 12 },
-  emptyTitle: { fontSize: 14, fontWeight: '600', color: palette.text1, marginBottom: 4 },
-  emptyBody: { fontSize: 12, color: palette.text3 },
 });

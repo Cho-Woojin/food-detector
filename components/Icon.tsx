@@ -24,6 +24,7 @@ const ALIASES = {
   heartOutline: 'heart-outline',
   star: 'star',
   sparkles: 'sparkles',
+  share: 'share-outline',
   // 메뉴
   user: 'person-outline',
   map: 'map-outline',

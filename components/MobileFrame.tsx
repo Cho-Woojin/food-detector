@@ -1,8 +1,9 @@
-import { palette } from '@/constants/Colors';
+import { color, radius, spacing } from '@/constants/tokens';
 import { ReactNode } from 'react';
 import { Platform, StyleSheet, View, useWindowDimensions } from 'react-native';
 
 const PHONE_MAX_WIDTH = 430;
+const PHONE_MAX_HEIGHT = 932;
 const DESKTOP_BREAKPOINT = 768;
 
 /**
@@ -28,20 +29,20 @@ export function MobileFrame({ children }: { children: ReactNode }) {
 const styles = StyleSheet.create({
   fullScreen: {
     flex: 1,
-    backgroundColor: palette.white,
+    backgroundColor: color.surface.subtle,
   },
   desktopBg: {
     flex: 1,
-    backgroundColor: palette.bgCard,
+    backgroundColor: color.fill.tertiary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   phoneFrame: {
     width: PHONE_MAX_WIDTH,
     height: '100%',
-    maxHeight: 932,
-    backgroundColor: palette.white,
-    borderRadius: 32,
+    maxHeight: PHONE_MAX_HEIGHT,
+    backgroundColor: color.surface.subtle,
+    borderRadius: radius.xl + spacing.m, // 32
     overflow: 'hidden',
     ...Platform.select({
       web: {

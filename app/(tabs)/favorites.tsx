@@ -1,18 +1,12 @@
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Icon } from '@/components/Icon';
 import { Cheese } from '@/constants/Assets';
-import { palette } from '@/constants/Colors';
+import { color, radius, spacing, typography } from '@/constants/tokens';
+import { AnimatedHeart, AppHeader, Chip, EmptyState, IconButton, Screen } from '@/components/ui';
+// Chip is still used in the filter row above the list.
 import { ensureRecomputedIndex } from '@/utils/dataStore';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
-import {
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
 
 type Grade = 'GOLDEN' | 'SILVER' | 'BRONZE';
 type Favorite = {
@@ -26,12 +20,37 @@ type Favorite = {
 };
 
 const FILTERS = ['전체', 'GOLDEN', 'SILVER', 'BRONZE'] as const;
+type Filter = (typeof FILTERS)[number];
+type SortKey = 'score' | 'recent' | 'name';
+
+const FILTER_LABEL: Record<Filter, string> = {
+  전체: '전체',
+  GOLDEN: '골든',
+  SILVER: '실버',
+  BRONZE: '브론즈',
+};
+
+const SORT_LABEL: Record<SortKey, string> = {
+  score: '점수순',
+  recent: '최근순',
+  name: '이름순',
+};
+
+const GRADE_LABEL: Record<Grade, string> = {
+  GOLDEN: '골든 치즈',
+  SILVER: '실버 치즈',
+  BRONZE: '브론즈 치즈',
+};
+
+const CHEESE_BY_GRADE = (g: Grade) =>
+  g === 'GOLDEN' ? Cheese.gold : g === 'SILVER' ? Cheese.silver : Cheese.bronze;
 
 export default function FavoritesScreen() {
-  const [filter, setFilter] = useState<(typeof FILTERS)[number]>('전체');
+  const [filter, setFilter] = useState<Filter>('전체');
+  const [sort, setSort] = useState<SortKey>('score');
   const [favorites, setFavorites] = useState<Favorite[]>([]);
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
 
-  // 임시 좋아요: 재계산 인덱스 상위 점수 일부
   useEffect(() => {
     let cancelled = false;
     ensureRecomputedIndex().then((rows) => {
@@ -50,151 +69,237 @@ export default function FavoritesScreen() {
           district: r.g,
         }));
       setFavorites(list);
+      setLikedIds(new Set(list.map((x) => x.id)));
     });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const filtered = filter === '전체' ? favorites : favorites.filter((f) => f.grade === filter);
+  const filtered = useMemo(() => {
+    let list = filter === '전체' ? favorites : favorites.filter((f) => f.grade === filter);
+    list = list.filter((f) => likedIds.has(f.id));
+    if (sort === 'score') list = [...list].sort((a, b) => b.score - a.score);
+    if (sort === 'name') list = [...list].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+    return list;
+  }, [favorites, filter, sort, likedIds]);
+
+  const totalCount = favorites.filter((f) => likedIds.has(f.id)).length;
+  const allEmpty = totalCount === 0;
+  const filterEmpty = !allEmpty && filtered.length === 0;
+
+  const cycleSort = () => {
+    const order: SortKey[] = ['score', 'recent', 'name'];
+    const next = order[(order.indexOf(sort) + 1) % order.length];
+    setSort(next);
+  };
+
+  const toggleLike = (id: string) => {
+    setLikedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   return (
-    <View style={styles.root}>
-      <View style={styles.headerBar}>
-        <Text style={styles.headerTitle}>좋아요한 식당</Text>
-        <Text style={styles.headerCount}>{favorites.length}곳</Text>
-      </View>
+    <Screen variant="surface" edges={['top']} paddingHorizontal="none">
+      <AppHeader
+        title="좋아요한 식당"
+        subtitle={`${totalCount}곳`}
+        variant="large"
+        leading="none"
+        withSafeArea={false}
+        trailing={
+          <IconButton
+            icon="search"
+            size="md"
+            accessibilityLabel="검색"
+            onPress={() => router.push('/search')}
+          />
+        }
+      />
 
-      <View style={styles.filterRow}>
-        {FILTERS.map((f) => {
-          const active = filter === f;
-          return (
-            <Pressable
+      {/* Filter + sort row */}
+      <View style={styles.controlBar}>
+        <View style={styles.filterRow}>
+          {FILTERS.map((f) => (
+            <Chip
               key={f}
+              variant="filter"
+              size="sm"
+              selected={filter === f}
               onPress={() => setFilter(f)}
-              style={[styles.filterChip, active && styles.filterChipActive]}>
-              <Text style={[styles.filterText, active && styles.filterTextActive]}>{f}</Text>
-            </Pressable>
-          );
-        })}
+              accessibilityLabel={`${FILTER_LABEL[f]} 필터`}>
+              {FILTER_LABEL[f]}
+            </Chip>
+          ))}
+        </View>
+        <Pressable
+          onPress={cycleSort}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={`정렬: ${SORT_LABEL[sort]}`}
+          style={styles.sortBtn}>
+          <Icon name="forward" size={12} color={color.text.secondary} />
+          <Text style={styles.sortText}>{SORT_LABEL[sort]}</Text>
+        </Pressable>
       </View>
 
       <ScrollView
-        style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
-        {filtered.map((item) => (
-          <TouchableOpacity
-            key={item.id}
-            activeOpacity={0.7}
-            onPress={() => router.push(`/restaurant/${item.id}` as any)}
-            style={styles.card}>
-            <Image
-              source={
-                item.grade === 'GOLDEN'
-                  ? Cheese.gold
-                  : item.grade === 'SILVER'
-                  ? Cheese.silver
-                  : Cheese.bronze
-              }
-              style={styles.cheese}
-              resizeMode="contain"
+        {filtered.map((item, i) => (
+          <View key={item.id}>
+            <RestaurantRow
+              item={item}
+              liked={likedIds.has(item.id)}
+              onToggle={() => toggleLike(item.id)}
+              onPress={() => router.push(`/restaurant/${item.id}` as any)}
             />
-            <View style={styles.cardBody}>
-              <View style={styles.cardTopRow}>
-                <Text style={styles.cardName}>{item.name}</Text>
-                <Text style={styles.cardScore}>{item.score}점</Text>
-              </View>
-              <Text style={styles.cardCategory}>
-                {item.category} · {item.distance}
-              </Text>
-              <View style={styles.districtRow}>
-                <Icon name="location" size={11} color={palette.text3} />
-                <Text style={styles.cardDistrict}>{item.district}</Text>
-              </View>
-            </View>
-            <Icon name="heart" size={16} color={palette.accent} style={{ marginLeft: 8 }} />
-          </TouchableOpacity>
+            {i < filtered.length - 1 ? <View style={styles.divider} /> : null}
+          </View>
         ))}
 
-        {filtered.length === 0 && (
-          <View style={styles.empty}>
-            <Icon name="searchOutline" size={36} color={palette.text3} />
-            <Text style={styles.emptyText}>해당 등급의 식당이 없어요</Text>
-          </View>
-        )}
-
-        <View style={{ height: 24 }} />
+        {allEmpty ? (
+          <EmptyState
+            mascot="search"
+            mascotSize="lg"
+            title="아직 좋아요한 식당이 없어요"
+            body="식당 상세에서 하트를 눌러 모아보세요"
+            cta={{ label: '식당 둘러보기', onPress: () => router.push('/search'), variant: 'primary' }}
+          />
+        ) : filterEmpty ? (
+          <EmptyState
+            mascot="empty"
+            mascotSize="md"
+            title="이 등급엔 좋아요가 없어요"
+            body="다른 등급으로 골라봐요"
+            cta={{ label: '전체 보기', onPress: () => setFilter('전체') }}
+          />
+        ) : null}
       </ScrollView>
-    </View>
+    </Screen>
+  );
+}
+
+function RestaurantRow({
+  item,
+  liked,
+  onPress,
+  onToggle,
+}: {
+  item: Favorite;
+  liked: boolean;
+  onPress: () => void;
+  onToggle: () => void;
+}) {
+  const cheeseFg = color.cheese[item.grade].fg;
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${item.name} 상세 보기`}
+      style={({ pressed }) => [styles.row, pressed && { backgroundColor: color.fill.quaternary }]}>
+      {/* Thumbnail */}
+      <View style={styles.thumb}>
+        <Image
+          source={CHEESE_BY_GRADE(item.grade)}
+          style={styles.thumbImg}
+          resizeMode="contain"
+        />
+      </View>
+
+      {/* Info column */}
+      <View style={styles.info}>
+        <View style={styles.titleRow}>
+          <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
+          <AnimatedHeart active={liked} size={20} hitSize={32} onPress={onToggle} />
+        </View>
+
+        <View style={styles.scoreRow}>
+          <Text style={[styles.score, { color: cheeseFg }]}>{item.score}점</Text>
+          <Text style={styles.dot}>·</Text>
+          <Text style={[styles.gradeLabel, { color: cheeseFg }]}>{GRADE_LABEL[item.grade]}</Text>
+          <Text style={styles.dot}>·</Text>
+          <Text style={styles.category}>{item.category}</Text>
+        </View>
+
+        <View style={styles.metaRow}>
+          <Icon name="location" size={11} color={color.text.tertiary} />
+          <Text style={styles.metaText}>{item.district}</Text>
+          {item.distance !== '—' ? (
+            <>
+              <Text style={styles.dotSmall}>·</Text>
+              <Text style={styles.metaText}>{item.distance}</Text>
+            </>
+          ) : null}
+        </View>
+      </View>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: palette.white },
-  headerBar: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 12,
-  },
-  headerTitle: { fontSize: 22, fontWeight: '700', color: palette.text1 },
-  headerCount: { fontSize: 13, color: palette.text3 },
-
-  filterRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingBottom: 12,
-    gap: 8,
-  },
-  filterChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.white,
-  },
-  filterChipActive: {
-    backgroundColor: palette.accent,
-    borderColor: palette.accent,
-  },
-  filterText: { fontSize: 12, color: palette.text2, fontWeight: '500' },
-  filterTextActive: { color: palette.white, fontWeight: '600' },
-
-  scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 20 },
-
-  card: {
+  controlBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: palette.bg,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: palette.border,
-  },
-  cheese: { width: 44, height: 44, marginRight: 12 },
-  cardBody: { flex: 1 },
-  cardTopRow: {
-    flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'baseline',
-    marginBottom: 2,
+    paddingHorizontal: spacing.l,
+    paddingTop: spacing.s,
+    paddingBottom: spacing.m,
+    gap: spacing.s,
   },
-  cardName: { fontSize: 15, fontWeight: '600', color: palette.text1 },
-  cardScore: { fontSize: 13, fontWeight: '600', color: palette.accent },
-  cardCategory: { fontSize: 12, color: palette.text2, marginBottom: 2 },
-  districtRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  cardDistrict: { fontSize: 11, color: palette.text3 },
-
-  empty: {
+  filterRow: { flexDirection: 'row', gap: spacing.s, flex: 1, flexWrap: 'wrap' },
+  sortBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 60,
-    gap: 10,
+    gap: 4,
+    paddingHorizontal: spacing.m,
+    paddingVertical: spacing.s,
+    borderRadius: radius.pill,
+    backgroundColor: color.fill.tertiary,
   },
-  emptyText: { fontSize: 13, color: palette.text3 },
+  sortText: { ...typography.captionEmphasized, color: color.text.secondary },
+
+  scrollContent: { paddingTop: spacing.xs, paddingBottom: spacing.xxl },
+
+  // List row (no card, no shadow)
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.m,
+    paddingHorizontal: spacing.l,
+    paddingVertical: spacing.l,
+  },
+  thumb: {
+    width: 84,
+    height: 84,
+    borderRadius: radius.m,
+    backgroundColor: color.fill.tertiary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  thumbImg: { width: 56, height: 56 },
+
+  info: { flex: 1, gap: spacing.xs },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.s },
+  name: { ...typography.bodyEmphasized, color: color.text.primary, flex: 1 },
+
+  scoreRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexWrap: 'wrap' },
+  score: { ...typography.subheadlineEmphasized },
+  gradeLabel: { ...typography.captionEmphasized },
+  dot: { ...typography.caption, color: color.text.tertiary },
+  category: { ...typography.caption, color: color.text.secondary },
+
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xxs, marginTop: spacing.xxs },
+  metaText: { ...typography.footnote, color: color.text.tertiary },
+  dotSmall: { ...typography.footnote, color: color.text.tertiary, marginHorizontal: spacing.xxs },
+
+  divider: {
+    height: 1,
+    backgroundColor: color.border.default,
+    marginHorizontal: spacing.l,
+  },
 });

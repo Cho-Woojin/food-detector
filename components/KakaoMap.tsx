@@ -1,7 +1,7 @@
 // components/KakaoMap.tsx
 // 카카오맵 React 컴포넌트 (Web 환경 전용)
 
-import { palette } from '@/constants/Colors';
+import { color, spacing, typography } from '@/constants/tokens';
 import { Restaurant } from '@/constants/Restaurant';
 import { loadKakaoMap } from '@/utils/kakaoMap';
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
@@ -134,13 +134,13 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
           const position = new kakao.maps.LatLng(rest.lat, rest.lng);
           
           // 등급별 커스텀 마커 (HTML 사용)
-          const color = GRADE_COLORS[rest.grade] || GRADE_COLORS.NEEDS_DATA;
+          const pinColor = GRADE_COLORS[rest.grade] || GRADE_COLORS.NEEDS_DATA;
           const size = GRADE_SIZES[rest.grade] || 16;
-          
+
           const markerImageSrc = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`
             <svg width="${size}" height="${size + 4}" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 2}" 
-                      fill="${color}" stroke="white" stroke-width="2"/>
+              <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 2}"
+                      fill="${pinColor}" stroke="white" stroke-width="2"/>
               ${rest.grade === 'GOLDEN' ? `<text x="${size/2}" y="${size/2 + 4}" font-size="12" text-anchor="middle" fill="white" font-weight="700">★</text>` : ''}
             </svg>
           `)}`;
@@ -169,12 +169,12 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
         
         // 클러스터러에 마커 추가
         clusterer.addMarkers(markers);
-        
-        console.log(`[KakaoMap] ${markers.length}개 핀 표시 완료`);
+
+        if (__DEV__) console.log(`[KakaoMap] ${markers.length}개 핀 표시 완료`);
         setLoading(false);
-        
+
       } catch (err: any) {
-        console.error('[KakaoMap] 초기화 실패:', err);
+        if (__DEV__) console.error('[KakaoMap] 초기화 실패:', err);
         setError(err.message || '지도 로드 실패');
         setLoading(false);
       }
@@ -203,7 +203,7 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
       {/* 로딩 오버레이 */}
       {loading && (
         <View style={styles.overlay}>
-          <ActivityIndicator color={palette.primaryGreen} size="large" />
+          <ActivityIndicator color={color.brand.primary} size="large" />
           <Text style={styles.loadingText}>식탐정이 지도를 펼치는 중...</Text>
         </View>
       )}
@@ -235,18 +235,18 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     minHeight: 400,
-    backgroundColor: palette.bgCard,
+    backgroundColor: color.fill.tertiary,
   },
   fallback: {
     flex: 1,
     minHeight: 400,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: palette.bgCard,
+    backgroundColor: color.fill.tertiary,
   },
   fallbackText: {
-    fontSize: 14,
-    color: palette.text2,
+    ...typography.subheadline,
+    color: color.text.secondary,
   },
   overlay: {
     position: 'absolute',
@@ -259,25 +259,24 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
   },
   loadingText: {
-    marginTop: 12,
-    fontSize: 13,
-    color: palette.text2,
+    ...typography.caption,
+    color: color.text.secondary,
+    marginTop: spacing.m,
   },
   errorIcon: {
     fontSize: 32,
-    marginBottom: 8,
+    marginBottom: spacing.s,
   },
   errorText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: palette.alertRed,
+    ...typography.subheadlineEmphasized,
+    color: color.status.danger,
     textAlign: 'center',
-    marginBottom: 4,
-    paddingHorizontal: 24,
+    marginBottom: spacing.xs,
+    paddingHorizontal: spacing.xxl,
   },
   errorHint: {
-    fontSize: 11,
-    color: palette.text3,
+    ...typography.footnote,
+    color: color.text.tertiary,
     textAlign: 'center',
   },
 });

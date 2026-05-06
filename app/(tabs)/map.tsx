@@ -2,7 +2,8 @@
 import { Icon } from '@/components/Icon';
 import KakaoMap, { KakaoMapHandle } from '@/components/KakaoMap';
 import { Cheese } from '@/constants/Assets';
-import { palette } from '@/constants/Colors';
+import { SearchBar } from '@/components/ui';
+import { color, elevation, radius, spacing, typography } from '@/constants/tokens';
 import { GuKey, Restaurant } from '@/constants/Restaurant';
 import { loadRestaurantsByGu } from '@/utils/loadData';
 import { useRouter } from 'expo-router';
@@ -14,6 +15,7 @@ import {
   StyleSheet,
   Text,
   View,
+  ViewStyle,
 } from 'react-native';
 
 const SEOUL_CENTER = { lat: 37.5663, lng: 126.978 };
@@ -38,7 +40,7 @@ export default function MapScreen() {
           .filter((r) => r.grade === 'GOLDEN' || r.grade === 'SILVER' || r.grade === 'BRONZE');
         setRestaurants(merged);
       } catch (e) {
-        console.error('데이터 로드 실패:', e);
+        if (__DEV__) console.error('데이터 로드 실패:', e);
       }
     })();
     return () => {
@@ -59,7 +61,7 @@ export default function MapScreen() {
         mapHandleRef.current?.setLevel(4);
       },
       (err) => {
-        console.error('위치 조회 실패:', err);
+        if (__DEV__) console.error('위치 조회 실패:', err);
         alert('위치 권한을 허용해주세요');
       }
     );
@@ -74,6 +76,11 @@ export default function MapScreen() {
 
   const gradeLabel = (g: string) =>
     g === 'GOLDEN' ? '골든 치즈' : g === 'SILVER' ? '실버 치즈' : g === 'BRONZE' ? '브론즈 치즈' : g;
+
+  const cheeseFg = (g: string) =>
+    g === 'GOLDEN' ? color.cheese.GOLDEN.fg
+      : g === 'SILVER' ? color.cheese.SILVER.fg
+      : color.cheese.BRONZE.fg;
 
   return (
     <View style={styles.root}>
@@ -100,27 +107,36 @@ export default function MapScreen() {
         </View>
 
         {/* 상단 검색바 (오버레이) */}
-        <View style={styles.searchBar}>
-          <Icon name="search" size={14} color={palette.text2} />
-          <Text style={styles.searchText}>이 지역에서 검색</Text>
+        <View style={styles.searchOverlay}>
+          <SearchBar
+            variant="button"
+            placeholder="이 지역에서 검색"
+            onPress={() => router.push('/search')}
+          />
         </View>
 
         {/* 우측 컨트롤 버튼 (오버레이) */}
         <View style={styles.controls}>
           <Pressable
             onPress={handleLocate}
+            accessibilityRole="button"
+            accessibilityLabel="현위치 이동"
             style={({ pressed }) => [styles.ctrlBtn, pressed && styles.ctrlBtnPressed]}>
-            <Icon name="location" size={18} color={palette.text1} />
+            <Icon name="location" size={18} color={color.text.primary} />
           </Pressable>
           <View style={styles.zoomGroup}>
             <Pressable
               onPress={() => mapHandleRef.current?.zoomIn()}
+              accessibilityRole="button"
+              accessibilityLabel="확대"
               style={({ pressed }) => [styles.zoomBtn, pressed && styles.ctrlBtnPressed]}>
               <Text style={styles.zoomText}>+</Text>
             </Pressable>
             <View style={styles.zoomDivider} />
             <Pressable
               onPress={() => mapHandleRef.current?.zoomOut()}
+              accessibilityRole="button"
+              accessibilityLabel="축소"
               style={({ pressed }) => [styles.zoomBtn, pressed && styles.ctrlBtnPressed]}>
               <Text style={styles.zoomText}>−</Text>
             </Pressable>
@@ -131,6 +147,8 @@ export default function MapScreen() {
         {selected && (
           <Pressable
             onPress={goDetail}
+            accessibilityRole="button"
+            accessibilityLabel={`${selected.name} 상세 보기`}
             style={({ pressed }) => [styles.selectedCard, pressed && { opacity: 0.95 }]}>
             <View style={styles.selectedImageBox}>
               <Image source={{ uri: selected.img }} style={styles.selectedImage} resizeMode="cover" />
@@ -149,11 +167,11 @@ export default function MapScreen() {
               <Text style={styles.selectedMeta} numberOfLines={1}>
                 {selected.cat} · {selected.gu}
               </Text>
-              <Text style={styles.selectedScore}>
+              <Text style={[styles.selectedScore, { color: cheeseFg(selected.grade) }]}>
                 {selected.score}점 · {gradeLabel(selected.grade)}
               </Text>
             </View>
-            <Icon name="forward" size={18} color={palette.text3} />
+            <Icon name="forward" size={18} color={color.text.tertiary} />
           </Pressable>
         )}
       </View>
@@ -162,135 +180,86 @@ export default function MapScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: palette.bgCard, alignItems: 'center' },
+  root: { flex: 1, backgroundColor: color.surface.canvas, alignItems: 'center' },
   container: {
     flex: 1,
     width: '100%',
     maxWidth: 480,
-    backgroundColor: palette.bg,
+    backgroundColor: color.surface.subtle,
     position: 'relative',
   },
 
-  mapBox: { flex: 1, backgroundColor: palette.bgCard },
-  mobileFallback: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  mobileFallbackTitle: { fontSize: 16, fontWeight: '700', color: palette.text1, marginBottom: 4 },
-  mobileFallbackSub: { fontSize: 12, color: palette.text2 },
+  mapBox: { flex: 1, backgroundColor: color.fill.tertiary },
+  mobileFallback: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xxxl },
+  mobileFallbackTitle: { ...typography.bodyEmphasized, color: color.text.primary, marginBottom: spacing.xs },
+  mobileFallbackSub: { ...typography.caption, color: color.text.secondary },
 
-  // 상단 검색바 (오버레이)
-  searchBar: {
+  // 상단 검색바 (오버레이) — 위치만, 시각 스타일은 SearchBar 컴포넌트
+  searchOverlay: {
     position: 'absolute',
-    top: 12,
-    left: 12,
-    right: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: palette.white,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: palette.border,
-    ...Platform.select({
-      web: { boxShadow: '0 2px 8px rgba(0,0,0,0.08)' },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-        elevation: 2,
-      },
-    }),
+    top: spacing.m,
+    left: spacing.m,
+    right: spacing.m,
   },
-  searchText: { fontSize: 13, color: palette.text2 },
 
   // 우측 컨트롤
   controls: {
     position: 'absolute',
-    right: 12,
+    right: spacing.m,
     bottom: 96,
-    gap: 10,
+    gap: spacing.s + 2,
     alignItems: 'center',
   },
   ctrlBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: palette.white,
+    width: 44,
+    height: 44,
+    borderRadius: radius.pill,
+    backgroundColor: color.surface.subtle,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: palette.border,
-    ...Platform.select({
-      web: { boxShadow: '0 2px 6px rgba(0,0,0,0.1)' },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 6,
-        elevation: 2,
-      },
-    }),
+    borderColor: color.border.default,
+    ...(elevation.subtle as ViewStyle),
   },
   ctrlBtnPressed: { opacity: 0.7 },
   zoomGroup: {
-    backgroundColor: palette.white,
-    borderRadius: 12,
+    backgroundColor: color.surface.subtle,
+    borderRadius: radius.m,
     borderWidth: 1,
-    borderColor: palette.border,
+    borderColor: color.border.default,
     overflow: 'hidden',
-    ...Platform.select({
-      web: { boxShadow: '0 2px 6px rgba(0,0,0,0.1)' },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 6,
-        elevation: 2,
-      },
-    }),
+    ...(elevation.subtle as ViewStyle),
   },
   zoomBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  zoomText: { fontSize: 22, fontWeight: '600', color: palette.text1, lineHeight: 24 },
-  zoomDivider: { height: 1, backgroundColor: palette.border },
+  zoomText: { ...typography.title, fontSize: 22, lineHeight: 24, color: color.text.primary },
+  zoomDivider: { height: 1, backgroundColor: color.border.default },
 
   // 선택 카드
   selectedCard: {
     position: 'absolute',
-    bottom: 16,
-    left: 12,
-    right: 12,
+    bottom: spacing.l,
+    left: spacing.m,
+    right: spacing.m,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: palette.white,
-    padding: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: palette.border,
-    ...Platform.select({
-      web: { boxShadow: '0 4px 16px rgba(0,0,0,0.1)' },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 16,
-        elevation: 6,
-      },
-    }),
+    backgroundColor: color.surface.subtle,
+    padding: spacing.m,
+    borderRadius: radius.l,
+    ...(elevation.card as ViewStyle),
   },
   selectedImageBox: {
     width: 56,
     height: 56,
-    borderRadius: 10,
-    marginRight: 12,
+    borderRadius: radius.m,
+    marginRight: spacing.m,
     position: 'relative',
     overflow: 'hidden',
-    backgroundColor: palette.bgCard,
+    backgroundColor: color.fill.tertiary,
   },
   selectedImage: { width: '100%', height: '100%' },
   selectedCheeseBadge: {
@@ -304,7 +273,7 @@ const styles = StyleSheet.create({
   },
   selectedCheeseImg: { width: 20, height: 20 },
   selectedInfo: { flex: 1 },
-  selectedName: { fontSize: 14, fontWeight: '700', color: palette.text1, marginBottom: 2 },
-  selectedMeta: { fontSize: 11, color: palette.text2, marginBottom: 2 },
-  selectedScore: { fontSize: 12, fontWeight: '600', color: palette.primaryGreen },
+  selectedName: { ...typography.subheadlineEmphasized, color: color.text.primary, marginBottom: spacing.xxs },
+  selectedMeta: { ...typography.footnote, color: color.text.secondary, marginBottom: spacing.xxs },
+  selectedScore: { ...typography.captionEmphasized },
 });

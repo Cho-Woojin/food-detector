@@ -1,10 +1,10 @@
 import { Logos, Mascots } from '@/constants/Assets';
-import { palette } from '@/constants/Colors';
+import { color, mascotSize, motion, radius, spacing, typography } from '@/constants/tokens';
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, Image, StyleSheet, Text, View } from 'react-native';
 
 type Props = {
-  /** 데이터 로딩이 끝나도 최소 노출되는 시간(ms). 브랜딩 강조용. */
+  /** Minimum exposure time even when data is ready (ms) — branding hold. */
   minDurationMs?: number;
   ready: boolean;
   onFinish: () => void;
@@ -13,46 +13,25 @@ type Props = {
 export function AppSplash({ minDurationMs = 1400, ready, onFinish }: Props) {
   const fade = useRef(new Animated.Value(0)).current;
   const lift = useRef(new Animated.Value(20)).current;
-  const bounce = useRef(new Animated.Value(0)).current;
   const startedAt = useRef<number>(Date.now());
 
-  // 진입 애니메이션
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fade, {
         toValue: 1,
-        duration: 380,
+        duration: motion.duration.splash,
         easing: Easing.out(Easing.ease),
         useNativeDriver: true,
       }),
       Animated.timing(lift, {
         toValue: 0,
-        duration: 420,
+        duration: motion.duration.splash + 40,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
     ]).start();
+  }, [fade, lift]);
 
-    // 마스코트 살짝 둥둥
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(bounce, {
-          toValue: 1,
-          duration: 900,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(bounce, {
-          toValue: 0,
-          duration: 900,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-  }, [bounce, fade, lift]);
-
-  // ready + 최소 노출 시간 충족 시 페이드 아웃
   useEffect(() => {
     if (!ready) return;
     const elapsed = Date.now() - startedAt.current;
@@ -68,11 +47,6 @@ export function AppSplash({ minDurationMs = 1400, ready, onFinish }: Props) {
     return () => clearTimeout(t);
   }, [ready, minDurationMs, fade, onFinish]);
 
-  const bounceY = bounce.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -8],
-  });
-
   return (
     <View style={styles.root}>
       <Animated.View
@@ -85,13 +59,9 @@ export function AppSplash({ minDurationMs = 1400, ready, onFinish }: Props) {
           <Text style={styles.logoText}>식탐정</Text>
         </View>
 
-        <Animated.Image
-          source={Mascots.search}
-          style={[styles.mascot, { transform: [{ translateY: bounceY }] }]}
-          resizeMode="contain"
-        />
+        <Image source={Mascots.search} style={styles.mascot} resizeMode="contain" />
 
-        <Text style={styles.tagline}>오늘 안전한 식당, 식탐정이 찾아드릴게요</Text>
+        <Text style={styles.tagline}>오늘 안전한 식당, 식탐정이 찾아줄게요</Text>
       </Animated.View>
 
       <View style={styles.dotsRow}>
@@ -132,37 +102,36 @@ function Dot({ delay }: { delay: number }) {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: palette.lightGreen,
+    backgroundColor: color.surface.subtle,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 32,
+    padding: spacing.xxxl,
   },
-  center: { alignItems: 'center', gap: 24 },
-  logoRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  center: { alignItems: 'center', gap: spacing.xxl },
+  logoRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.m },
   logoImage: { width: 56, height: 56 },
   logoText: {
+    ...typography.display,
     fontSize: 36,
-    fontWeight: '800',
-    color: palette.primaryGreen,
-    letterSpacing: -0.5,
+    lineHeight: 40,
+    color: color.brand.primary,
   },
-  mascot: { width: 180, height: 180 },
+  mascot: { width: mascotSize.hero, height: mascotSize.hero },
   tagline: {
-    fontSize: 14,
-    color: palette.text2,
-    fontWeight: '500',
+    ...typography.subheadlineEmphasized,
+    color: color.text.secondary,
     textAlign: 'center',
   },
   dotsRow: {
     position: 'absolute',
     bottom: 64,
     flexDirection: 'row',
-    gap: 8,
+    gap: spacing.s,
   },
   dot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
-    backgroundColor: palette.primaryGreen,
+    borderRadius: radius.pill,
+    backgroundColor: color.brand.primary,
   },
 });

@@ -10,7 +10,9 @@ import 'react-native-reanimated';
 import { AppSplash } from '@/components/AppSplash';
 import { MobileFrame } from '@/components/MobileFrame';
 import { useColorScheme } from '@/components/useColorScheme';
-import { fontFamily } from '@/constants/Typography';
+import { fontFamilies } from '@/constants/tokens';
+
+const fontFamily = fontFamilies.default;
 import { ensureRecomputedIndex } from '@/utils/dataStore';
 
 // 모든 Text/TextInput 기본 폰트를 Pretendard로 (웹) / 시스템 (네이티브)
