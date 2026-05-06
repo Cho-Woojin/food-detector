@@ -6,7 +6,7 @@ import { color, spacing, typography } from '@/constants/tokens';
 import { Restaurant } from '@/constants/Restaurant';
 import { loadKakaoMap } from '@/utils/kakaoMap';
 import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Image as RNImage, Platform, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 
 interface KakaoMapProps {
   restaurants: Restaurant[];
@@ -23,18 +23,29 @@ export type KakaoMapHandle = {
   setLevel: (lv: number) => void;
 };
 
-// 등급별 마커: 치즈 PNG 에셋 + 사이즈 (점수 높은 등급일수록 큼)
-const CHEESE_URI: Record<string, string> = {
-  GOLDEN: RNImage.resolveAssetSource(Cheese.gold).uri,
-  SILVER: RNImage.resolveAssetSource(Cheese.silver).uri,
-  BRONZE: RNImage.resolveAssetSource(Cheese.bronze).uri,
-};
-
+// 등급별 마커 사이즈 (점수 높은 등급일수록 큼)
 const GRADE_SIZES: Record<string, number> = {
   GOLDEN: 44,
   SILVER: 34,
   BRONZE: 28,
 };
+
+/**
+ * Expo metro web에서 require된 PNG는 보통 `{ uri }` 형태이거나 string URL.
+ * SSR(정적 prerender) 단계에서는 RNImage.resolveAssetSource가 없을 수 있어
+ * 모든 가능한 형태를 안전하게 풀어 string URL만 반환.
+ */
+function resolveAssetUri(asset: unknown): string {
+  if (!asset) return '';
+  if (typeof asset === 'string') return asset;
+  if (typeof asset === 'object') {
+    const a = asset as Record<string, any>;
+    if (typeof a.uri === 'string') return a.uri;
+    if (typeof a.default === 'string') return a.default;
+    if (a.default && typeof a.default.uri === 'string') return a.default.uri;
+  }
+  return '';
+}
 
 /**
  * 줌 레벨 → 표시할 최소 점수 임계값.
@@ -72,6 +83,16 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
     () => [...restaurants].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)),
     [restaurants]
   );
+
+  // 클라이언트에서만 PNG asset URI 평가 (SSR 단계 회피)
+  const cheeseUri = useMemo<Record<string, string>>(() => {
+    if (typeof window === 'undefined') return { GOLDEN: '', SILVER: '', BRONZE: '' };
+    return {
+      GOLDEN: resolveAssetUri(Cheese.gold),
+      SILVER: resolveAssetUri(Cheese.silver),
+      BRONZE: resolveAssetUri(Cheese.bronze),
+    };
+  }, []);
 
   useImperativeHandle(
     ref,
@@ -136,14 +157,14 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
 
         sortedRestaurants.forEach((rest) => {
           if (!rest.lat || !rest.lng) return;
-          const cheeseUri = CHEESE_URI[rest.grade];
-          if (!cheeseUri) return; // 치즈 등급 외(WARNING/INVESTIGATING)는 표시 안 함
+          const uri = cheeseUri[rest.grade];
+          if (!uri) return; // 치즈 등급 외(WARNING/INVESTIGATING)는 표시 안 함
 
           const position = new kakao.maps.LatLng(rest.lat, rest.lng);
           const size = GRADE_SIZES[rest.grade] ?? 28;
 
           const markerImage = new kakao.maps.MarkerImage(
-            cheeseUri,
+            uri,
             new kakao.maps.Size(size, size),
             { offset: new kakao.maps.Point(size / 2, size / 2) }
           );
@@ -193,7 +214,7 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
       markersRef.current = [];
       mapInstanceRef.current = null;
     };
-  }, [sortedRestaurants, centerLat, centerLng, zoom, onMarkerClick]);
+  }, [sortedRestaurants, centerLat, centerLng, zoom, onMarkerClick, cheeseUri]);
   
   return (
     <View style={styles.container}>
