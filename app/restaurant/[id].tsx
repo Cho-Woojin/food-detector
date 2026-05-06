@@ -127,7 +127,11 @@ export default function RestaurantDetail() {
 
       {/* Sticky CTA */}
       <View style={[styles.bottomCta, { paddingBottom: spacing.m + insets.bottom }]}>
-        <Button variant="ghost" size="md" leftIcon="map" onPress={() => {}}>
+        <Button
+          variant="ghost"
+          size="md"
+          leftIcon="map"
+          onPress={() => router.replace('/(tabs)/map')}>
           지도 보기
         </Button>
         <View style={{ flex: 1 }}>

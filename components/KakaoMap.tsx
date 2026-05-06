@@ -22,11 +22,11 @@ export type KakaoMapHandle = {
   setLevel: (lv: number) => void;
 };
 
-// 등급별 단순 dot 마커: 색상 + 크기로만 등급 표현
-const GRADE_STYLE: Record<string, { color: string; size: number }> = {
-  GOLDEN: { color: '#22C55E', size: 18 }, // brand green — 최상위
-  SILVER: { color: '#94A3B8', size: 14 }, // 회색 — 중간
-  BRONZE: { color: '#CD7F32', size: 12 }, // 갈색 — 하위
+// 등급별 단순 dot 마커: 식탐정 그린 농도 + 크기로 등급 표현
+const GRADE_STYLE: Record<string, { color: string; size: number; border: number }> = {
+  GOLDEN: { color: '#16A34A', size: 22, border: 2.5 }, // 진한 그린 — 최상위
+  SILVER: { color: '#4ADE80', size: 18, border: 2 },   // 옅은 그린 — 중간
+  BRONZE: { color: '#94A3B8', size: 16, border: 2 },   // 회색  — 하위
 };
 
 /**
@@ -43,8 +43,8 @@ function scoreThreshold(level: number): number {
 }
 
 /** 단순한 색상 dot SVG → data URL (서버에서도 안전) */
-function dotMarkerSrc(fill: string, size: number): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 1.5}" fill="${fill}" stroke="white" stroke-width="1.5"/></svg>`;
+function dotMarkerSrc(fill: string, size: number, border: number): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - border}" fill="${fill}" stroke="white" stroke-width="${border}"/></svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
@@ -72,11 +72,9 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
 
   // 등급별 SVG 마커 (서버/클라 모두 안전)
   const markerSrc = useMemo<Record<string, string>>(() => {
-    return {
-      GOLDEN: dotMarkerSrc(GRADE_STYLE.GOLDEN.color, GRADE_STYLE.GOLDEN.size),
-      SILVER: dotMarkerSrc(GRADE_STYLE.SILVER.color, GRADE_STYLE.SILVER.size),
-      BRONZE: dotMarkerSrc(GRADE_STYLE.BRONZE.color, GRADE_STYLE.BRONZE.size),
-    };
+    const make = (g: keyof typeof GRADE_STYLE) =>
+      dotMarkerSrc(GRADE_STYLE[g].color, GRADE_STYLE[g].size, GRADE_STYLE[g].border);
+    return { GOLDEN: make('GOLDEN'), SILVER: make('SILVER'), BRONZE: make('BRONZE') };
   }, []);
 
   useImperativeHandle(
