@@ -29,19 +29,6 @@ const GRADE_STYLE: Record<string, { color: string; size: number; border: number 
   BRONZE: { color: '#94A3B8', size: 16, border: 2 },   // 회색  — 하위
 };
 
-/**
- * 줌 레벨 → 표시할 최소 점수 임계값.
- * 멀리서(레벨↑) 볼수록 상위 점수만 표시해 밀도를 해소.
- *  · 1-5 (도시 ~ 동네): 모두 표시
- *  · 6-7 (구 단위)     : 75점 이상 (BRONZE 상위 + SILVER + GOLDEN)
- *  · 8+  (광역)        : 85점 이상 (SILVER + GOLDEN)
- */
-function scoreThreshold(level: number): number {
-  if (level <= 5) return 0;
-  if (level <= 7) return 75;
-  return 85;
-}
-
 /** 단순한 색상 dot SVG → data URL (서버에서도 안전) */
 function dotMarkerSrc(fill: string, size: number, border: number): string {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - border}" fill="${fill}" stroke="white" stroke-width="${border}"/></svg>`;
@@ -60,6 +47,7 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
 ) {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<any>(null);
+  const clustererRef = useRef<any>(null);
   const markersRef = useRef<{ marker: any; score: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -138,8 +126,26 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
         const map = new kakao.maps.Map(mapRef.current, options);
         mapInstanceRef.current = map;
 
+        // 클러스터러 — 5,000+ 마커를 동시에 그리면 브라우저가 멈추므로 줌 레벨에 따라 자동 묶음
+        const clusterer = new kakao.maps.MarkerClusterer({
+          map,
+          averageCenter: true,
+          minLevel: 5,            // 줌 레벨 5 이상(축소)에서 클러스터링
+          disableClickZoom: false,
+          gridSize: 60,
+          calculator: [10, 50, 200], // 묶음 크기 단계
+          styles: [
+            { width: '32px', height: '32px', background: 'rgba(34,197,94,0.85)', borderRadius: '16px', color: '#fff', textAlign: 'center', lineHeight: '32px', fontSize: '12px', fontWeight: '700' },
+            { width: '40px', height: '40px', background: 'rgba(22,163,74,0.85)', borderRadius: '20px', color: '#fff', textAlign: 'center', lineHeight: '40px', fontSize: '13px', fontWeight: '700' },
+            { width: '52px', height: '52px', background: 'rgba(21,128,61,0.9)',  borderRadius: '26px', color: '#fff', textAlign: 'center', lineHeight: '52px', fontSize: '14px', fontWeight: '800' },
+            { width: '64px', height: '64px', background: 'rgba(20,83,45,0.92)',  borderRadius: '32px', color: '#fff', textAlign: 'center', lineHeight: '64px', fontSize: '15px', fontWeight: '800' },
+          ],
+        });
+        clustererRef.current = clusterer;
+
         // 마커 생성 (점수 높은 순으로 already sorted)
         const allMarkers: { marker: any; score: number }[] = [];
+        const kakaoMarkers: any[] = [];
 
         sortedRestaurants.forEach((rest) => {
           if (!rest.lat || !rest.lng) return;
@@ -159,7 +165,6 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
             position,
             image: markerImage,
             title: rest.name,
-            zIndex: rest.score ?? 0, // 겹침 시 점수 높은 게 위
           });
 
           kakao.maps.event.addListener(marker, 'click', () => {
@@ -167,22 +172,14 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
           });
 
           allMarkers.push({ marker, score: rest.score ?? 0 });
+          kakaoMarkers.push(marker);
         });
 
+        // 클러스터러에 일괄 추가 (개별 marker.setMap 호출 안 함)
+        clusterer.addMarkers(kakaoMarkers);
         markersRef.current = allMarkers;
 
-        // 줌 레벨에 따른 가시성 적용
-        const applyVisibility = () => {
-          const threshold = scoreThreshold(map.getLevel());
-          allMarkers.forEach(({ marker, score }) => {
-            marker.setMap(score >= threshold ? map : null);
-          });
-        };
-
-        applyVisibility();
-        kakao.maps.event.addListener(map, 'zoom_changed', applyVisibility);
-
-        if (__DEV__) console.log(`[KakaoMap] ${allMarkers.length}개 핀 생성 (점수 정렬)`);
+        if (__DEV__) console.log(`[KakaoMap] ${allMarkers.length}개 핀 생성 + 클러스터링`);
         setLoading(false);
 
       } catch (err: any) {
@@ -196,7 +193,10 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
 
     // 클린업
     return () => {
-      markersRef.current.forEach(({ marker }) => marker.setMap(null));
+      if (clustererRef.current) {
+        clustererRef.current.clear();
+        clustererRef.current = null;
+      }
       markersRef.current = [];
       mapInstanceRef.current = null;
     };
