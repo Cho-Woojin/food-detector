@@ -10,6 +10,43 @@ import { Chip, EmptyState, IconButton, SearchBar, SectionHeader } from '@/compon
 import { RecomputedRow, ensureRecomputedIndex } from '@/utils/dataStore';
 
 const RECENT_SEED = ['행복한', '국수', '돈까스'];
+const RECENT_STORAGE_KEY = 'foodDetector:recentSearch';
+const RECENT_MAX = 8;
+
+// 모달이 닫혔다 열려도 메모리에 유지 + localStorage persist (web)
+let cachedRecent: string[] | null = null;
+
+function loadRecent(): string[] {
+  if (cachedRecent !== null) return cachedRecent;
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(RECENT_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.every((x) => typeof x === 'string')) {
+          cachedRecent = parsed;
+          return cachedRecent;
+        }
+      }
+    } catch {
+      /* noop */
+    }
+  }
+  cachedRecent = [...RECENT_SEED];
+  return cachedRecent;
+}
+
+function persistRecent(list: string[]) {
+  cachedRecent = list;
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.setItem(RECENT_STORAGE_KEY, JSON.stringify(list));
+    } catch {
+      /* noop */
+    }
+  }
+}
+
 const POPULAR = [
   { kw: '강남 한식',   trend: 'up' },
   { kw: '냉면',        trend: 'up' },
@@ -29,7 +66,7 @@ export default function SearchScreen() {
   const inputRef = useRef<TextInput>(null);
 
   const [query, setQuery] = useState((params.q as string) ?? '');
-  const [recent, setRecent] = useState(RECENT_SEED);
+  const [recent, setRecent] = useState<string[]>(() => loadRecent());
   const [index, setIndex] = useState<IndexRow[] | null>(null);
 
   useEffect(() => {
@@ -83,12 +120,32 @@ export default function SearchScreen() {
   const totalHits = restaurantHits.length + districtHits.length + categoryHits.length;
 
   const submit = (q: string) => {
-    if (!q.trim()) return;
-    setRecent((prev) => [q, ...prev.filter((x) => x !== q)].slice(0, 8));
+    const t = q.trim();
+    if (!t) return;
+    setRecent((prev) => {
+      const next = [t, ...prev.filter((x) => x !== t)].slice(0, RECENT_MAX);
+      persistRecent(next);
+      return next;
+    });
   };
 
-  const removeRecent = (kw: string) => setRecent((prev) => prev.filter((x) => x !== kw));
-  const clearRecent = () => setRecent([]);
+  const removeRecent = (kw: string) =>
+    setRecent((prev) => {
+      const next = prev.filter((x) => x !== kw);
+      persistRecent(next);
+      return next;
+    });
+
+  const clearRecent = () => {
+    setRecent([]);
+    persistRecent([]);
+  };
+
+  // 자동완성 결과 클릭 시에도 recent에 키워드 저장 (사용자는 enter 안 누르고 클릭)
+  const goRestaurant = (id: string) => {
+    submit(trimmed);
+    router.push(`/restaurant/${id}` as any);
+  };
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -144,7 +201,7 @@ export default function SearchScreen() {
                     {restaurantHits.map((r) => (
                       <Pressable
                         key={r.i}
-                        onPress={() => router.push(`/restaurant/${r.i}` as any)}
+                        onPress={() => goRestaurant(r.i)}
                         accessibilityRole="button"
                         style={({ pressed }) => [styles.suggestRow, pressed && { backgroundColor: color.fill.tertiary }]}>
                         <Icon name="search" size={14} color={color.text.tertiary} />
