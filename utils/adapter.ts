@@ -264,10 +264,15 @@ function defaultHours(cat: CategoryKey): string {
   return '11:00 - 22:00';
 }
 
-// ---------- 점수 재계산: 5축 합 (max 130) → 100점 만점으로 정규화 ----------
+// ---------- 점수 재계산 ----------
+// 시연 데이터의 D(리뷰 분석)/E(Gap 탐지)는 99% 이상이 측정 안 됨(0).
+// "데이터 부족" 축을 분모에서 제외해 실제로 측정된 항목만으로 정규화한다.
+// 이렇게 해야 hyg=1·pun=0 같은 평범한 식당도 BRONZE 이상으로 분류된다.
 export function recomputeScore(axes: AxisScore[]): number {
-  const sum = axes.reduce((acc, a) => acc + a.score, 0);
-  const max = axes.reduce((acc, a) => acc + a.max, 0); // 130
+  const measured = axes.filter((a) => a.rating !== '데이터 부족');
+  if (measured.length === 0) return 0;
+  const sum = measured.reduce((acc, a) => acc + a.score, 0);
+  const max = measured.reduce((acc, a) => acc + a.max, 0);
   return Math.round((sum / max) * 100);
 }
 
