@@ -1,11 +1,12 @@
 // components/KakaoMap.tsx
 // 카카오맵 React 컴포넌트 (Web 환경 전용)
 
+import { Cheese } from '@/constants/Assets';
 import { color, spacing, typography } from '@/constants/tokens';
 import { Restaurant } from '@/constants/Restaurant';
 import { loadKakaoMap } from '@/utils/kakaoMap';
-import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
+import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Image as RNImage, Platform, StyleSheet, Text, View } from 'react-native';
 
 interface KakaoMapProps {
   restaurants: Restaurant[];
@@ -22,25 +23,33 @@ export type KakaoMapHandle = {
   setLevel: (lv: number) => void;
 };
 
-// 등급별 핀 색상 (식탐정 디자인 토큰)
-const GRADE_COLORS: Record<string, string> = {
-  GOLDEN: '#F1C40F',         // 노랑
-  SILVER: '#94A3B8',          // 실버
-  BRONZE: '#CD7F32',          // 브론즈
-  INVESTIGATING: '#3498DB',   // 정보 파랑
-  WARNING: '#E74C3C',         // 빨강
-  NEEDS_DATA: '#BDBDBD',      // 회색
+// 등급별 마커: 치즈 PNG 에셋 + 사이즈 (점수 높은 등급일수록 큼)
+const CHEESE_URI: Record<string, string> = {
+  GOLDEN: RNImage.resolveAssetSource(Cheese.gold).uri,
+  SILVER: RNImage.resolveAssetSource(Cheese.silver).uri,
+  BRONZE: RNImage.resolveAssetSource(Cheese.bronze).uri,
 };
 
-// 등급별 핀 크기 (중요한 등급일수록 크게)
 const GRADE_SIZES: Record<string, number> = {
-  GOLDEN: 36,
-  SILVER: 28,
-  BRONZE: 24,
-  INVESTIGATING: 20,
-  WARNING: 22,
-  NEEDS_DATA: 16,
+  GOLDEN: 44,
+  SILVER: 34,
+  BRONZE: 28,
 };
+
+/**
+ * 줌 레벨 → 표시할 최소 점수 임계값.
+ * 멀리서(레벨↑) 볼수록 점수 높은 식당만 보이게 해서 밀도를 자동 해소한다.
+ *  · 1-3 (가까이): 모두
+ *  · 4-5      : 80점 이상 (BRONZE 상위 + SILVER + GOLDEN)
+ *  · 6-7      : 88점 이상 (SILVER 상위 + GOLDEN)
+ *  · 8+ (멀리): 90점 이상 (GOLDEN만)
+ */
+function scoreThreshold(level: number): number {
+  if (level <= 3) return 0;
+  if (level <= 5) return 80;
+  if (level <= 7) return 88;
+  return 90;
+}
 
 const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
   {
@@ -54,9 +63,15 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
 ) {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<any>(null);
-  const clustererRef = useRef<any>(null);
+  const markersRef = useRef<{ marker: any; score: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // 점수 내림차순 정렬 — 마커 생성·표시 우선순위
+  const sortedRestaurants = useMemo(
+    () => [...restaurants].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)),
+    [restaurants]
+  );
 
   useImperativeHandle(
     ref,
@@ -115,62 +130,52 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
         };
         const map = new kakao.maps.Map(mapRef.current, options);
         mapInstanceRef.current = map;
-        
-        // 클러스터러 생성 (26,474개 핀을 줌 레벨에 따라 묶기)
-        const clusterer = new kakao.maps.MarkerClusterer({
-          map: map,
-          averageCenter: true,
-          minLevel: 6, // 줌 레벨 6 이하에서 클러스터링
-          disableClickZoom: false,
-        });
-        clustererRef.current = clusterer;
-        
-        // 마커 생성
-        const markers: any[] = [];
-        
-        restaurants.forEach((rest) => {
-          if (!rest.lat || !rest.lng) return;
-          
-          const position = new kakao.maps.LatLng(rest.lat, rest.lng);
-          
-          // 등급별 커스텀 마커 (HTML 사용)
-          const pinColor = GRADE_COLORS[rest.grade] || GRADE_COLORS.NEEDS_DATA;
-          const size = GRADE_SIZES[rest.grade] || 16;
 
-          const markerImageSrc = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`
-            <svg width="${size}" height="${size + 4}" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 2}"
-                      fill="${pinColor}" stroke="white" stroke-width="2"/>
-              ${rest.grade === 'GOLDEN' ? `<text x="${size/2}" y="${size/2 + 4}" font-size="12" text-anchor="middle" fill="white" font-weight="700">★</text>` : ''}
-            </svg>
-          `)}`;
-          
+        // 마커 생성 (점수 높은 순으로 already sorted)
+        const allMarkers: { marker: any; score: number }[] = [];
+
+        sortedRestaurants.forEach((rest) => {
+          if (!rest.lat || !rest.lng) return;
+          const cheeseUri = CHEESE_URI[rest.grade];
+          if (!cheeseUri) return; // 치즈 등급 외(WARNING/INVESTIGATING)는 표시 안 함
+
+          const position = new kakao.maps.LatLng(rest.lat, rest.lng);
+          const size = GRADE_SIZES[rest.grade] ?? 28;
+
           const markerImage = new kakao.maps.MarkerImage(
-            markerImageSrc,
-            new kakao.maps.Size(size, size + 4),
-            { offset: new kakao.maps.Point(size/2, size/2) }
+            cheeseUri,
+            new kakao.maps.Size(size, size),
+            { offset: new kakao.maps.Point(size / 2, size / 2) }
           );
-          
+
           const marker = new kakao.maps.Marker({
-            position: position,
+            position,
             image: markerImage,
             title: rest.name,
+            zIndex: rest.score ?? 0, // 겹침 시 점수 높은 게 위
           });
-          
-          // 클릭 이벤트
-          kakao.maps.event.addListener(marker, 'click', () => {
-            if (onMarkerClick) {
-              onMarkerClick(rest);
-            }
-          });
-          
-          markers.push(marker);
-        });
-        
-        // 클러스터러에 마커 추가
-        clusterer.addMarkers(markers);
 
-        if (__DEV__) console.log(`[KakaoMap] ${markers.length}개 핀 표시 완료`);
+          kakao.maps.event.addListener(marker, 'click', () => {
+            onMarkerClick?.(rest);
+          });
+
+          allMarkers.push({ marker, score: rest.score ?? 0 });
+        });
+
+        markersRef.current = allMarkers;
+
+        // 줌 레벨에 따른 가시성 적용
+        const applyVisibility = () => {
+          const threshold = scoreThreshold(map.getLevel());
+          allMarkers.forEach(({ marker, score }) => {
+            marker.setMap(score >= threshold ? map : null);
+          });
+        };
+
+        applyVisibility();
+        kakao.maps.event.addListener(map, 'zoom_changed', applyVisibility);
+
+        if (__DEV__) console.log(`[KakaoMap] ${allMarkers.length}개 핀 생성 (점수 정렬)`);
         setLoading(false);
 
       } catch (err: any) {
@@ -181,15 +186,14 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
     };
     
     initMap();
-    
+
     // 클린업
     return () => {
-      if (clustererRef.current) {
-        clustererRef.current.clear();
-      }
+      markersRef.current.forEach(({ marker }) => marker.setMap(null));
+      markersRef.current = [];
       mapInstanceRef.current = null;
     };
-  }, [restaurants, centerLat, centerLng, zoom]);
+  }, [sortedRestaurants, centerLat, centerLng, zoom, onMarkerClick]);
   
   return (
     <View style={styles.container}>
