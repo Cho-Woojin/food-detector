@@ -4,7 +4,16 @@
   "outputDirectory": "dist",
   "installCommand": "npm install",
   "framework": null,
+  "cleanUrls": true,
+  "trailingSlash": false,
   "rewrites": [
-    { "source": "/((?!_expo|assets|favicon\\.ico).*)", "destination": "/" }
+    {
+      "source": "/restaurant/:id",
+      "destination": "/restaurant/[id]"
+    },
+    {
+      "source": "/((?!_expo/|assets/|favicon\\.ico|.*\\.html|.*\\.js|.*\\.css|.*\\.png|.*\\.svg|.*\\.json).*)",
+      "destination": "/index.html"
+    }
   ]
 }
