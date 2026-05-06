@@ -24,9 +24,9 @@ export type KakaoMapHandle = {
 
 // 등급별 단순 dot 마커: 색상 + 크기로만 등급 표현
 const GRADE_STYLE: Record<string, { color: string; size: number }> = {
-  GOLDEN: { color: '#22C55E', size: 14 }, // brand green — 최상위
-  SILVER: { color: '#94A3B8', size: 11 }, // 회색 — 중간
-  BRONZE: { color: '#CD7F32', size: 9 },  // 갈색 — 하위
+  GOLDEN: { color: '#22C55E', size: 18 }, // brand green — 최상위
+  SILVER: { color: '#94A3B8', size: 14 }, // 회색 — 중간
+  BRONZE: { color: '#CD7F32', size: 12 }, // 갈색 — 하위
 };
 
 /**
@@ -120,6 +120,9 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
   
   // 카카오맵 초기화
   useEffect(() => {
+    // 첫 mount 시 restaurants는 빈 배열 — 빈 상태로 Map을 두 번 만들면
+    // 같은 div에 중복 Map이 생성돼 마커가 보이지 않을 수 있다. 데이터가 들어온 뒤 한 번만 init.
+    if (sortedRestaurants.length === 0) return;
     const initMap = async () => {
       try {
         setLoading(true);
