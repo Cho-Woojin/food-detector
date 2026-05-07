@@ -23,6 +23,28 @@ import { useMemo } from 'react';
 const SEOUL_CENTER = { lat: 37.5663, lng: 126.978 };
 const ALL_GUS: GuKey[] = ['종로구', '강남구', '마포구'];
 
+/**
+ * 좌표 jitter — 데이터셋 한계 보완.
+ * 현재 26K 식당 데이터의 lat/lng가 식당별이 아니라 자치구 대표 좌표 1개로
+ * 들어있어 모든 핀이 같은 자리에 겹쳐 보인다. id 기반 deterministic 해시로
+ * 자치구 영역(반경 ~2km) 안에서 식당별로 일관된 오프셋을 부여한다.
+ *  - 같은 식당은 항상 같은 위치 (캐시 안전)
+ *  - 시연용 분산 시각화. 실제 좌표가 들어오면 이 함수만 제거하면 됨.
+ */
+const JITTER_LAT = 0.018; // ~2.0 km
+const JITTER_LNG = 0.022; // ~1.9 km (위도 37.5에서)
+function jitterFromId(id: string): { dLat: number; dLng: number } {
+  let h1 = 2166136261, h2 = 4294967291;
+  for (let i = 0; i < id.length; i++) {
+    h1 = ((h1 ^ id.charCodeAt(i)) * 16777619) >>> 0;
+    h2 = ((h2 ^ (id.charCodeAt(i) * 31)) * 2654435761) >>> 0;
+  }
+  // -0.5 .. +0.5 범위로 정규화
+  const dLat = ((h1 % 10000) / 10000 - 0.5) * JITTER_LAT;
+  const dLng = ((h2 % 10000) / 10000 - 0.5) * JITTER_LNG;
+  return { dLat, dLng };
+}
+
 export default function MapScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
@@ -46,7 +68,9 @@ export default function MapScreen() {
           .filter((r) => r.lat && r.lng)
           .map((r) => {
             const { score, grade } = recomputeFromRaw(r);
-            return { ...r, score, grade };
+            // 자치구 대표 좌표만 들어있는 한계 보완 — id 기반 분산
+            const { dLat, dLng } = jitterFromId(r.id);
+            return { ...r, score, grade, lat: r.lat + dLat, lng: r.lng + dLng };
           })
           .filter((r) => r.grade === 'GOLDEN' || r.grade === 'SILVER' || r.grade === 'BRONZE');
         setRestaurants(merged);
