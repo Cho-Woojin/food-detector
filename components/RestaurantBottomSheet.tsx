@@ -3,12 +3,13 @@
 // 더 자세한 정보는 "상세 보고서 보기" 버튼으로 /restaurant/[id]로 이동.
 
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
-import React, { forwardRef, useImperativeHandle, useMemo, useRef } from 'react';
+import React, { forwardRef, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 
 import { Icon } from '@/components/Icon';
 import { Cheese } from '@/constants/Assets';
+import { HygieneGuideModal } from '@/components/HygieneGuideModal';
 import { Restaurant as DataRestaurant, GradeKey, RiskTag } from '@/constants/Restaurant';
 import { color, radius, spacing, typography } from '@/constants/tokens';
 import { toUIRestaurant } from '@/utils/adapter';
@@ -83,6 +84,7 @@ export const RestaurantBottomSheet = forwardRef<RestaurantBottomSheetHandle, Pro
   function RestaurantBottomSheet({ restaurant, onClose }, ref) {
     const sheetRef = useRef<BottomSheet>(null);
     const liked = useIsLiked(restaurant?.id);
+    const [guideTag, setGuideTag] = useState<RiskTag | null>(null);
 
     useImperativeHandle(ref, () => ({
       expand: () => sheetRef.current?.snapToIndex(1),
@@ -112,6 +114,7 @@ export const RestaurantBottomSheet = forwardRef<RestaurantBottomSheetHandle, Pro
     const risks = restaurant?.riskTags ?? [];
 
     return (
+      <>
       <BottomSheet
         ref={sheetRef}
         index={-1}
@@ -182,14 +185,20 @@ export const RestaurantBottomSheet = forwardRef<RestaurantBottomSheetHandle, Pro
             })}
           </View>
 
-          {/* 위험 태그만 표시 (메뉴 pill 제거 — 식중독 위험 시그널만 유지) */}
+          {/* 위험 태그 — 클릭하면 위생 가이드 모달 */}
           {risks.length > 0 && (
             <View style={styles.tagsBlock}>
               {risks.map((t) => (
-                <View key={t} style={[styles.tag, styles.tagRisk]}>
+                <Pressable
+                  key={t}
+                  onPress={() => setGuideTag(t)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${RISK_LABEL[t] ?? t} 위생 가이드 보기`}
+                  style={({ pressed }) => [styles.tag, styles.tagRisk, pressed && { opacity: 0.7 }]}>
                   <Icon name="warning" size={12} color={color.status.danger} />
                   <Text style={styles.tagRiskText}>{RISK_LABEL[t] ?? t}</Text>
-                </View>
+                  <Icon name="forward" size={11} color={color.status.danger} />
+                </Pressable>
               ))}
             </View>
           )}
@@ -206,6 +215,8 @@ export const RestaurantBottomSheet = forwardRef<RestaurantBottomSheetHandle, Pro
           </>)}
         </BottomSheetView>
       </BottomSheet>
+      <HygieneGuideModal tag={guideTag} onClose={() => setGuideTag(null)} />
+      </>
     );
   }
 );
