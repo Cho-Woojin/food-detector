@@ -253,21 +253,11 @@ function Stat({ value, label }: { value: string; label: string }) {
 function MenuRow({ item, showDivider }: { item: MenuItem; showDivider: boolean }) {
   const muted = item.disabled;
   const interactive = !item.disabled && !!item.onPress;
-  const Wrapper: any = interactive ? Pressable : View;
-  return (
-    <Wrapper
-      accessibilityRole={interactive ? 'button' : undefined}
-      accessibilityLabel={item.label}
-      onPress={interactive ? item.onPress : undefined}
-      style={({ pressed }: { pressed?: boolean } = {}) => [
-        styles.menuItem,
-        showDivider && styles.menuItemBorder,
-        pressed && interactive && { backgroundColor: color.fill.tertiary },
-      ]}>
+
+  const inner = (
+    <>
       <Icon name={item.icon} size={20} color={muted ? color.text.tertiary : color.text.secondary} style={styles.menuIcon} />
-      <Text style={[styles.menuLabel, muted && { color: color.text.tertiary }]}>
-        {item.label}
-      </Text>
+      <Text style={[styles.menuLabel, muted && { color: color.text.tertiary }]}>{item.label}</Text>
       {item.comingSoon ? (
         <View style={styles.soonBadge}>
           <Text style={styles.soonBadgeText}>준비 중</Text>
@@ -278,7 +268,31 @@ function MenuRow({ item, showDivider }: { item: MenuItem; showDivider: boolean }
           {interactive && <Icon name="forward" size={16} color={color.text.tertiary} />}
         </>
       )}
-    </Wrapper>
+    </>
+  );
+
+  // Pressable은 함수형 style 지원, View는 배열 style만 지원 — 분기해서 렌더
+  if (interactive) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={item.label}
+        onPress={item.onPress}
+        style={({ pressed }) => [
+          styles.menuItem,
+          showDivider && styles.menuItemBorder,
+          pressed && { backgroundColor: color.fill.tertiary },
+        ]}>
+        {inner}
+      </Pressable>
+    );
+  }
+  return (
+    <View
+      accessibilityLabel={item.label}
+      style={[styles.menuItem, showDivider && styles.menuItemBorder]}>
+      {inner}
+    </View>
   );
 }
 
