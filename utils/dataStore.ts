@@ -41,13 +41,13 @@ export function getGuSync(gu: GuKey): Restaurant[] | null {
   return guCache[gu] ?? null;
 }
 
-// id → gu 매핑은 인덱스에서 한 번만 만들어둔다.
+// id → gu 매핑: 신규 인덱스는 flat index를 포함하지 않으므로 recomputed 캐시에서 빌드한다.
 let idToGu: Map<string, GuKey> | null = null;
 
 export async function ensureIdToGu(): Promise<Map<string, GuKey>> {
   if (idToGu) return idToGu;
-  const idx = await ensureIndex();
-  idToGu = new Map(idx.index.map((row) => [row.i, row.g]));
+  const all = await ensureRecomputedIndex();
+  idToGu = new Map(all.map((r) => [r.i, r.g]));
   return idToGu;
 }
 

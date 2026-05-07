@@ -11,6 +11,7 @@ import { color, elevation, mascotSize, motion, radius, spacing, typography } fro
 import { AnimatedHeart, Button, Card, CheeseBadge, Chip, IconButton, SkeletonCard } from '@/components/ui';
 import { findRestaurantById } from '@/utils/dataStore';
 import { toUIRestaurant } from '@/utils/adapter';
+import { toggleLike, useIsLiked } from '@/utils/favorites';
 
 const TABS = ['평가', '리뷰', '정보'] as const;
 type Tab = (typeof TABS)[number];
@@ -26,7 +27,7 @@ export default function RestaurantDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<Tab>('평가');
-  const [liked, setLiked] = useState(false);
+  const liked = useIsLiked(typeof id === 'string' ? id : null);
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -84,7 +85,7 @@ export default function RestaurantDetail() {
               active={liked}
               size={22}
               hitSize={36}
-              onPress={() => setLiked((v) => !v)}
+              onPress={() => restaurant && toggleLike(restaurant.id)}
             />
           </View>
           <Text style={styles.categoryCenter}>{restaurant.category}</Text>

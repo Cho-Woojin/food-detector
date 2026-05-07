@@ -6,6 +6,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useState } from 'react';
 import { Text, TextInput, View } from 'react-native';
 import 'react-native-reanimated';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AppSplash } from '@/components/AppSplash';
 import { MobileFrame } from '@/components/MobileFrame';
@@ -80,8 +81,9 @@ function RootLayoutNav() {
   }, []);
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <MobileFrame>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <MobileFrame>
         <View style={{ flex: 1 }}>
           <Stack>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -117,7 +119,8 @@ function RootLayoutNav() {
             </View>
           )}
         </View>
-      </MobileFrame>
-    </ThemeProvider>
+        </MobileFrame>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }

@@ -5,6 +5,7 @@ import { color, radius, spacing, typography } from '@/constants/tokens';
 import { AnimatedHeart, AppHeader, Chip, EmptyState, IconButton, Screen } from '@/components/ui';
 // Chip is still used in the filter row above the list.
 import { ensureRecomputedIndex } from '@/utils/dataStore';
+import { toggleLike as toggleLikeStore, useLikedIds } from '@/utils/favorites';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -49,16 +50,16 @@ export default function FavoritesScreen() {
   const [filter, setFilter] = useState<Filter>('전체');
   const [sort, setSort] = useState<SortKey>('score');
   const [favorites, setFavorites] = useState<Favorite[]>([]);
-  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
+  const likedIds = useLikedIds();
 
+  // 좋아요한 ID들의 메타정보를 인덱스에서 조회 (G/S/B만 좋아요 카드로 표시)
   useEffect(() => {
     let cancelled = false;
     ensureRecomputedIndex().then((rows) => {
       if (cancelled) return;
       const list: Favorite[] = rows
+        .filter((r) => likedIds.has(r.i))
         .filter((r) => r.gr === 'GOLDEN' || r.gr === 'SILVER' || r.gr === 'BRONZE')
-        .sort((a, b) => b.s - a.s)
-        .slice(0, 8)
         .map((r) => ({
           id: r.i,
           name: r.n,
@@ -69,12 +70,11 @@ export default function FavoritesScreen() {
           district: r.g,
         }));
       setFavorites(list);
-      setLikedIds(new Set(list.map((x) => x.id)));
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [likedIds]);
 
   const filtered = useMemo(() => {
     let list = filter === '전체' ? favorites : favorites.filter((f) => f.grade === filter);
@@ -94,14 +94,7 @@ export default function FavoritesScreen() {
     setSort(next);
   };
 
-  const toggleLike = (id: string) => {
-    setLikedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+  const toggleLike = (id: string) => { toggleLikeStore(id); };
 
   return (
     <Screen variant="surface" edges={['top']} paddingHorizontal="none">

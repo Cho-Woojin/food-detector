@@ -116,20 +116,50 @@ function buildMenuGuide(cat: CategoryKey): MenuGuide {
       avoid: ['오래 진열된 김밥', '회 김밥'],
       guideline: '즉석에서 만들어주는 메뉴를 선택하세요. 진열 시간이 긴 음식은 피해주세요.',
     },
-    '치킨·호프': {
+    '치킨': {
       recommend: ['후라이드', '양념치킨', '간장치킨'],
       avoid: ['생채소 사이드', '치즈볼 장시간 보관'],
       guideline: '튀긴 메인은 안전해요. 곁들임 생채소는 오늘 컨디션에 따라 선택하세요.',
     },
-    '카페·디저트': {
+    '카페디저트': {
       recommend: ['커피', '구운 베이커리', '핫 디저트'],
       avoid: ['생크림 디저트', '치즈케이크 (장시간 진열)'],
       guideline: '뜨거운 음료와 구운 디저트가 안전해요.',
     },
-    '고기·구이': {
+    '고기': {
       recommend: ['바싹 구운 고기', '찌개', '국'],
       avoid: ['육회', '갈비살 (레어)', '날계란'],
       guideline: '충분히 익혀 드세요. 날 고기는 오늘 같은 날 위험합니다.',
+    },
+    '패스트푸드': {
+      recommend: ['갓 조리한 버거', '튀김류'],
+      avoid: ['오래된 사이드', '생야채 토핑 다량'],
+      guideline: '주문 즉시 받은 음식 위주로. 진열된 사이드는 피하세요.',
+    },
+    '샌드위치': {
+      recommend: ['따뜻한 샌드위치', '갓 만든 샌드위치'],
+      avoid: ['오래 진열된 차가운 샌드위치', '날계란 토핑'],
+      guideline: '주문 즉시 만든 따뜻한 메뉴를 선택하세요.',
+    },
+    '도시락': {
+      recommend: ['갓 데운 도시락', '가열 반찬'],
+      avoid: ['장시간 보관된 도시락', '날 반찬류'],
+      guideline: '구입 후 빠르게 섭취하세요. 보관 시간이 길수록 위험합니다.',
+    },
+    '샐러드': {
+      recommend: ['그릴드 단백질 추가 샐러드', '드레싱 즉시 사용'],
+      avoid: ['오래 보관된 야채', '날계란 드레싱'],
+      guideline: '신선도가 최우선. 채소는 식중독 위험이 상대적으로 높아요.',
+    },
+    '아시안': {
+      recommend: ['쌀국수', '카레', '볶음 메뉴'],
+      avoid: ['생야채 다량', '날계란 토핑'],
+      guideline: '뜨거운 국물·볶음 메뉴 위주로. 생식 토핑은 피해주세요.',
+    },
+    '찜탕': {
+      recommend: ['뜨거운 탕', '찜류'],
+      avoid: ['미지근한 국물', '재가열한 탕'],
+      guideline: '갓 끓인 뜨거운 메뉴가 가장 안전해요.',
     },
     '술집': {
       recommend: ['튀김 안주', '구이 안주', '찌개'],
@@ -258,9 +288,10 @@ function extractDistrict(r: Restaurant): string {
 
 // ---------- 영업 시간 (mock) ----------
 function defaultHours(cat: CategoryKey): string {
-  if (cat === '카페·디저트') return '08:00 - 22:00';
+  if (cat === '카페디저트') return '08:00 - 22:00';
   if (cat === '술집') return '17:00 - 02:00';
-  if (cat === '치킨·호프') return '15:00 - 24:00';
+  if (cat === '치킨') return '15:00 - 24:00';
+  if (cat === '패스트푸드') return '10:00 - 23:00';
   return '11:00 - 22:00';
 }
 
@@ -290,19 +321,19 @@ function gradeLabelFromUI(g: Grade): string {
   return '수사 중';
 }
 
-// 가벼운 재계산: 인덱스/홈/지도/검색에서 사용. axes 재구성은 동일 로직.
+// JSON 사전계산값을 그대로 사용. 모든 화면(지도/상세/좋아요/검색/홈)이 동일 값 보도록 통일.
+// 5축 객체 빌드 등의 비용 없이 ref만 반환하므로 빠름.
 export function recomputeFromRaw(r: Restaurant): { score: number; grade: Grade } {
-  const axes = buildAxes(r);
-  const score = recomputeScore(axes);
-  const grade = deriveGrade(score);
-  return { score, grade };
+  return { score: r.score, grade: normalizeGrade(r.grade) };
 }
 
 // ---------- 메인 어댑터 (상세) ----------
 export function toUIRestaurant(r: Restaurant): UIRestaurant {
+  // 점수/등급은 JSON 사전계산값을 그대로 사용 (지도·좋아요와 일관)
+  // 5축은 spider chart 시각화 용도로만 빌드 (점수에는 영향 X)
   const axes = buildAxes(r);
-  const score = recomputeScore(axes);
-  const grade = deriveGrade(score);
+  const score = r.score;
+  const grade = normalizeGrade(r.grade);
   const labelKr = gradeLabelFromUI(grade);
 
   const scoreSummary =

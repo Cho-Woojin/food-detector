@@ -22,6 +22,14 @@ export const Cheese = {
   bronze: require('@/assets/cheese/bronze.png'),
 } as const;
 
+// SVG는 public/cheese/에 두고 정적 URL로 참조 (Expo web의 public dir이 root에서 서빙됨)
+// require로 부르면 metro가 package.json 찾으려 해서 실패하는 케이스 있음
+export const CheeseSvg = {
+  gold: '/cheese/gold.svg',
+  silver: '/cheese/silver.svg',
+  bronze: '/cheese/bronze.svg',
+} as const;
+
 export type CheeseKey = keyof typeof Cheese;
 
 // Logos (3 variants)
