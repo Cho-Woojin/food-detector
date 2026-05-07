@@ -1,43 +1,59 @@
-import { Image, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Icon, IconName } from '@/components/Icon';
 import { Mascots } from '@/constants/Assets';
 import { color, mascotSize, radius, spacing, typography } from '@/constants/tokens';
-import { AppHeader, Button, Card, IconButton, Screen } from '@/components/ui';
+import { AppHeader, Button, Card, Screen } from '@/components/ui';
 import { router } from 'expo-router';
+import { useLikedIds } from '@/utils/favorites';
 
-const GUEST = true; // Mock — toggle for design preview
+const GUEST = true; // 로그인 시스템 도입 전까지 게스트 고정
 
-type MenuItem = { icon: IconName; label: string; value?: string; disabled?: boolean; comingSoon?: boolean };
+type MenuItem = {
+  icon: IconName;
+  label: string;
+  value?: string;
+  disabled?: boolean;
+  comingSoon?: boolean;
+  onPress?: () => void;
+};
 type MenuSection = { title: string; items: MenuItem[] };
 
-const MENU_SECTIONS: MenuSection[] = [
-  {
-    title: '활동',
-    items: [
-      { icon: 'heart', label: '좋아요한 식당', value: '5' },
-      { icon: 'pencil', label: '내가 쓴 위생 리뷰', value: '12' },
-      { icon: 'camera', label: '업로드한 사진', value: '8' },
-    ],
-  },
-  {
-    title: '설정',
-    items: [
-      { icon: 'location', label: '지역 설정', value: '강남구' },
-      { icon: 'bell', label: '알림 설정' },
-      { icon: 'moon', label: '다크 모드', comingSoon: true, disabled: true },
-    ],
-  },
-  {
-    title: '식탐정',
-    items: [
-      { icon: 'doc', label: '서비스 약관' },
-      { icon: 'doc', label: '개인정보 처리방침' },
-      { icon: 'chat', label: '문의하기' },
-    ],
-  },
-];
-
 export default function ProfileScreen() {
+  const likedCount = useLikedIds().size;
+
+  // 활동 섹션은 게스트일 땐 좋아요만 의미 있음 (리뷰·사진은 미구현 → '준비 중'으로 표시)
+  const sections: MenuSection[] = [
+    {
+      title: '활동',
+      items: [
+        {
+          icon: 'heart',
+          label: '좋아요한 식당',
+          value: String(likedCount),
+          onPress: () => router.push('/(tabs)/favorites' as any),
+        },
+        { icon: 'pencil', label: '내가 쓴 위생 리뷰', comingSoon: true, disabled: true },
+        { icon: 'camera', label: '업로드한 사진', comingSoon: true, disabled: true },
+      ],
+    },
+    {
+      title: '설정',
+      items: [
+        { icon: 'location', label: '지역 설정', value: '서울 전체', comingSoon: true, disabled: true },
+        { icon: 'bell', label: '알림 설정', comingSoon: true, disabled: true },
+        { icon: 'moon', label: '다크 모드', comingSoon: true, disabled: true },
+      ],
+    },
+    {
+      title: '식탐정',
+      items: [
+        { icon: 'doc', label: '서비스 약관', onPress: () => {} },
+        { icon: 'doc', label: '개인정보 처리방침', onPress: () => {} },
+        { icon: 'chat', label: '문의하기', onPress: () => {} },
+      ],
+    },
+  ];
+
   return (
     <Screen variant="canvas" edges={['top']} scroll paddingHorizontal="l">
       <AppHeader
@@ -45,24 +61,16 @@ export default function ProfileScreen() {
         variant="large"
         leading="none"
         withSafeArea={false}
-        trailing={
-          <IconButton
-            icon="search"
-            size="md"
-            accessibilityLabel="검색"
-            onPress={() => router.push('/search')}
-          />
-        }
       />
 
       {/* Guest / logged-in profile card */}
-      {GUEST ? <GuestCard /> : <LoggedInCard />}
+      {GUEST ? <GuestCard likedCount={likedCount} /> : <LoggedInCard />}
 
       {/* Owner-mode banner */}
       <OwnerBanner />
 
       {/* Menu sections */}
-      {MENU_SECTIONS.map((section, sIdx) => (
+      {sections.map((section, sIdx) => (
         <View key={section.title} style={[styles.section, sIdx === 0 && { marginTop: spacing.xxl }]}>
           <Text style={styles.sectionTitle}>{section.title}</Text>
           <Card variant="outlined" padding="none" radius="l" style={{ overflow: 'hidden' }}>
@@ -82,21 +90,23 @@ export default function ProfileScreen() {
   );
 }
 
-function GuestCard() {
+function GuestCard({ likedCount }: { likedCount: number }) {
+  // 좋아요 상태로 안내 문구 차별화 — 비회원도 캐시로 좋아요 사용 가능
+  const sub = likedCount > 0
+    ? `이 기기에 좋아요 ${likedCount}곳이 저장돼있어요. 로그인하면 다른 기기에서도 볼 수 있어요.`
+    : '로그인하면 좋아요·리뷰가 모든 기기에서 동기화돼요.';
   return (
     <Card variant="elevated" padding="l" style={{ marginTop: spacing.l }}>
       <View style={styles.guestRow}>
         <Image source={Mascots.search} style={styles.guestMascot} resizeMode="contain" />
         <View style={{ flex: 1 }}>
           <Text style={styles.guestName}>식탐정 게스트</Text>
-          <Text style={styles.guestBody}>
-            로그인하면 즐겨찾기·리뷰가 동기화돼요
-          </Text>
+          <Text style={styles.guestBody}>{sub}</Text>
         </View>
       </View>
       <View style={{ marginTop: spacing.m }}>
         <Button variant="primary" size="md" fullWidth onPress={() => {}}>
-          로그인 / 회원가입
+          로그인 / 회원가입 (준비 중)
         </Button>
       </View>
     </Card>
@@ -140,14 +150,16 @@ function OwnerBanner() {
       <View style={styles.ownerRow}>
         <Image source={Mascots.badge} style={styles.ownerMascot} resizeMode="contain" />
         <View style={{ flex: 1 }}>
-          <Text style={styles.ownerTitle}>내 가게 입증하기</Text>
-          <Text style={styles.ownerBody}>식탐정 평가로 가게 위생을 알려줘요</Text>
+          <View style={styles.ownerTitleRow}>
+            <Text style={styles.ownerTitle}>내 가게 입증하기</Text>
+            <View style={styles.soonBadge}>
+              <Text style={styles.soonBadgeText}>준비 중</Text>
+            </View>
+          </View>
+          <Text style={styles.ownerBody}>
+            사장님이 식탐정에서 가게 위생을 직접 인증해보세요
+          </Text>
         </View>
-      </View>
-      <View style={{ marginTop: spacing.m, alignItems: 'flex-start' }}>
-        <Button variant="owner" size="sm" onPress={() => {}}>
-          시작하기
-        </Button>
       </View>
     </Card>
   );
@@ -164,29 +176,30 @@ function Stat({ value, label }: { value: string; label: string }) {
 
 function MenuRow({ item, showDivider }: { item: MenuItem; showDivider: boolean }) {
   const muted = item.disabled;
-  const Wrapper: any = item.disabled ? View : Pressable;
+  const interactive = !item.disabled && !!item.onPress;
+  const Wrapper: any = interactive ? Pressable : View;
   return (
     <Wrapper
-      accessibilityRole={item.disabled ? undefined : 'button'}
+      accessibilityRole={interactive ? 'button' : undefined}
       accessibilityLabel={item.label}
+      onPress={interactive ? item.onPress : undefined}
       style={({ pressed }: { pressed?: boolean } = {}) => [
         styles.menuItem,
         showDivider && styles.menuItemBorder,
-        pressed && !item.disabled && { backgroundColor: color.fill.tertiary },
+        pressed && interactive && { backgroundColor: color.fill.tertiary },
       ]}>
       <Icon name={item.icon} size={20} color={muted ? color.text.tertiary : color.text.secondary} style={styles.menuIcon} />
       <Text style={[styles.menuLabel, muted && { color: color.text.tertiary }]}>
         {item.label}
       </Text>
       {item.comingSoon ? (
-        <View style={styles.comingSoonRow}>
-          <Text style={styles.comingSoonText}>곧 만나요</Text>
-          <Switch value={false} disabled />
+        <View style={styles.soonBadge}>
+          <Text style={styles.soonBadgeText}>준비 중</Text>
         </View>
       ) : (
         <>
           {item.value ? <Text style={styles.menuValue}>{item.value}</Text> : null}
-          <Icon name="forward" size={16} color={color.text.tertiary} />
+          {interactive && <Icon name="forward" size={16} color={color.text.tertiary} />}
         </>
       )}
     </Wrapper>
@@ -225,8 +238,18 @@ const styles = StyleSheet.create({
   // Owner banner
   ownerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.m },
   ownerMascot: { width: mascotSize.inline, height: mascotSize.inline },
-  ownerTitle: { ...typography.bodyEmphasized, color: color.text.primary, marginBottom: spacing.xxs },
+  ownerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.xxs },
+  ownerTitle: { ...typography.bodyEmphasized, color: color.text.primary },
   ownerBody: { ...typography.caption, color: color.text.secondary },
+
+  // 공통 "준비 중" 뱃지
+  soonBadge: {
+    paddingHorizontal: spacing.xs + 2,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    backgroundColor: color.fill.tertiary,
+  },
+  soonBadgeText: { ...typography.footnote, color: color.text.tertiary, fontWeight: '600' },
 
   // Menu sections
   section: { marginTop: spacing.xl },
@@ -252,8 +275,6 @@ const styles = StyleSheet.create({
   menuIcon: { marginRight: spacing.m, width: 22 },
   menuLabel: { flex: 1, ...typography.subheadline, color: color.text.primary },
   menuValue: { ...typography.caption, color: color.text.tertiary, marginRight: spacing.xs + 2 },
-  comingSoonRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.s },
-  comingSoonText: { ...typography.footnote, color: color.text.tertiary },
 
   version: {
     ...typography.footnote,

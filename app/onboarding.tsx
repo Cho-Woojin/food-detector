@@ -21,20 +21,20 @@ const SLIDES = [
   {
     image: Onboarding.investigate,
     fallback: Mascots.search,
-    title: '식탐정이 추적해요',
-    body: '인증 마크가 아니라\n지금 믿을 수 있는 식당을 알려줘요',
+    title: '지도에서 한눈에',
+    body: '서울 25개 자치구 식당의\n위생 등급을 치즈 마커로 보여줘요',
   },
   {
     image: null,
-    fallback: Mascots.weather,
-    title: '오늘의 위험을 알려줘요',
-    body: '기상·식약처 데이터로\n오늘 안전한 메뉴를 추천해요',
+    fallback: Mascots.badge,
+    title: '5가지 기준으로 검증',
+    body: '위생등급·행정처분·인증·리뷰·메뉴 안전\n다섯 축으로 식당을 분석해요',
   },
   {
     image: Onboarding.celebrate,
     fallback: Mascots.ceremony,
-    title: '치즈 등급으로 한눈에',
-    body: '식탐정이 다섯 가지 기준으로 검증한 식당에\n직접 등급을 매겨요',
+    title: '안전한 단골집 모으기',
+    body: '좋아요로 위생 좋은 식당을 저장하고\n위험 메뉴는 미리 안내받아요',
   },
 ];
 
