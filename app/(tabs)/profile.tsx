@@ -1,10 +1,13 @@
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
 import { Icon, IconName } from '@/components/Icon';
 import { Mascots } from '@/constants/Assets';
 import { color, mascotSize, radius, spacing, typography } from '@/constants/tokens';
 import { AppHeader, Button, Card, Screen } from '@/components/ui';
+import { HygieneGuideListModal } from '@/components/HygieneGuideListModal';
 import { router } from 'expo-router';
 import { useLikedIds } from '@/utils/favorites';
+import { ensureRecomputedById } from '@/utils/dataStore';
 
 const GUEST = true; // 로그인 시스템 도입 전까지 게스트 고정
 
@@ -18,10 +21,34 @@ type MenuItem = {
 };
 type MenuSection = { title: string; items: MenuItem[] };
 
-export default function ProfileScreen() {
-  const likedCount = useLikedIds().size;
+type GradeBreakdown = { GOLDEN: number; SILVER: number; BRONZE: number; OTHER: number };
 
-  // 활동 섹션은 게스트일 땐 좋아요만 의미 있음 (리뷰·사진은 미구현 → '준비 중'으로 표시)
+export default function ProfileScreen() {
+  const likedIds = useLikedIds();
+  const likedCount = likedIds.size;
+  const [breakdown, setBreakdown] = useState<GradeBreakdown>({ GOLDEN: 0, SILVER: 0, BRONZE: 0, OTHER: 0 });
+  const [guideListOpen, setGuideListOpen] = useState(false);
+
+  // 좋아요한 식당의 등급별 분포 계산 — 데이터 로드 후 1회
+  useEffect(() => {
+    if (likedCount === 0) { setBreakdown({ GOLDEN: 0, SILVER: 0, BRONZE: 0, OTHER: 0 }); return; }
+    let cancelled = false;
+    ensureRecomputedById().then((map) => {
+      if (cancelled) return;
+      const next: GradeBreakdown = { GOLDEN: 0, SILVER: 0, BRONZE: 0, OTHER: 0 };
+      for (const id of likedIds) {
+        const row = map.get(id);
+        const gr = row?.gr;
+        if (gr === 'GOLDEN') next.GOLDEN++;
+        else if (gr === 'SILVER') next.SILVER++;
+        else if (gr === 'BRONZE') next.BRONZE++;
+        else next.OTHER++;
+      }
+      setBreakdown(next);
+    });
+    return () => { cancelled = true; };
+  }, [likedIds]);
+
   const sections: MenuSection[] = [
     {
       title: '활동',
@@ -34,6 +61,16 @@ export default function ProfileScreen() {
         },
         { icon: 'pencil', label: '내가 쓴 위생 리뷰', comingSoon: true, disabled: true },
         { icon: 'camera', label: '업로드한 사진', comingSoon: true, disabled: true },
+      ],
+    },
+    {
+      title: '안전 가이드',
+      items: [
+        {
+          icon: 'leaf',
+          label: '위생 가이드 라이브러리',
+          onPress: () => setGuideListOpen(true),
+        },
       ],
     },
     {
@@ -50,6 +87,7 @@ export default function ProfileScreen() {
         { icon: 'doc', label: '서비스 약관', onPress: () => {} },
         { icon: 'doc', label: '개인정보 처리방침', onPress: () => {} },
         { icon: 'chat', label: '문의하기', onPress: () => {} },
+        { icon: 'sparkles', label: '데이터 출처', value: '식약처·카카오', onPress: () => {} },
       ],
     },
   ];
@@ -65,6 +103,9 @@ export default function ProfileScreen() {
 
       {/* Guest / logged-in profile card */}
       {GUEST ? <GuestCard likedCount={likedCount} /> : <LoggedInCard />}
+
+      {/* 좋아요 등급별 분포 — 데이터 있을 때만 */}
+      {likedCount > 0 && <LikedBreakdownCard breakdown={breakdown} total={likedCount} />}
 
       {/* Owner-mode banner */}
       <OwnerBanner />
@@ -85,8 +126,43 @@ export default function ProfileScreen() {
         </View>
       ))}
 
-      <Text style={styles.version}>식탐정 v1.0.0</Text>
+      <Text style={styles.version}>식탐정 v1.0.0 · 식약처 LOCALDATA 기반</Text>
+
+      <HygieneGuideListModal visible={guideListOpen} onClose={() => setGuideListOpen(false)} />
     </Screen>
+  );
+}
+
+function LikedBreakdownCard({ breakdown, total }: { breakdown: GradeBreakdown; total: number }) {
+  // 가로 비율 바 — 골드/실버/브론즈/기타
+  const data = [
+    { key: 'GOLDEN', count: breakdown.GOLDEN, label: '골든', fg: color.cheese.GOLDEN.fg },
+    { key: 'SILVER', count: breakdown.SILVER, label: '실버', fg: color.cheese.SILVER.fg },
+    { key: 'BRONZE', count: breakdown.BRONZE, label: '브론즈', fg: color.cheese.BRONZE.fg },
+    { key: 'OTHER', count: breakdown.OTHER, label: '기타', fg: color.text.tertiary },
+  ];
+  return (
+    <Card variant="elevated" padding="l" style={{ marginTop: spacing.l }}>
+      <View style={styles.statHeader}>
+        <Text style={styles.statTitle}>나의 좋아요 분포</Text>
+        <Text style={styles.statTotal}>총 {total}곳</Text>
+      </View>
+      <View style={styles.statBar}>
+        {data.map((d) =>
+          d.count > 0 ? (
+            <View key={d.key} style={[styles.statBarSeg, { flex: d.count, backgroundColor: d.fg }]} />
+          ) : null
+        )}
+      </View>
+      <View style={styles.statLegend}>
+        {data.map((d) => (
+          <View key={d.key} style={styles.statChip}>
+            <View style={[styles.statDot, { backgroundColor: d.fg }]} />
+            <Text style={styles.statChipText}>{d.label} {d.count}</Text>
+          </View>
+        ))}
+      </View>
+    </Card>
   );
 }
 
@@ -241,6 +317,17 @@ const styles = StyleSheet.create({
   ownerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.xxs },
   ownerTitle: { ...typography.bodyEmphasized, color: color.text.primary },
   ownerBody: { ...typography.caption, color: color.text.secondary },
+
+  // 좋아요 분포 카드
+  statHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.s },
+  statTitle: { ...typography.subheadlineEmphasized, color: color.text.primary },
+  statTotal: { ...typography.caption, color: color.text.secondary },
+  statBar: { flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden', backgroundColor: color.fill.tertiary },
+  statBarSeg: { height: '100%' },
+  statLegend: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.s + 4, marginTop: spacing.m },
+  statChip: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  statDot: { width: 8, height: 8, borderRadius: 4 },
+  statChipText: { ...typography.caption, color: color.text.secondary },
 
   // 공통 "준비 중" 뱃지
   soonBadge: {
