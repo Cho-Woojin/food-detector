@@ -18,6 +18,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
+import { useMemo } from 'react';
 
 const SEOUL_CENTER = { lat: 37.5663, lng: 126.978 };
 const ALL_GUS: GuKey[] = ['종로구', '강남구', '마포구'];
@@ -30,6 +31,7 @@ export default function MapScreen() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [selected, setSelected] = useState<Restaurant | null>(null);
   const [center, setCenter] = useState(SEOUL_CENTER);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -90,6 +92,27 @@ export default function MapScreen() {
     if (selected) router.push(`/restaurant/${selected.id}` as any);
   };
 
+  // 지도 전용 검색 — 이름/카테고리 매칭, 점수 높은 순. 메인 검색과 달리 '이 지도 안의 식당'만.
+  const searchHits = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    const out: Restaurant[] = [];
+    for (const r of restaurants) {
+      if (out.length >= 6) break;
+      const haystack = `${r.name} ${r.cat}`.toLowerCase();
+      if (haystack.includes(q)) out.push(r);
+    }
+    return out.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+  }, [searchQuery, restaurants]);
+
+  const pickSearchResult = (r: Restaurant) => {
+    setSelected(r);
+    setCenter({ lat: r.lat, lng: r.lng });
+    mapHandleRef.current?.panTo(r.lat, r.lng);
+    mapHandleRef.current?.setLevel(3);
+    setSearchQuery('');
+  };
+
   const cheeseFor = (g: string) =>
     g === 'GOLDEN' ? Cheese.gold : g === 'SILVER' ? Cheese.silver : Cheese.bronze;
 
@@ -126,13 +149,45 @@ export default function MapScreen() {
           )}
         </View>
 
-        {/* 상단 검색바 (오버레이) */}
+        {/* 상단 검색바 (지도 전용 — 인라인 자동완성, 이 지도 안의 식당만 매칭) */}
         <View style={styles.searchOverlay}>
           <SearchBar
-            variant="button"
-            placeholder="이 지역에서 검색"
-            onPress={() => router.push('/search')}
+            variant="input"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="이 지도 안에서 식당 검색"
+            returnKeyType="search"
+            onSubmitEditing={() => searchHits[0] && pickSearchResult(searchHits[0])}
           />
+          {searchQuery.trim() && searchHits.length > 0 ? (
+            <View style={styles.searchResults}>
+              {searchHits.map((r, i) => (
+                <Pressable
+                  key={r.id}
+                  onPress={() => pickSearchResult(r)}
+                  style={({ pressed }) => [
+                    styles.searchResultRow,
+                    i < searchHits.length - 1 && styles.searchResultDivider,
+                    pressed && { backgroundColor: color.fill.tertiary },
+                  ]}>
+                  <Image source={cheeseFor(r.grade)} style={styles.searchResultCheese} resizeMode="contain" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.searchResultName} numberOfLines={1}>{r.name}</Text>
+                    <Text style={styles.searchResultMeta} numberOfLines={1}>
+                      {r.cat} · {r.gu}
+                    </Text>
+                  </View>
+                  <Text style={[styles.searchResultScore, { color: cheeseFg(r.grade) }]}>
+                    {r.score}점
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : searchQuery.trim() ? (
+            <View style={[styles.searchResults, styles.searchEmpty]}>
+              <Text style={styles.searchEmptyText}>이 지도 안에서 매칭되는 식당이 없어요</Text>
+            </View>
+          ) : null}
         </View>
 
         {/* 우측 컨트롤 버튼 (오버레이) */}
@@ -221,6 +276,36 @@ const styles = StyleSheet.create({
     left: spacing.m,
     right: spacing.m,
   },
+  searchResults: {
+    marginTop: spacing.s,
+    backgroundColor: color.surface.subtle,
+    borderRadius: radius.l,
+    borderWidth: 1,
+    borderColor: color.border.default,
+    overflow: 'hidden',
+    ...(elevation.subtle as ViewStyle),
+  },
+  searchResultRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.m,
+    paddingHorizontal: spacing.m,
+    paddingVertical: spacing.s + 2,
+  },
+  searchResultDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: color.border.default,
+  },
+  searchResultCheese: { width: 28, height: 28 },
+  searchResultName: { ...typography.subheadlineEmphasized, color: color.text.primary },
+  searchResultMeta: { ...typography.footnote, color: color.text.secondary, marginTop: 2 },
+  searchResultScore: { ...typography.captionEmphasized },
+  searchEmpty: {
+    paddingHorizontal: spacing.m,
+    paddingVertical: spacing.l,
+    alignItems: 'center',
+  },
+  searchEmptyText: { ...typography.caption, color: color.text.tertiary },
 
   // 우측 컨트롤
   controls: {
