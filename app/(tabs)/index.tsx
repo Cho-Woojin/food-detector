@@ -198,7 +198,7 @@ function RiskCard(props: {
   const { district, riskLevel, accent, bgColor, labelKr, mascotKey, message } = props;
 
   return (
-    <Card variant="tinted" bgColor={bgColor} padding="xxl" radius="xxl">
+    <Card variant="tinted" bgColor={bgColor} padding="l" radius="xxl" style={{ borderRadius: radius.xxl }}>
       <View style={styles.locationRow}>
         <Icon name="location" size={13} color={color.text.secondary} />
         <Text style={styles.locationText}>{district} · 12:00 기준</Text>
@@ -392,13 +392,13 @@ const styles = StyleSheet.create({
   stageRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.m,
-    marginTop: spacing.l,
+    gap: spacing.s,
+    marginTop: spacing.s,
   },
-  stageCol: { flex: 1, minHeight: 140, justifyContent: 'center' },
-  bigMascot: { width: 140, height: 140 },
-  bigStageLabel: { ...typography.display, marginTop: spacing.s },
-  bigStageSub: { ...typography.subheadlineEmphasized, marginTop: spacing.xs },
+  stageCol: { flex: 1, justifyContent: 'center', gap: spacing.xs },
+  bigMascot: { width: 110, height: 110 },
+  bigStageLabel: { fontSize: 28, fontWeight: '800', lineHeight: 32 },
+  bigStageSub: { ...typography.captionEmphasized },
   time: { ...typography.caption, color: color.text.tertiary, marginTop: spacing.s },
 
   // 위험 단계 dot 시각화
@@ -408,12 +408,12 @@ const styles = StyleSheet.create({
   // 한줄 가이드
   guidanceRow: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.s,
-    marginTop: spacing.l,
+    marginTop: spacing.s,
     backgroundColor: color.surface.subtle,
-    paddingHorizontal: spacing.m, paddingVertical: spacing.s + 2,
-    borderRadius: radius.l,
+    paddingHorizontal: spacing.m, paddingVertical: spacing.s,
+    borderRadius: radius.m,
   },
-  guidanceText: { ...typography.subheadlineEmphasized, flex: 1 },
+  guidanceText: { ...typography.captionEmphasized, flex: 1, color: color.text.primary },
 
   // 환경 카드 row
   envRow: { gap: spacing.s, paddingHorizontal: spacing.l },

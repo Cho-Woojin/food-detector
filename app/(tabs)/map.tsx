@@ -134,6 +134,22 @@ export default function MapScreen() {
   }, [targetId, restaurants]);
 
   const handleLocate = () => {
+    // 1) 이미 watchPosition으로 userLoc 있으면 즉시 거기로 이동 (가장 빠름)
+    if (userLoc) {
+      mapHandleRef.current?.setLevel(4);
+      mapHandleRef.current?.panTo(userLoc.lat, userLoc.lng);
+      setCenter({ lat: userLoc.lat, lng: userLoc.lng });
+      return;
+    }
+    // 2) 캐시된 위치라도 있으면 사용
+    const cached = getCachedLocation();
+    if (cached) {
+      mapHandleRef.current?.setLevel(4);
+      mapHandleRef.current?.panTo(cached.lat, cached.lng);
+      setCenter({ lat: cached.lat, lng: cached.lng });
+      return;
+    }
+    // 3) 둘 다 없으면 권한 요청
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
       alert('현위치 기능을 사용할 수 없습니다');
       return;
@@ -141,14 +157,13 @@ export default function MapScreen() {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const next = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        const accuracy = pos.coords.accuracy;
+        setUserLoc({ lat: next.lat, lng: next.lng, accuracy });
         setCenter(next);
-        mapHandleRef.current?.panTo(next.lat, next.lng);
         mapHandleRef.current?.setLevel(4);
+        mapHandleRef.current?.panTo(next.lat, next.lng);
       },
-      (err) => {
-        if (__DEV__) console.error('위치 조회 실패:', err);
-        alert('위치 권한을 허용해주세요');
-      }
+      () => alert('위치 권한을 허용해주세요'),
     );
   };
 
@@ -417,15 +432,13 @@ const styles = StyleSheet.create({
   chipText: { ...typography.caption, color: color.text.secondary },
   chipTextActive: { color: color.surface.subtle, fontWeight: '600' },
 
-  // 카테고리 칩 아래 — 현위치 버튼 (왼쪽 정렬, 초록 라인)
+  // 카테고리 칩 아래 — 현위치 버튼 (테두리 없이 그림자, 심볼만 초록)
   locateBtn: {
     alignSelf: 'flex-start',
     width: 40,
     height: 40,
     borderRadius: radius.pill,
     backgroundColor: color.surface.subtle,
-    borderWidth: 1.5,
-    borderColor: color.brand.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: spacing.s,
