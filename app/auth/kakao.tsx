@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 
 import { color, spacing, typography } from '@/constants/tokens';
 import { handleKakaoCallback } from '@/utils/kakaoAuth';
+import { markLandingSkipped } from '@/utils/landing';
 
 export default function KakaoCallback() {
   const params = useLocalSearchParams<{ code?: string; error?: string; error_description?: string }>();
@@ -25,8 +26,12 @@ export default function KakaoCallback() {
     }
     handleKakaoCallback(code)
       .then((user) => {
-        if (user) router.replace('/(tabs)/profile' as any);
-        else setError('카카오 로그인에 실패했어요');
+        if (user) {
+          markLandingSkipped(); // 로그인 = 더 이상 랜딩 보일 필요 X
+          router.replace('/(tabs)' as any);
+        } else {
+          setError('카카오 로그인에 실패했어요');
+        }
       })
       .catch((e) => {
         if (__DEV__) console.warn('[kakaoCallback]', e);
