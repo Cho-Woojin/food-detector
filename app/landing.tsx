@@ -87,7 +87,7 @@ export default function LandingScreen() {
 
       <View style={styles.body}>
         {step === 1 && <StepSplash />}
-        {step === 2 && <StepProblem onNext={next} onSkip={goSkip} />}
+        {step === 2 && <StepProblem onNext={next} />}
         {step === 3 && <StepLocation onNext={(gu) => { if (gu) setLocationGu(gu); next(); }} />}
         {step === 4 && <StepEnvironment gu={locationGu} rows={allRows} onNext={next} />}
         {step === 5 && (
@@ -96,7 +96,7 @@ export default function LandingScreen() {
             query={searchQuery}
             setQuery={setSearchQuery}
             onPick={(r) => { setSearchPicked(r); next(); }}
-            onSkip={next}
+            onSkip={() => setStep(7)} // 검색 건너뛰기 = 결과 카드 패스 → 바로 리뷰 활성화
           />
         )}
         {step === 6 && <StepResult picked={searchPicked} onNext={next} />}
@@ -136,7 +136,7 @@ function StepSplash() {
 }
 
 // ===== Step 2: 문제 공감 =====
-function StepProblem({ onNext, onSkip }: { onNext: () => void; onSkip: () => void }) {
+function StepProblem({ onNext }: { onNext: () => void }) {
   return (
     <>
       <View style={styles.center}>
@@ -149,7 +149,6 @@ function StepProblem({ onNext, onSkip }: { onNext: () => void; onSkip: () => voi
         </Text>
       </View>
       <PrimaryNext label="알아보기" onPress={onNext} />
-      <SkipButton onPress={onSkip} />
     </>
   );
 }
@@ -193,7 +192,6 @@ function StepLocation({ onNext }: { onNext: (gu?: string) => void }) {
         onPress={requestLocation}
         disabled={requesting}
       />
-      <SkipButton onPress={() => onNext()} />
     </>
   );
 }
@@ -320,7 +318,7 @@ function StepSearch({
           ))}
         </View>
       </View>
-      <SkipButton label="건너뛰기" onPress={onSkip} />
+      <SecondaryButton label="검색 건너뛰기" onPress={onSkip} />
     </>
   );
 }
@@ -358,48 +356,63 @@ function StepResult({ picked, onNext }: { picked: RecomputedRow | null; onNext: 
   );
 }
 
-// ===== Step 7: 위생 리뷰 활성화 =====
+// ===== Step 7: 위생 리뷰 활성화 (별점 시각화) =====
 function StepHygieneReview({ onNext, onSkip }: { onNext: () => void; onSkip: () => void }) {
   return (
     <>
       <View style={{ flex: 1 }}>
-        <Text style={styles.locationTag}>당신의 한 줄 리뷰가</Text>
+        <Text style={styles.locationTag}>당신의 별점이</Text>
         <Text style={styles.bigQuote2}>다른 사용자의 안전을 지켜요</Text>
         <Text style={styles.subBodyLeft}>
-          "주방이 깨끗했어요" "재료가 신선했어요" 같은 짧은 위생 리뷰가
-          모이면, 식약처 데이터로는 안 보이는 실제 매장 위생 상태가 드러나요.
+          식약처 데이터로는 안 보이는 실제 매장 위생 상태를
+          5점 만점 별점 리뷰로 평가해주세요.
         </Text>
 
-        <View style={styles.reviewImpactCard}>
-          <View style={styles.impactRow}>
-            <Text style={styles.impactNumber}>+5</Text>
-            <Text style={styles.impactLabel}>리뷰 1개 작성 시{'\n'}식당 위생 점수에 반영</Text>
-          </View>
-          <View style={styles.impactDivider} />
-          <View style={styles.impactRow}>
-            <Text style={styles.impactNumber}>12</Text>
-            <Text style={styles.impactLabel}>평균적으로 한 리뷰가{'\n'}12명의 선택을 도와요</Text>
-          </View>
+        {/* 별점 5점 데모 — 큰 별 */}
+        <View style={styles.starDemo}>
+          <StarRow rating={5} size={32} />
+          <Text style={styles.starDemoLabel}>5점 = 매우 위생적</Text>
         </View>
 
-        <View style={styles.reviewExamples}>
-          <ReviewChip text="✓ 주방이 깨끗했어요" />
-          <ReviewChip text="✓ 재료가 신선했어요" />
-          <ReviewChip text="✓ 식기가 위생적이었어요" />
-          <ReviewChip text="⚠ 식기에 음식 자국" />
-          <ReviewChip text="⚠ 화장실 청결 부족" />
+        {/* 예시 리뷰 — 별점 + 한줄평 */}
+        <Text style={styles.sectionLabel}>이런 리뷰를 남길 수 있어요</Text>
+        <View style={styles.reviewSampleList}>
+          <ReviewSample stars={5} text="주방이 깨끗했어요" />
+          <ReviewSample stars={5} text="재료가 신선했어요" />
+          <ReviewSample stars={4} text="식기가 위생적이었어요" />
+          <ReviewSample stars={2} text="식기에 음식 자국" />
+          <ReviewSample stars={1} text="화장실 청결 부족" />
         </View>
       </View>
       <PrimaryNext label="위생 리뷰 활성화" onPress={onNext} />
-      <SkipButton label="나중에 할게요" onPress={onSkip} />
+      <SecondaryButton label="나중에 할게요" onPress={onSkip} />
     </>
   );
 }
 
-function ReviewChip({ text }: { text: string }) {
+function StarRow({ rating, size = 16 }: { rating: number; size?: number }) {
   return (
-    <View style={styles.reviewChip}>
-      <Text style={styles.reviewChipText}>{text}</Text>
+    <View style={{ flexDirection: 'row', gap: 2 }}>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Text
+          key={i}
+          style={{
+            fontSize: size,
+            color: i <= rating ? '#FACC15' : color.border.default,
+            lineHeight: size * 1.05,
+          }}>
+          ★
+        </Text>
+      ))}
+    </View>
+  );
+}
+
+function ReviewSample({ stars, text }: { stars: number; text: string }) {
+  return (
+    <View style={styles.reviewSample}>
+      <StarRow rating={stars} size={16} />
+      <Text style={styles.reviewSampleText} numberOfLines={1}>{text}</Text>
     </View>
   );
 }
@@ -455,10 +468,14 @@ function PrimaryNext({ label, onPress, disabled }: { label: string; onPress: () 
   );
 }
 
-function SkipButton({ label = '건너뛰기', onPress }: { label?: string; onPress: () => void }) {
+function SecondaryButton({ label, onPress }: { label: string; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.skipBtn, pressed && { opacity: 0.6 }]}>
-      <Text style={styles.skipText}>{label}</Text>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => [styles.secondaryBtn, pressed && { opacity: 0.7 }]}>
+      <Text style={styles.secondaryBtnText}>{label}</Text>
     </Pressable>
   );
 }
@@ -584,27 +601,26 @@ const styles = StyleSheet.create({
   savePromptBody: { ...typography.subheadline, color: color.text.secondary, lineHeight: 22 },
 
   // Step 7 위생 리뷰
-  reviewImpactCard: {
-    flexDirection: 'row',
+  starDemo: {
     backgroundColor: color.surface.tintGreen,
     borderRadius: radius.xl,
     padding: spacing.l,
     marginBottom: spacing.l,
     alignItems: 'center',
+    gap: spacing.s,
   },
-  impactRow: { flex: 1, alignItems: 'center' },
-  impactNumber: { fontSize: 32, fontWeight: '800', color: color.brand.primary, marginBottom: spacing.xs },
-  impactLabel: { ...typography.caption, color: color.text.secondary, textAlign: 'center', lineHeight: 18 },
-  impactDivider: { width: 1, height: 48, backgroundColor: color.border.default },
-
-  reviewExamples: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-  reviewChip: {
-    paddingHorizontal: spacing.s + 2,
-    paddingVertical: spacing.xs + 2,
-    borderRadius: radius.pill,
+  starDemoLabel: { ...typography.subheadlineEmphasized, color: color.brand.primary },
+  reviewSampleList: { gap: spacing.xs },
+  reviewSample: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.m,
+    paddingHorizontal: spacing.m,
+    paddingVertical: spacing.s + 2,
     backgroundColor: color.surface.subtle,
+    borderRadius: radius.l,
   },
-  reviewChipText: { ...typography.caption, color: color.text.primary },
+  reviewSampleText: { ...typography.subheadline, color: color.text.primary, flex: 1 },
 
   // Step 8 가입
   signupCta: { gap: spacing.m, alignItems: 'center' },
@@ -628,6 +644,12 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   primaryBtnText: { ...typography.bodyEmphasized, color: '#fff', fontSize: 16 },
-  skipBtn: { paddingVertical: spacing.m, alignItems: 'center', marginTop: spacing.s },
-  skipText: { ...typography.subheadline, color: color.text.tertiary, textDecorationLine: 'underline' },
+  secondaryBtn: {
+    height: 52,
+    borderRadius: radius.l,
+    backgroundColor: color.fill.tertiary,
+    alignItems: 'center', justifyContent: 'center',
+    marginTop: spacing.s,
+  },
+  secondaryBtnText: { ...typography.bodyEmphasized, color: color.text.secondary, fontSize: 16 },
 });
