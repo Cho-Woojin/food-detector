@@ -9,7 +9,7 @@ import {
 import { Stack, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Mascots } from '@/constants/Assets';
+import { Cheese, Logos, Mascots } from '@/constants/Assets';
 import { color, mascotSize, radius, spacing, typography } from '@/constants/tokens';
 import { loginWithKakao } from '@/utils/kakaoAuth';
 import { markLandingSkipped } from '@/utils/landing';
@@ -129,7 +129,10 @@ function StepSplash() {
   return (
     <View style={styles.center}>
       <Image source={Mascots.search} style={styles.mascot} resizeMode="contain" />
-      <Text style={styles.brand}>식탐정</Text>
+      <View style={styles.brandRow}>
+        <Image source={Logos.symbol} style={styles.brandSymbol} resizeMode="contain" />
+        <Text style={styles.brand}>식탐정</Text>
+      </View>
       <Text style={styles.splashTagline}>오늘 안전한 식당 찾기</Text>
     </View>
   );
@@ -140,7 +143,7 @@ function StepProblem({ onNext }: { onNext: () => void }) {
   return (
     <>
       <View style={styles.center}>
-        <Text style={styles.questionEmoji}>🤔</Text>
+        <Image source={Mascots.warning} style={styles.mascot} resizeMode="contain" />
         <Text style={styles.bigQuote}>
           오늘 먹는 음식,{'\n'}정말 안전할까요?
         </Text>
@@ -180,7 +183,7 @@ function StepLocation({ onNext }: { onNext: (gu?: string) => void }) {
   return (
     <>
       <View style={styles.center}>
-        <Text style={styles.questionEmoji}>🐭</Text>
+        <Image source={Mascots.weather} style={styles.mascot} resizeMode="contain" />
         <Text style={styles.bigQuote}>주변 식당 위험도를{'\n'}알려드릴게요</Text>
         <Text style={styles.subBody}>
           현재 위치를 기준으로 가까운 자치구의{'\n'}안전 식당과 위험 알림을 받을 수 있어요.
@@ -246,7 +249,7 @@ function StepEnvironment({ gu, rows, onNext }: { gu: string; rows: RecomputedRow
           ) : (
             list.map((r) => (
               <View key={r.i} style={styles.goldItem}>
-                <Text style={styles.goldEmoji}>🧀</Text>
+                <Image source={Cheese.gold} style={styles.goldCheese} resizeMode="contain" />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.goldName} numberOfLines={1}>{r.n}</Text>
                   <Text style={styles.goldMeta}>{r.c} · {r.g}</Text>
@@ -325,6 +328,12 @@ function StepSearch({
 
 // ===== Step 6: 결과 맛보기 =====
 function StepResult({ picked, onNext }: { picked: RecomputedRow | null; onNext: () => void }) {
+  const cheeseImg = picked
+    ? (picked.gr === 'GOLDEN' ? Cheese.gold
+      : picked.gr === 'SILVER' ? Cheese.silver
+      : picked.gr === 'BRONZE' ? Cheese.bronze : null)
+    : null;
+
   return (
     <>
       <View style={{ flex: 1 }}>
@@ -332,6 +341,9 @@ function StepResult({ picked, onNext }: { picked: RecomputedRow | null; onNext: 
 
         {picked ? (
           <View style={styles.resultCard}>
+            {cheeseImg && (
+              <Image source={cheeseImg} style={styles.resultCheese} resizeMode="contain" />
+            )}
             <Text style={styles.resultName} numberOfLines={2}>{picked.n}</Text>
             <Text style={styles.resultMeta}>{picked.c} · {picked.g}</Text>
             <Text style={styles.resultScore}>{picked.s}점</Text>
@@ -339,6 +351,7 @@ function StepResult({ picked, onNext }: { picked: RecomputedRow | null; onNext: 
           </View>
         ) : (
           <View style={styles.resultCard}>
+            <Image source={Mascots.empty} style={styles.resultCheese} resizeMode="contain" />
             <Text style={styles.resultName}>아직 찾아본 식당이 없어요</Text>
             <Text style={styles.resultMeta}>괜찮아요, 들어가서 자유롭게 둘러보세요.</Text>
           </View>
@@ -361,8 +374,13 @@ function StepHygieneReview({ onNext, onSkip }: { onNext: () => void; onSkip: () 
   return (
     <>
       <View style={{ flex: 1 }}>
-        <Text style={styles.locationTag}>당신의 별점이</Text>
-        <Text style={styles.bigQuote2}>다른 사용자의 안전을 지켜요</Text>
+        <View style={styles.reviewHeader}>
+          <Image source={Mascots.badge} style={styles.reviewMascot} resizeMode="contain" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.locationTag}>당신의 별점이</Text>
+            <Text style={styles.bigQuote2}>다른 사용자의 안전을 지켜요</Text>
+          </View>
+        </View>
         <Text style={styles.subBodyLeft}>
           식약처 데이터로는 안 보이는 실제 매장 위생 상태를
           5점 만점 별점 리뷰로 평가해주세요.
@@ -505,9 +523,10 @@ const styles = StyleSheet.create({
 
   // 공통 텍스트
   mascot: { width: mascotSize.hero, height: mascotSize.hero, marginBottom: spacing.l },
-  brand: { fontSize: 28, fontWeight: '800', color: color.text.primary, marginBottom: spacing.xs },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.xs },
+  brandSymbol: { width: 32, height: 32 },
+  brand: { fontSize: 28, fontWeight: '800', color: color.text.primary },
   splashTagline: { ...typography.body, color: color.text.secondary },
-  questionEmoji: { fontSize: 56, marginBottom: spacing.l },
   bigQuote: { fontSize: 22, fontWeight: '700', color: color.text.primary, textAlign: 'center', lineHeight: 32, marginBottom: spacing.m },
   bigQuote2: { fontSize: 20, fontWeight: '700', color: color.text.primary, marginBottom: spacing.s },
   subBody: { ...typography.body, color: color.text.secondary, textAlign: 'center', lineHeight: 22 },
@@ -551,7 +570,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.s + 2, paddingHorizontal: spacing.m,
     backgroundColor: color.surface.subtle, borderRadius: radius.l,
   },
-  goldEmoji: { fontSize: 22 },
+  goldCheese: { width: 32, height: 32 },
   goldName: { ...typography.bodyEmphasized, color: color.text.primary, marginBottom: 2 },
   goldMeta: { ...typography.caption, color: color.text.secondary },
   goldScore: { ...typography.bodyEmphasized, color: color.cheese.GOLDEN.fg },
@@ -587,6 +606,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.l,
   },
+  resultCheese: { width: 80, height: 80, marginBottom: spacing.s },
   resultName: { fontSize: 20, fontWeight: '700', color: color.text.primary, textAlign: 'center', marginBottom: spacing.xxs },
   resultMeta: { ...typography.subheadline, color: color.text.secondary, marginBottom: spacing.m },
   resultScore: { fontSize: 36, fontWeight: '800', color: color.brand.primary, marginBottom: spacing.xs },
@@ -601,6 +621,13 @@ const styles = StyleSheet.create({
   savePromptBody: { ...typography.subheadline, color: color.text.secondary, lineHeight: 22 },
 
   // Step 7 위생 리뷰
+  reviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.m,
+    marginBottom: spacing.m,
+  },
+  reviewMascot: { width: mascotSize.featured, height: mascotSize.featured },
   starDemo: {
     backgroundColor: color.surface.tintGreen,
     borderRadius: radius.xl,
