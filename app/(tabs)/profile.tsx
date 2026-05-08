@@ -8,8 +8,8 @@ import { HygieneGuideListModal } from '@/components/HygieneGuideListModal';
 import { router } from 'expo-router';
 import { useLikedIds } from '@/utils/favorites';
 import { ensureRecomputedById } from '@/utils/dataStore';
+import { loginWithKakao, logoutFromKakao, useKakaoUser } from '@/utils/kakaoAuth';
 
-const GUEST = true; // 로그인 시스템 도입 전까지 게스트 고정
 
 type MenuItem = {
   icon: IconName;
@@ -26,6 +26,7 @@ type GradeBreakdown = { GOLDEN: number; SILVER: number; BRONZE: number; OTHER: n
 export default function ProfileScreen() {
   const likedIds = useLikedIds();
   const likedCount = likedIds.size;
+  const kakaoUser = useKakaoUser();
   const [breakdown, setBreakdown] = useState<GradeBreakdown>({ GOLDEN: 0, SILVER: 0, BRONZE: 0, OTHER: 0 });
   const [guideListOpen, setGuideListOpen] = useState(false);
 
@@ -102,7 +103,18 @@ export default function ProfileScreen() {
       />
 
       {/* Guest / logged-in profile card */}
-      {GUEST ? <GuestCard likedCount={likedCount} /> : <LoggedInCard />}
+      {kakaoUser ? (
+        <LoggedInCard
+          nickname={kakaoUser.nickname}
+          profileImage={kakaoUser.profileImage}
+          onLogout={() => logoutFromKakao()}
+        />
+      ) : (
+        <GuestCard
+          likedCount={likedCount}
+          onLogin={async () => { await loginWithKakao(); }}
+        />
+      )}
 
       {/* 좋아요 등급별 분포 — 데이터 있을 때만 */}
       {likedCount > 0 && <LikedBreakdownCard breakdown={breakdown} total={likedCount} />}
@@ -166,11 +178,10 @@ function LikedBreakdownCard({ breakdown, total }: { breakdown: GradeBreakdown; t
   );
 }
 
-function GuestCard({ likedCount }: { likedCount: number }) {
-  // 좋아요 상태로 안내 문구 차별화 — 비회원도 캐시로 좋아요 사용 가능
+function GuestCard({ likedCount, onLogin }: { likedCount: number; onLogin: () => void }) {
   const sub = likedCount > 0
     ? `이 기기에 좋아요 ${likedCount}곳이 저장돼있어요. 로그인하면 다른 기기에서도 볼 수 있어요.`
-    : '로그인하면 좋아요·리뷰가 모든 기기에서 동기화돼요.';
+    : '카카오로 로그인하면 좋아요·리뷰가 모든 기기에서 동기화돼요.';
   return (
     <Card variant="elevated" padding="l" style={{ marginTop: spacing.l }}>
       <View style={styles.guestRow}>
@@ -181,36 +192,43 @@ function GuestCard({ likedCount }: { likedCount: number }) {
         </View>
       </View>
       <View style={{ marginTop: spacing.m }}>
-        <Button variant="primary" size="md" fullWidth onPress={() => {}}>
-          로그인 / 회원가입 (준비 중)
+        <Button variant="primary" size="md" fullWidth onPress={onLogin}>
+          카카오로 시작하기
         </Button>
       </View>
     </Card>
   );
 }
 
-function LoggedInCard() {
+function LoggedInCard({
+  nickname, profileImage, onLogout,
+}: { nickname: string; profileImage?: string; onLogout: () => void }) {
+  const likedCount = useLikedIds().size;
   return (
     <Card variant="elevated" padding="l" style={{ marginTop: spacing.l }}>
       <View style={styles.guestRow}>
-        <View style={styles.avatar}>
-          <Icon name="user" size={28} color={color.brand.primary} />
-        </View>
+        {profileImage ? (
+          <Image source={{ uri: profileImage }} style={[styles.avatar, { backgroundColor: 'transparent' }]} />
+        ) : (
+          <View style={styles.avatar}>
+            <Icon name="user" size={28} color={color.brand.primary} />
+          </View>
+        )}
         <View style={{ flex: 1 }}>
-          <Text style={styles.guestName}>식탐정 사용자</Text>
-          <Text style={styles.emailText}>user@example.com</Text>
+          <Text style={styles.guestName}>{nickname}</Text>
+          <Text style={styles.emailText}>카카오 계정 연결됨</Text>
         </View>
-        <Button variant="ghost" size="sm" onPress={() => {}}>
-          편집
+        <Button variant="ghost" size="sm" onPress={onLogout}>
+          로그아웃
         </Button>
       </View>
 
       <View style={styles.statsRow}>
-        <Stat value="5" label="좋아요" />
+        <Stat value={String(likedCount)} label="좋아요" />
         <View style={styles.statDivider} />
-        <Stat value="12" label="리뷰" />
+        <Stat value="—" label="리뷰" />
         <View style={styles.statDivider} />
-        <Stat value="8" label="사진" />
+        <Stat value="—" label="사진" />
       </View>
     </Card>
   );

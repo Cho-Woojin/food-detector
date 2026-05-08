@@ -98,6 +98,7 @@ function RootLayoutNav() {
             />
             <Stack.Screen name="restaurant/[id]" options={{ headerShown: false }} />
             <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+            <Stack.Screen name="auth/kakao" options={{ headerShown: false }} />
           </Stack>
 
           {!splashGone && (
