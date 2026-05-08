@@ -19,15 +19,17 @@ import { requestUserLocation, getCachedLocation } from '@/utils/location';
 const KAKAO_YELLOW = '#FEE500';
 const KAKAO_TEXT = '#191919';
 
-type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7;
-const TOTAL_STEPS = 7;
+type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+const TOTAL_STEPS = 8;
 
-// 데모용 — 실제 위험 지수는 추후 외부 데이터(기상·식약처 알림) 연동
-const MOCK_RISK = {
-  level: '주의' as const,
-  emoji: '🟡',
+// 데모용 — 실제 환경 지수는 추후 기상·식약처·대기 데이터 연동
+const MOCK_ENV = {
+  risk: { level: '주의', emoji: '🟡', tone: '#F59E0B' as const },
   guidance: '차가운 음식 주의하세요',
-  detail: '여름철 해수 온도 상승으로 회·생굴 비브리오 위험이 높아요.',
+  detail: '여름철 해수 온도 상승으로 회·생굴의 비브리오 위험이 평소보다 높아요.',
+  weather: { temp: 28, humidity: 65, label: '구름 조금', emoji: '⛅' },
+  airQuality: { label: '보통', value: 'PM10 45', emoji: '🌫️' },
+  foodPoison: { label: '주의', desc: '비브리오 ↑ · 살모넬라 ↑', emoji: '🦠' },
 };
 
 export default function LandingScreen() {
@@ -55,6 +57,7 @@ export default function LandingScreen() {
   }, []);
 
   const next = () => setStep((s) => Math.min(TOTAL_STEPS, (s + 1)) as Step);
+  const back = () => setStep((s) => Math.max(1, (s - 1)) as Step);
   const goSkip = () => {
     markLandingSkipped();
     router.replace('/(tabs)' as any);
@@ -64,14 +67,29 @@ export default function LandingScreen() {
     <View style={[styles.root, { paddingTop: insets.top + spacing.l, paddingBottom: insets.bottom + spacing.l }]}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* 진행 표시 — Splash·결과·가입 단계는 숨김 */}
-      {step >= 2 && step <= 6 && <ProgressBar step={step} total={TOTAL_STEPS} />}
+      {/* 상단: 뒤로 가기 (Splash 제외) + 진행 바 */}
+      <View style={styles.topRow}>
+        {step > 1 ? (
+          <Pressable
+            onPress={back}
+            accessibilityRole="button"
+            accessibilityLabel="이전 단계로"
+            hitSlop={12}
+            style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}>
+            <Text style={styles.backIcon}>‹</Text>
+          </Pressable>
+        ) : <View style={styles.backBtn} />}
+        {step >= 2 && step <= 7 ? (
+          <ProgressBar step={step} total={TOTAL_STEPS} />
+        ) : <View style={{ flex: 1 }} />}
+        <View style={styles.backBtn} />
+      </View>
 
       <View style={styles.body}>
         {step === 1 && <StepSplash />}
         {step === 2 && <StepProblem onNext={next} onSkip={goSkip} />}
         {step === 3 && <StepLocation onNext={(gu) => { if (gu) setLocationGu(gu); next(); }} />}
-        {step === 4 && <StepRisk gu={locationGu} rows={allRows} onNext={next} />}
+        {step === 4 && <StepEnvironment gu={locationGu} rows={allRows} onNext={next} />}
         {step === 5 && (
           <StepSearch
             rows={allRows}
@@ -82,7 +100,8 @@ export default function LandingScreen() {
           />
         )}
         {step === 6 && <StepResult picked={searchPicked} onNext={next} />}
-        {step === 7 && <StepSignup onSkip={goSkip} />}
+        {step === 7 && <StepHygieneReview onNext={next} onSkip={next} />}
+        {step === 8 && <StepSignup onSkip={goSkip} />}
       </View>
     </View>
   );
@@ -181,24 +200,50 @@ function StepLocation({ onNext }: { onNext: (gu?: string) => void }) {
   );
 }
 
-// ===== Step 4: 위험지수 체험 =====
-function StepRisk({ gu, rows, onNext }: { gu: string; rows: RecomputedRow[]; onNext: () => void }) {
+// ===== Step 4: 환경 지수 (위치 기반) =====
+function StepEnvironment({ gu, rows, onNext }: { gu: string; rows: RecomputedRow[]; onNext: () => void }) {
   const goldensInGu = rows.filter((r) => r.gr === 'GOLDEN' && r.g === gu).slice(0, 3);
   const goldensFallback = rows.filter((r) => r.gr === 'GOLDEN').slice(0, 3);
   const list = goldensInGu.length > 0 ? goldensInGu : goldensFallback;
 
   return (
     <>
-      <View style={{ flex: 1, paddingTop: spacing.l }}>
-        <Text style={styles.locationTag}>{gu} 오늘 위험지수</Text>
-        <View style={styles.riskBadge}>
-          <Text style={styles.riskEmoji}>{MOCK_RISK.emoji}</Text>
-          <Text style={styles.riskLevel}>{MOCK_RISK.level}</Text>
-        </View>
-        <Text style={styles.riskGuidance}>"{MOCK_RISK.guidance}"</Text>
-        <Text style={styles.riskDetail}>{MOCK_RISK.detail}</Text>
+      <View style={{ flex: 1, paddingTop: spacing.s }}>
+        <Text style={styles.locationTag}>{gu} 오늘의 환경 지수</Text>
 
-        <Text style={styles.sectionLabel}>골든 치즈 식당 추천</Text>
+        {/* 종합 위험 카드 */}
+        <View style={[styles.envHero, { backgroundColor: color.surface.tintBlue }]}>
+          <View style={styles.envHeroTop}>
+            <Text style={styles.envHeroEmoji}>{MOCK_ENV.risk.emoji}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.envHeroLevel, { color: MOCK_ENV.risk.tone }]}>{MOCK_ENV.risk.level}</Text>
+              <Text style={styles.envHeroGuidance}>{MOCK_ENV.guidance}</Text>
+            </View>
+          </View>
+          <Text style={styles.envHeroDetail}>{MOCK_ENV.detail}</Text>
+        </View>
+
+        {/* 환경 지표 그리드 (날씨 / 식중독 / 대기) */}
+        <View style={styles.envGrid}>
+          <EnvCard
+            emoji={MOCK_ENV.weather.emoji}
+            title={`${MOCK_ENV.weather.temp}°C · 습도 ${MOCK_ENV.weather.humidity}%`}
+            sub={MOCK_ENV.weather.label}
+          />
+          <EnvCard
+            emoji={MOCK_ENV.foodPoison.emoji}
+            title={MOCK_ENV.foodPoison.label}
+            sub={MOCK_ENV.foodPoison.desc}
+          />
+          <EnvCard
+            emoji={MOCK_ENV.airQuality.emoji}
+            title={MOCK_ENV.airQuality.label}
+            sub={MOCK_ENV.airQuality.value}
+          />
+        </View>
+
+        {/* 골든 치즈 식당 */}
+        <Text style={styles.sectionLabel}>{gu} 골든 치즈 식당 추천</Text>
         <View style={styles.goldList}>
           {list.length === 0 ? (
             <ActivityIndicator color={color.brand.primary} />
@@ -218,6 +263,18 @@ function StepRisk({ gu, rows, onNext }: { gu: string; rows: RecomputedRow[]; onN
       </View>
       <PrimaryNext label="다음" onPress={onNext} />
     </>
+  );
+}
+
+function EnvCard({ emoji, title, sub }: { emoji: string; title: string; sub: string }) {
+  return (
+    <View style={styles.envCard}>
+      <Text style={styles.envCardEmoji}>{emoji}</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.envCardTitle} numberOfLines={1}>{title}</Text>
+        <Text style={styles.envCardSub} numberOfLines={1}>{sub}</Text>
+      </View>
+    </View>
   );
 }
 
@@ -303,7 +360,53 @@ function StepResult({ picked, onNext }: { picked: RecomputedRow | null; onNext: 
   );
 }
 
-// ===== Step 7: Soft 가입 =====
+// ===== Step 7: 위생 리뷰 활성화 =====
+function StepHygieneReview({ onNext, onSkip }: { onNext: () => void; onSkip: () => void }) {
+  return (
+    <>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.locationTag}>당신의 한 줄 리뷰가</Text>
+        <Text style={styles.bigQuote2}>다른 사용자의 안전을 지켜요</Text>
+        <Text style={styles.subBodyLeft}>
+          "주방이 깨끗했어요" "재료가 신선했어요" 같은 짧은 위생 리뷰가
+          모이면, 식약처 데이터로는 안 보이는 실제 매장 위생 상태가 드러나요.
+        </Text>
+
+        <View style={styles.reviewImpactCard}>
+          <View style={styles.impactRow}>
+            <Text style={styles.impactNumber}>+5</Text>
+            <Text style={styles.impactLabel}>리뷰 1개 작성 시{'\n'}식당 위생 점수에 반영</Text>
+          </View>
+          <View style={styles.impactDivider} />
+          <View style={styles.impactRow}>
+            <Text style={styles.impactNumber}>12</Text>
+            <Text style={styles.impactLabel}>평균적으로 한 리뷰가{'\n'}12명의 선택을 도와요</Text>
+          </View>
+        </View>
+
+        <View style={styles.reviewExamples}>
+          <ReviewChip text="✓ 주방이 깨끗했어요" />
+          <ReviewChip text="✓ 재료가 신선했어요" />
+          <ReviewChip text="✓ 식기가 위생적이었어요" />
+          <ReviewChip text="⚠ 식기에 음식 자국" />
+          <ReviewChip text="⚠ 화장실 청결 부족" />
+        </View>
+      </View>
+      <PrimaryNext label="위생 리뷰 활성화" onPress={onNext} />
+      <SkipButton label="나중에 할게요" onPress={onSkip} />
+    </>
+  );
+}
+
+function ReviewChip({ text }: { text: string }) {
+  return (
+    <View style={styles.reviewChip}>
+      <Text style={styles.reviewChipText}>{text}</Text>
+    </View>
+  );
+}
+
+// ===== Step 8: Soft 가입 =====
 function StepSignup({ onSkip }: { onSkip: () => void }) {
   return (
     <>
@@ -372,8 +475,12 @@ function gradeLabel(g: string): string {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.surface.canvas, paddingHorizontal: spacing.xl },
 
-  // 진행 바
-  progressRow: { flexDirection: 'row', gap: 4, marginBottom: spacing.l },
+  // 상단 바: 뒤로 + 진행
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.s, marginBottom: spacing.l },
+  backBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  backIcon: { fontSize: 28, color: color.text.primary, lineHeight: 28, marginTop: -2 },
+
+  progressRow: { flex: 1, flexDirection: 'row', gap: 4 },
   progressSeg: { flex: 1, height: 3, borderRadius: 2 },
   progressSegActive: { backgroundColor: color.brand.primary },
   progressSegIdle: { backgroundColor: color.border.default },
@@ -389,21 +496,38 @@ const styles = StyleSheet.create({
   bigQuote: { fontSize: 22, fontWeight: '700', color: color.text.primary, textAlign: 'center', lineHeight: 32, marginBottom: spacing.m },
   bigQuote2: { fontSize: 20, fontWeight: '700', color: color.text.primary, marginBottom: spacing.s },
   subBody: { ...typography.body, color: color.text.secondary, textAlign: 'center', lineHeight: 22 },
+  subBodyLeft: { ...typography.body, color: color.text.secondary, lineHeight: 22, marginBottom: spacing.l },
   errorText: { ...typography.caption, color: color.status.danger, textAlign: 'center', marginTop: spacing.m },
 
-  // Step 4 위험지수
+  // Step 4 환경 지수
   locationTag: { ...typography.captionEmphasized, color: color.text.secondary, marginBottom: spacing.s },
-  riskBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing.s,
-    backgroundColor: 'rgba(245,158,11,0.1)',
-    alignSelf: 'flex-start',
-    paddingHorizontal: spacing.m, paddingVertical: spacing.s,
-    borderRadius: radius.pill, marginBottom: spacing.m,
+
+  // 종합 환경 hero 카드
+  envHero: {
+    borderRadius: radius.xxl,
+    padding: spacing.l,
+    marginBottom: spacing.m,
   },
-  riskEmoji: { fontSize: 20 },
-  riskLevel: { fontSize: 18, fontWeight: '700', color: '#F59E0B' },
-  riskGuidance: { fontSize: 22, fontWeight: '700', color: color.text.primary, marginBottom: spacing.xs },
-  riskDetail: { ...typography.subheadline, color: color.text.secondary, marginBottom: spacing.xxl, lineHeight: 22 },
+  envHeroTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.m, marginBottom: spacing.s },
+  envHeroEmoji: { fontSize: 36 },
+  envHeroLevel: { fontSize: 22, fontWeight: '700', marginBottom: 2 },
+  envHeroGuidance: { fontSize: 16, fontWeight: '700', color: color.text.primary },
+  envHeroDetail: { ...typography.subheadline, color: color.text.secondary, lineHeight: 21 },
+
+  // 환경 지표 그리드
+  envGrid: { gap: spacing.s, marginBottom: spacing.l },
+  envCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.m,
+    backgroundColor: color.surface.subtle,
+    borderRadius: radius.l,
+    paddingHorizontal: spacing.m,
+    paddingVertical: spacing.s + 2,
+  },
+  envCardEmoji: { fontSize: 24 },
+  envCardTitle: { ...typography.bodyEmphasized, color: color.text.primary, marginBottom: 2 },
+  envCardSub: { ...typography.caption, color: color.text.secondary },
 
   sectionLabel: { ...typography.subheadlineEmphasized, color: color.text.primary, marginBottom: spacing.m },
   goldList: { gap: spacing.s },
@@ -461,7 +585,30 @@ const styles = StyleSheet.create({
   savePromptTitle: { fontSize: 18, fontWeight: '700', color: color.text.primary, marginBottom: spacing.s, lineHeight: 26 },
   savePromptBody: { ...typography.subheadline, color: color.text.secondary, lineHeight: 22 },
 
-  // Step 7 가입
+  // Step 7 위생 리뷰
+  reviewImpactCard: {
+    flexDirection: 'row',
+    backgroundColor: color.surface.tintGreen,
+    borderRadius: radius.xl,
+    padding: spacing.l,
+    marginBottom: spacing.l,
+    alignItems: 'center',
+  },
+  impactRow: { flex: 1, alignItems: 'center' },
+  impactNumber: { fontSize: 32, fontWeight: '800', color: color.brand.primary, marginBottom: spacing.xs },
+  impactLabel: { ...typography.caption, color: color.text.secondary, textAlign: 'center', lineHeight: 18 },
+  impactDivider: { width: 1, height: 48, backgroundColor: color.border.default },
+
+  reviewExamples: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+  reviewChip: {
+    paddingHorizontal: spacing.s + 2,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radius.pill,
+    backgroundColor: color.surface.subtle,
+  },
+  reviewChipText: { ...typography.caption, color: color.text.primary },
+
+  // Step 8 가입
   signupCta: { gap: spacing.m, alignItems: 'center' },
   kakaoBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
