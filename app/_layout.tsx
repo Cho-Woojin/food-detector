@@ -15,6 +15,9 @@ import { fontFamilies } from '@/constants/tokens';
 
 const fontFamily = fontFamilies.default;
 import { ensureRecomputedIndex } from '@/utils/dataStore';
+import { shouldShowLanding } from '@/utils/landing';
+import { useKakaoUser } from '@/utils/kakaoAuth';
+import { router } from 'expo-router';
 
 // 모든 Text/TextInput 기본 폰트를 Pretendard로 (웹) / 시스템 (네이티브)
 const TextAny = Text as any;
@@ -66,6 +69,7 @@ function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const [dataReady, setDataReady] = useState(false);
   const [splashGone, setSplashGone] = useState(false);
+  const kakaoUser = useKakaoUser();
 
   // 인덱스 + 자치구 식당 데이터 미리 로드 (홈/검색/지도가 즉시 동작하도록)
   useEffect(() => {
@@ -79,6 +83,14 @@ function RootLayoutNav() {
       cancelled = true;
     };
   }, []);
+
+  // 첫 진입 + 비로그인 + skip 안 한 사용자는 랜딩으로 리다이렉트.
+  // 데이터 + 스플래시가 다 사라진 후에 처리해야 깜빡임 없음.
+  useEffect(() => {
+    if (!dataReady || !splashGone) return;
+    if (kakaoUser) return; // 로그인 상태면 랜딩 건너뜀
+    if (shouldShowLanding()) router.replace('/landing' as any);
+  }, [dataReady, splashGone, kakaoUser]);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -98,6 +110,8 @@ function RootLayoutNav() {
             />
             <Stack.Screen name="restaurant/[id]" options={{ headerShown: false }} />
             <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+            <Stack.Screen name="auth/kakao" options={{ headerShown: false }} />
+            <Stack.Screen name="landing" options={{ headerShown: false, animation: 'fade' }} />
           </Stack>
 
           {!splashGone && (

@@ -8,6 +8,7 @@ import { color, elevation, radius, spacing, typography } from '@/constants/token
 import { CategoryKey, GuKey, Restaurant } from '@/constants/Restaurant';
 import { loadRestaurantsByGu } from '@/utils/loadData';
 import { useLikedIds } from '@/utils/favorites';
+import { getCachedLocation } from '@/utils/location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -56,7 +57,11 @@ export default function MapScreen() {
   const mapHandleRef = useRef<KakaoMapHandle>(null);
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [selected, setSelected] = useState<Restaurant | null>(null);
-  const [center, setCenter] = useState(SEOUL_CENTER);
+  // 진입 시 캐시된 사용자 위치(있으면) 기준, 없으면 서울 중심
+  const [center, setCenter] = useState(() => {
+    const cached = getCachedLocation();
+    return cached ? { lat: cached.lat, lng: cached.lng } : SEOUL_CENTER;
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<CategoryKey | 'ALL'>('ALL');
   const [mapType, setMapType] = useState<'ROADMAP' | 'SKYVIEW'>('ROADMAP');

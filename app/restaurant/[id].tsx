@@ -12,6 +12,7 @@ import { AnimatedHeart, Button, Card, CheeseBadge, Chip, IconButton, SkeletonCar
 import { findRestaurantById } from '@/utils/dataStore';
 import { toUIRestaurant } from '@/utils/adapter';
 import { toggleLike, useIsLiked } from '@/utils/favorites';
+import { ShareSheet } from '@/components/ShareSheet';
 
 const TABS = ['평가', '리뷰', '정보'] as const;
 type Tab = (typeof TABS)[number];
@@ -30,6 +31,7 @@ export default function RestaurantDetail() {
   const liked = useIsLiked(typeof id === 'string' ? id : null);
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [loading, setLoading] = useState(true);
+  const [shareOpen, setShareOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,7 +60,12 @@ export default function RestaurantDetail() {
       <View style={[styles.topBar, { paddingTop: insets.top + spacing.xs }]}>
         <IconButton icon="back" size="md" accessibilityLabel="뒤로 가기" onPress={() => router.back()} />
         <View style={{ flex: 1 }} />
-        <IconButton icon="share" size="md" accessibilityLabel="공유하기" onPress={() => {}} />
+        <IconButton
+          icon="share"
+          size="md"
+          accessibilityLabel="공유하기"
+          onPress={() => setShareOpen(true)}
+        />
         <IconButton icon="search" size="md" accessibilityLabel="검색" onPress={() => router.push('/search')} />
       </View>
 
@@ -148,6 +155,19 @@ export default function RestaurantDetail() {
           </Button>
         </View>
       </View>
+
+      <ShareSheet
+        visible={shareOpen}
+        target={{
+          id: restaurant.id,
+          name: restaurant.name,
+          cat: restaurant.category,
+          gu: restaurant.district.split(' ')[0] || '',
+          score: restaurant.score,
+          grade: restaurant.grade as any,
+        }}
+        onClose={() => setShareOpen(false)}
+      />
     </View>
   );
 }

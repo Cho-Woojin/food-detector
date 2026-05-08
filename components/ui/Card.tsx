@@ -19,7 +19,7 @@ export type CardProps = {
   tint?: Tint;
   bgColor?: string;
   padding?: SpacingKey | 'none';
-  radius?: Extract<RadiusKey, 'm' | 'l' | 'xl'>;
+  radius?: Extract<RadiusKey, 'm' | 'l' | 'xl' | 'xxl'>;
   pressable?: boolean;
   onPress?: () => void;
   accessibilityLabel?: string;
@@ -32,7 +32,7 @@ export function Card({
   tint,
   bgColor,
   padding = 'l',
-  radius: radiusKey = 'l',
+  radius: radiusKey = 'xl',
   pressable = false,
   onPress,
   accessibilityLabel,

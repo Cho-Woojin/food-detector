@@ -1,43 +1,98 @@
-import { Image, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
 import { Icon, IconName } from '@/components/Icon';
 import { Mascots } from '@/constants/Assets';
 import { color, mascotSize, radius, spacing, typography } from '@/constants/tokens';
-import { AppHeader, Button, Card, IconButton, Screen } from '@/components/ui';
+import { AppHeader, Button, Card, Screen } from '@/components/ui';
+import { HygieneGuideListModal } from '@/components/HygieneGuideListModal';
 import { router } from 'expo-router';
+import { useLikedIds } from '@/utils/favorites';
+import { ensureRecomputedById } from '@/utils/dataStore';
+import { loginWithKakao, logoutFromKakao, useKakaoUser } from '@/utils/kakaoAuth';
 
-const GUEST = true; // Mock — toggle for design preview
 
-type MenuItem = { icon: IconName; label: string; value?: string; disabled?: boolean; comingSoon?: boolean };
+type MenuItem = {
+  icon: IconName;
+  label: string;
+  value?: string;
+  disabled?: boolean;
+  comingSoon?: boolean;
+  onPress?: () => void;
+};
 type MenuSection = { title: string; items: MenuItem[] };
 
-const MENU_SECTIONS: MenuSection[] = [
-  {
-    title: '활동',
-    items: [
-      { icon: 'heart', label: '좋아요한 식당', value: '5' },
-      { icon: 'pencil', label: '내가 쓴 위생 리뷰', value: '12' },
-      { icon: 'camera', label: '업로드한 사진', value: '8' },
-    ],
-  },
-  {
-    title: '설정',
-    items: [
-      { icon: 'location', label: '지역 설정', value: '강남구' },
-      { icon: 'bell', label: '알림 설정' },
-      { icon: 'moon', label: '다크 모드', comingSoon: true, disabled: true },
-    ],
-  },
-  {
-    title: '식탐정',
-    items: [
-      { icon: 'doc', label: '서비스 약관' },
-      { icon: 'doc', label: '개인정보 처리방침' },
-      { icon: 'chat', label: '문의하기' },
-    ],
-  },
-];
+type GradeBreakdown = { GOLDEN: number; SILVER: number; BRONZE: number; OTHER: number };
 
 export default function ProfileScreen() {
+  const likedIds = useLikedIds();
+  const likedCount = likedIds.size;
+  const kakaoUser = useKakaoUser();
+  const [breakdown, setBreakdown] = useState<GradeBreakdown>({ GOLDEN: 0, SILVER: 0, BRONZE: 0, OTHER: 0 });
+  const [guideListOpen, setGuideListOpen] = useState(false);
+
+  // 좋아요한 식당의 등급별 분포 계산 — 데이터 로드 후 1회
+  useEffect(() => {
+    if (likedCount === 0) { setBreakdown({ GOLDEN: 0, SILVER: 0, BRONZE: 0, OTHER: 0 }); return; }
+    let cancelled = false;
+    ensureRecomputedById().then((map) => {
+      if (cancelled) return;
+      const next: GradeBreakdown = { GOLDEN: 0, SILVER: 0, BRONZE: 0, OTHER: 0 };
+      for (const id of likedIds) {
+        const row = map.get(id);
+        const gr = row?.gr;
+        if (gr === 'GOLDEN') next.GOLDEN++;
+        else if (gr === 'SILVER') next.SILVER++;
+        else if (gr === 'BRONZE') next.BRONZE++;
+        else next.OTHER++;
+      }
+      setBreakdown(next);
+    });
+    return () => { cancelled = true; };
+  }, [likedIds]);
+
+  const sections: MenuSection[] = [
+    {
+      title: '활동',
+      items: [
+        {
+          icon: 'heart',
+          label: '좋아요한 식당',
+          value: String(likedCount),
+          onPress: () => router.push('/(tabs)/favorites' as any),
+        },
+        { icon: 'pencil', label: '내가 쓴 위생 리뷰', comingSoon: true, disabled: true },
+        { icon: 'camera', label: '업로드한 사진', comingSoon: true, disabled: true },
+      ],
+    },
+    {
+      title: '안전 가이드',
+      items: [
+        {
+          icon: 'leaf',
+          label: '위생 가이드 라이브러리',
+          onPress: () => setGuideListOpen(true),
+        },
+      ],
+    },
+    {
+      title: '설정',
+      items: [
+        { icon: 'location', label: '지역 설정', value: '서울 전체', comingSoon: true, disabled: true },
+        { icon: 'bell', label: '알림 설정', comingSoon: true, disabled: true },
+        { icon: 'moon', label: '다크 모드', comingSoon: true, disabled: true },
+      ],
+    },
+    {
+      title: '식탐정',
+      items: [
+        { icon: 'doc', label: '서비스 약관', onPress: () => {} },
+        { icon: 'doc', label: '개인정보 처리방침', onPress: () => {} },
+        { icon: 'chat', label: '문의하기', onPress: () => {} },
+        { icon: 'sparkles', label: '데이터 출처', value: '식약처·카카오', onPress: () => {} },
+      ],
+    },
+  ];
+
   return (
     <Screen variant="canvas" edges={['top']} scroll paddingHorizontal="l">
       <AppHeader
@@ -45,24 +100,30 @@ export default function ProfileScreen() {
         variant="large"
         leading="none"
         withSafeArea={false}
-        trailing={
-          <IconButton
-            icon="search"
-            size="md"
-            accessibilityLabel="검색"
-            onPress={() => router.push('/search')}
-          />
-        }
       />
 
       {/* Guest / logged-in profile card */}
-      {GUEST ? <GuestCard /> : <LoggedInCard />}
+      {kakaoUser ? (
+        <LoggedInCard
+          nickname={kakaoUser.nickname}
+          profileImage={kakaoUser.profileImage}
+          onLogout={() => logoutFromKakao()}
+        />
+      ) : (
+        <GuestCard
+          likedCount={likedCount}
+          onLogin={async () => { await loginWithKakao(); }}
+        />
+      )}
+
+      {/* 좋아요 등급별 분포 — 데이터 있을 때만 */}
+      {likedCount > 0 && <LikedBreakdownCard breakdown={breakdown} total={likedCount} />}
 
       {/* Owner-mode banner */}
       <OwnerBanner />
 
       {/* Menu sections */}
-      {MENU_SECTIONS.map((section, sIdx) => (
+      {sections.map((section, sIdx) => (
         <View key={section.title} style={[styles.section, sIdx === 0 && { marginTop: spacing.xxl }]}>
           <Text style={styles.sectionTitle}>{section.title}</Text>
           <Card variant="outlined" padding="none" radius="l" style={{ overflow: 'hidden' }}>
@@ -77,54 +138,97 @@ export default function ProfileScreen() {
         </View>
       ))}
 
-      <Text style={styles.version}>식탐정 v1.0.0</Text>
+      <Text style={styles.version}>식탐정 v1.0.0 · 식약처 LOCALDATA 기반</Text>
+
+      <HygieneGuideListModal visible={guideListOpen} onClose={() => setGuideListOpen(false)} />
     </Screen>
   );
 }
 
-function GuestCard() {
+function LikedBreakdownCard({ breakdown, total }: { breakdown: GradeBreakdown; total: number }) {
+  // 가로 비율 바 — 골드/실버/브론즈/기타
+  const data = [
+    { key: 'GOLDEN', count: breakdown.GOLDEN, label: '골든', fg: color.cheese.GOLDEN.fg },
+    { key: 'SILVER', count: breakdown.SILVER, label: '실버', fg: color.cheese.SILVER.fg },
+    { key: 'BRONZE', count: breakdown.BRONZE, label: '브론즈', fg: color.cheese.BRONZE.fg },
+    { key: 'OTHER', count: breakdown.OTHER, label: '기타', fg: color.text.tertiary },
+  ];
+  return (
+    <Card variant="elevated" padding="l" style={{ marginTop: spacing.l }}>
+      <View style={styles.statHeader}>
+        <Text style={styles.statTitle}>나의 좋아요 분포</Text>
+        <Text style={styles.statTotal}>총 {total}곳</Text>
+      </View>
+      <View style={styles.statBar}>
+        {data.map((d) =>
+          d.count > 0 ? (
+            <View key={d.key} style={[styles.statBarSeg, { flex: d.count, backgroundColor: d.fg }]} />
+          ) : null
+        )}
+      </View>
+      <View style={styles.statLegend}>
+        {data.map((d) => (
+          <View key={d.key} style={styles.statChip}>
+            <View style={[styles.statDot, { backgroundColor: d.fg }]} />
+            <Text style={styles.statChipText}>{d.label} {d.count}</Text>
+          </View>
+        ))}
+      </View>
+    </Card>
+  );
+}
+
+function GuestCard({ likedCount, onLogin }: { likedCount: number; onLogin: () => void }) {
+  const sub = likedCount > 0
+    ? `이 기기에 좋아요 ${likedCount}곳이 저장돼있어요. 로그인하면 다른 기기에서도 볼 수 있어요.`
+    : '카카오로 로그인하면 좋아요·리뷰가 모든 기기에서 동기화돼요.';
   return (
     <Card variant="elevated" padding="l" style={{ marginTop: spacing.l }}>
       <View style={styles.guestRow}>
         <Image source={Mascots.search} style={styles.guestMascot} resizeMode="contain" />
         <View style={{ flex: 1 }}>
           <Text style={styles.guestName}>식탐정 게스트</Text>
-          <Text style={styles.guestBody}>
-            로그인하면 즐겨찾기·리뷰가 동기화돼요
-          </Text>
+          <Text style={styles.guestBody}>{sub}</Text>
         </View>
       </View>
       <View style={{ marginTop: spacing.m }}>
-        <Button variant="primary" size="md" fullWidth onPress={() => {}}>
-          로그인 / 회원가입
+        <Button variant="primary" size="md" fullWidth onPress={onLogin}>
+          카카오로 시작하기
         </Button>
       </View>
     </Card>
   );
 }
 
-function LoggedInCard() {
+function LoggedInCard({
+  nickname, profileImage, onLogout,
+}: { nickname: string; profileImage?: string; onLogout: () => void }) {
+  const likedCount = useLikedIds().size;
   return (
     <Card variant="elevated" padding="l" style={{ marginTop: spacing.l }}>
       <View style={styles.guestRow}>
-        <View style={styles.avatar}>
-          <Icon name="user" size={28} color={color.brand.primary} />
-        </View>
+        {profileImage ? (
+          <Image source={{ uri: profileImage }} style={[styles.avatar, { backgroundColor: 'transparent' }]} />
+        ) : (
+          <View style={styles.avatar}>
+            <Icon name="user" size={28} color={color.brand.primary} />
+          </View>
+        )}
         <View style={{ flex: 1 }}>
-          <Text style={styles.guestName}>식탐정 사용자</Text>
-          <Text style={styles.emailText}>user@example.com</Text>
+          <Text style={styles.guestName}>{nickname}</Text>
+          <Text style={styles.emailText}>카카오 계정 연결됨</Text>
         </View>
-        <Button variant="ghost" size="sm" onPress={() => {}}>
-          편집
+        <Button variant="ghost" size="sm" onPress={onLogout}>
+          로그아웃
         </Button>
       </View>
 
       <View style={styles.statsRow}>
-        <Stat value="5" label="좋아요" />
+        <Stat value={String(likedCount)} label="좋아요" />
         <View style={styles.statDivider} />
-        <Stat value="12" label="리뷰" />
+        <Stat value="—" label="리뷰" />
         <View style={styles.statDivider} />
-        <Stat value="8" label="사진" />
+        <Stat value="—" label="사진" />
       </View>
     </Card>
   );
@@ -140,14 +244,16 @@ function OwnerBanner() {
       <View style={styles.ownerRow}>
         <Image source={Mascots.badge} style={styles.ownerMascot} resizeMode="contain" />
         <View style={{ flex: 1 }}>
-          <Text style={styles.ownerTitle}>내 가게 입증하기</Text>
-          <Text style={styles.ownerBody}>식탐정 평가로 가게 위생을 알려줘요</Text>
+          <View style={styles.ownerTitleRow}>
+            <Text style={styles.ownerTitle}>내 가게 입증하기</Text>
+            <View style={styles.soonBadge}>
+              <Text style={styles.soonBadgeText}>준비 중</Text>
+            </View>
+          </View>
+          <Text style={styles.ownerBody}>
+            사장님이 식탐정에서 가게 위생을 직접 인증해보세요
+          </Text>
         </View>
-      </View>
-      <View style={{ marginTop: spacing.m, alignItems: 'flex-start' }}>
-        <Button variant="owner" size="sm" onPress={() => {}}>
-          시작하기
-        </Button>
       </View>
     </Card>
   );
@@ -164,32 +270,47 @@ function Stat({ value, label }: { value: string; label: string }) {
 
 function MenuRow({ item, showDivider }: { item: MenuItem; showDivider: boolean }) {
   const muted = item.disabled;
-  const Wrapper: any = item.disabled ? View : Pressable;
-  return (
-    <Wrapper
-      accessibilityRole={item.disabled ? undefined : 'button'}
-      accessibilityLabel={item.label}
-      style={({ pressed }: { pressed?: boolean } = {}) => [
-        styles.menuItem,
-        showDivider && styles.menuItemBorder,
-        pressed && !item.disabled && { backgroundColor: color.fill.tertiary },
-      ]}>
+  const interactive = !item.disabled && !!item.onPress;
+
+  const inner = (
+    <>
       <Icon name={item.icon} size={20} color={muted ? color.text.tertiary : color.text.secondary} style={styles.menuIcon} />
-      <Text style={[styles.menuLabel, muted && { color: color.text.tertiary }]}>
-        {item.label}
-      </Text>
+      <Text style={[styles.menuLabel, muted && { color: color.text.tertiary }]}>{item.label}</Text>
       {item.comingSoon ? (
-        <View style={styles.comingSoonRow}>
-          <Text style={styles.comingSoonText}>곧 만나요</Text>
-          <Switch value={false} disabled />
+        <View style={styles.soonBadge}>
+          <Text style={styles.soonBadgeText}>준비 중</Text>
         </View>
       ) : (
         <>
           {item.value ? <Text style={styles.menuValue}>{item.value}</Text> : null}
-          <Icon name="forward" size={16} color={color.text.tertiary} />
+          {interactive && <Icon name="forward" size={16} color={color.text.tertiary} />}
         </>
       )}
-    </Wrapper>
+    </>
+  );
+
+  // Pressable은 함수형 style 지원, View는 배열 style만 지원 — 분기해서 렌더
+  if (interactive) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={item.label}
+        onPress={item.onPress}
+        style={({ pressed }) => [
+          styles.menuItem,
+          showDivider && styles.menuItemBorder,
+          pressed && { backgroundColor: color.fill.tertiary },
+        ]}>
+        {inner}
+      </Pressable>
+    );
+  }
+  return (
+    <View
+      accessibilityLabel={item.label}
+      style={[styles.menuItem, showDivider && styles.menuItemBorder]}>
+      {inner}
+    </View>
   );
 }
 
@@ -225,8 +346,29 @@ const styles = StyleSheet.create({
   // Owner banner
   ownerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.m },
   ownerMascot: { width: mascotSize.inline, height: mascotSize.inline },
-  ownerTitle: { ...typography.bodyEmphasized, color: color.text.primary, marginBottom: spacing.xxs },
+  ownerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.xxs },
+  ownerTitle: { ...typography.bodyEmphasized, color: color.text.primary },
   ownerBody: { ...typography.caption, color: color.text.secondary },
+
+  // 좋아요 분포 카드
+  statHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.s },
+  statTitle: { ...typography.subheadlineEmphasized, color: color.text.primary },
+  statTotal: { ...typography.caption, color: color.text.secondary },
+  statBar: { flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden', backgroundColor: color.fill.tertiary },
+  statBarSeg: { height: '100%' },
+  statLegend: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.s + 4, marginTop: spacing.m },
+  statChip: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  statDot: { width: 8, height: 8, borderRadius: 4 },
+  statChipText: { ...typography.caption, color: color.text.secondary },
+
+  // 공통 "준비 중" 뱃지
+  soonBadge: {
+    paddingHorizontal: spacing.xs + 2,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    backgroundColor: color.fill.tertiary,
+  },
+  soonBadgeText: { ...typography.footnote, color: color.text.tertiary, fontWeight: '600' },
 
   // Menu sections
   section: { marginTop: spacing.xl },
@@ -252,8 +394,6 @@ const styles = StyleSheet.create({
   menuIcon: { marginRight: spacing.m, width: 22 },
   menuLabel: { flex: 1, ...typography.subheadline, color: color.text.primary },
   menuValue: { ...typography.caption, color: color.text.tertiary, marginRight: spacing.xs + 2 },
-  comingSoonRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.s },
-  comingSoonText: { ...typography.footnote, color: color.text.tertiary },
 
   version: {
     ...typography.footnote,
