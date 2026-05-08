@@ -64,7 +64,6 @@ export default function MapScreen() {
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<CategoryKey | 'ALL'>('ALL');
-  const [mapType, setMapType] = useState<'ROADMAP' | 'SKYVIEW'>('ROADMAP');
   const [mapMoved, setMapMoved] = useState(false);
   const likedIds = useLikedIds();
 
@@ -184,7 +183,7 @@ export default function MapScreen() {
             <KakaoMap
               ref={mapHandleRef}
               restaurants={visible}
-              mapType={mapType}
+              mapType="ROADMAP"
               likedIds={likedIds}
               forcedVisibleIds={forcedVisibleIds}
               onMapMoved={() => setMapMoved(true)}
@@ -279,42 +278,17 @@ export default function MapScreen() {
               );
             })}
           </ScrollView>
-        </View>
 
-        {/* 우측 컨트롤 버튼 (오버레이) */}
-        <View style={styles.controls}>
-          <Pressable
-            onPress={() => setMapType(mapType === 'ROADMAP' ? 'SKYVIEW' : 'ROADMAP')}
-            accessibilityRole="button"
-            accessibilityLabel={mapType === 'ROADMAP' ? '위성지도 보기' : '일반지도 보기'}
-            style={({ pressed }) => [styles.ctrlBtn, pressed && styles.ctrlBtnPressed]}>
-            <Text style={styles.mapTypeText}>{mapType === 'ROADMAP' ? '위성' : '일반'}</Text>
-          </Pressable>
+          {/* 카테고리 칩 바로 아래 — 현위치 버튼 (과녁 아이콘, 초록 라인) */}
           <Pressable
             onPress={handleLocate}
             accessibilityRole="button"
             accessibilityLabel="현위치 이동"
-            style={({ pressed }) => [styles.ctrlBtn, pressed && styles.ctrlBtnPressed]}>
-            <Icon name="location" size={18} color={color.text.primary} />
+            style={({ pressed }) => [styles.locateBtn, pressed && { opacity: 0.7 }]}>
+            <Icon name="locate" size={20} color={color.brand.primary} />
           </Pressable>
-          <View style={styles.zoomGroup}>
-            <Pressable
-              onPress={() => mapHandleRef.current?.zoomIn()}
-              accessibilityRole="button"
-              accessibilityLabel="확대"
-              style={({ pressed }) => [styles.zoomBtn, pressed && styles.ctrlBtnPressed]}>
-              <Text style={styles.zoomText}>+</Text>
-            </Pressable>
-            <View style={styles.zoomDivider} />
-            <Pressable
-              onPress={() => mapHandleRef.current?.zoomOut()}
-              accessibilityRole="button"
-              accessibilityLabel="축소"
-              style={({ pressed }) => [styles.zoomBtn, pressed && styles.ctrlBtnPressed]}>
-              <Text style={styles.zoomText}>−</Text>
-            </Pressable>
-          </View>
         </View>
+
 
         {/* "이 지역에서 검색" 버튼 — 사용자가 지도를 이동·줌하면 등장 */}
         {mapMoved && (
@@ -424,42 +398,20 @@ const styles = StyleSheet.create({
   chipText: { ...typography.caption, color: color.text.secondary },
   chipTextActive: { color: color.surface.subtle, fontWeight: '600' },
 
-  // 우측 컨트롤
-  controls: {
-    position: 'absolute',
-    right: spacing.m,
-    bottom: 96,
-    gap: spacing.s + 2,
-    alignItems: 'center',
-  },
-  ctrlBtn: {
-    width: 44,
-    height: 44,
+  // 카테고리 칩 아래 — 현위치 버튼 (왼쪽 정렬, 초록 라인)
+  locateBtn: {
+    alignSelf: 'flex-start',
+    width: 40,
+    height: 40,
     borderRadius: radius.pill,
     backgroundColor: color.surface.subtle,
+    borderWidth: 1.5,
+    borderColor: color.brand.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: color.border.default,
+    marginTop: spacing.s,
     ...(elevation.raised as ViewStyle),
   },
-  ctrlBtnPressed: { opacity: 0.7 },
-  zoomGroup: {
-    backgroundColor: color.surface.subtle,
-    borderRadius: radius.m,
-    borderWidth: 1,
-    borderColor: color.border.default,
-    overflow: 'hidden',
-    ...(elevation.raised as ViewStyle),
-  },
-  zoomBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  zoomText: { ...typography.title, fontSize: 22, lineHeight: 24, color: color.text.primary },
-  mapTypeText: { ...typography.captionEmphasized, color: color.text.primary },
 
   // "이 지역에서 검색" 떠있는 버튼 (지도 상단 가운데)
   researchBtn: {

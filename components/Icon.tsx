@@ -15,6 +15,7 @@ const ALIASES = {
   bell: 'notifications-outline',
   location: 'location',
   locationOutline: 'location-outline',
+  locate: 'locate-outline', // 과녁(crosshair) — 카카오맵의 현위치 버튼 스타일
   close: 'close',
   back: 'chevron-back',
   forward: 'chevron-forward',
