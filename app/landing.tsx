@@ -156,26 +156,24 @@ function StepProblem({ onNext, onSkip }: { onNext: () => void; onSkip: () => voi
 
 // ===== Step 3: 위치 허용 =====
 function StepLocation({ onNext }: { onNext: (gu?: string) => void }) {
+  const cached = getCachedLocation();
   const [requesting, setRequesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // 이미 권한 받은 적이 있으면 캐시에서 즉시 사용 (24h)
-  useEffect(() => {
-    const cached = getCachedLocation();
-    if (cached) onNext(cached.gu);
-    // 의존성 비워서 마운트 1회만
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const requestLocation = async () => {
     setRequesting(true);
     setError(null);
+    // 캐시 있으면 즉시 사용. 없을 때만 권한 요청.
+    if (cached) {
+      setRequesting(false);
+      onNext(cached.gu);
+      return;
+    }
     const loc = await requestUserLocation();
     setRequesting(false);
     if (loc) {
       onNext(loc.gu);
     } else {
-      // 거부됐거나 실패 — 사용자에게 안내. 건너뛰기로 계속 가능.
       setError('위치 권한이 거부됐어요. 건너뛰기로 둘러볼 수 있어요.');
     }
   };
@@ -191,7 +189,7 @@ function StepLocation({ onNext }: { onNext: (gu?: string) => void }) {
         {error && <Text style={styles.errorText}>{error}</Text>}
       </View>
       <PrimaryNext
-        label={requesting ? '위치 확인 중...' : '현재 위치 사용'}
+        label={requesting ? '위치 확인 중...' : cached ? '이전 위치로 계속' : '현재 위치 사용'}
         onPress={requestLocation}
         disabled={requesting}
       />
