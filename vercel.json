@@ -6,6 +6,19 @@
   "framework": null,
   "cleanUrls": true,
   "trailingSlash": false,
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "(?<deploy>.+)-cho-woojins-projects\\.vercel\\.app"
+        }
+      ],
+      "destination": "https://food-detector-dun.vercel.app/:path*",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/restaurant/:id",
