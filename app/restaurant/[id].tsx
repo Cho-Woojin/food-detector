@@ -12,7 +12,7 @@ import { AnimatedHeart, Button, Card, CheeseBadge, Chip, IconButton, SkeletonCar
 import { findRestaurantById } from '@/utils/dataStore';
 import { toUIRestaurant } from '@/utils/adapter';
 import { toggleLike, useIsLiked } from '@/utils/favorites';
-import { shareRestaurantToKakao } from '@/utils/kakaoShare';
+import { ShareSheet } from '@/components/ShareSheet';
 
 const TABS = ['평가', '리뷰', '정보'] as const;
 type Tab = (typeof TABS)[number];
@@ -31,6 +31,7 @@ export default function RestaurantDetail() {
   const liked = useIsLiked(typeof id === 'string' ? id : null);
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [loading, setLoading] = useState(true);
+  const [shareOpen, setShareOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,19 +63,8 @@ export default function RestaurantDetail() {
         <IconButton
           icon="share"
           size="md"
-          accessibilityLabel="카카오톡으로 공유하기"
-          onPress={() => {
-            // restaurant는 UIRestaurant — district에서 자치구 추출
-            const gu = restaurant.district.split(' ')[0] || '';
-            shareRestaurantToKakao({
-              id: restaurant.id,
-              name: restaurant.name,
-              cat: restaurant.category,
-              gu,
-              score: restaurant.score,
-              grade: restaurant.grade as any,
-            });
-          }}
+          accessibilityLabel="공유하기"
+          onPress={() => setShareOpen(true)}
         />
         <IconButton icon="search" size="md" accessibilityLabel="검색" onPress={() => router.push('/search')} />
       </View>
@@ -165,6 +155,19 @@ export default function RestaurantDetail() {
           </Button>
         </View>
       </View>
+
+      <ShareSheet
+        visible={shareOpen}
+        target={{
+          id: restaurant.id,
+          name: restaurant.name,
+          cat: restaurant.category,
+          gu: restaurant.district.split(' ')[0] || '',
+          score: restaurant.score,
+          grade: restaurant.grade as any,
+        }}
+        onClose={() => setShareOpen(false)}
+      />
     </View>
   );
 }
