@@ -56,7 +56,11 @@ const POPULAR = [
   { kw: '중식',        trend: 'down' },
 ] as const;
 
-const CATEGORIES = ['한식', '중식', '일식', '양식', '분식', '카페', '회·해산물', '구이'];
+// 지도 탭과 동일한 카테고리 (CategoryKey와 매칭)
+const CATEGORIES = [
+  '한식', '치킨', '카페디저트', '일식', '중식', '양식', '분식', '고기',
+  '술집', '찜탕', '아시안', '패스트푸드', '도시락', '샌드위치', '샐러드', '뷔페',
+];
 
 type IndexRow = RecomputedRow;
 
@@ -245,9 +249,29 @@ export default function SearchScreen() {
           </>
         ) : (
           <>
+            {/* 1. 카테고리 — 상단 가로 스크롤 (지도 탭과 동일) */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.catRow}
+              style={styles.catScroll}>
+              {CATEGORIES.map((c) => (
+                <Pressable
+                  key={c}
+                  onPress={() => setQuery(c)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${c} 카테고리`}
+                  style={({ pressed }) => [styles.catChip, pressed && { opacity: 0.85 }]}>
+                  <Text style={styles.catChipText}>{c}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+
+            {/* 2. 최근 검색 */}
             <SectionHeader
               title="최근 검색"
               trailing={recent.length > 0 ? { label: '전체 삭제', onPress: clearRecent } : undefined}
+              marginTop="l"
               marginBottom="s"
             />
             {recent.length > 0 ? (
@@ -267,10 +291,11 @@ export default function SearchScreen() {
               <EmptyState mascot="search" mascotSize="sm" title="검색하면 여기에 기록이 쌓여요" paddingY="l" />
             )}
 
+            {/* 3. 인기 검색어 */}
             <SectionHeader
               title="인기 검색어"
               subtitle="오늘 12:00 기준"
-              marginTop="xxl"
+              marginTop="xl"
               marginBottom="s"
             />
             <View>
@@ -287,15 +312,6 @@ export default function SearchScreen() {
                   <Text style={styles.popularText}>{p.kw}</Text>
                   <TrendArrow trend={p.trend} />
                 </Pressable>
-              ))}
-            </View>
-
-            <SectionHeader title="카테고리로 찾기" marginTop="xxl" marginBottom="m" />
-            <View style={styles.chipsRow}>
-              {CATEGORIES.map((c) => (
-                <Chip key={c} variant="recent" size="md" onPress={() => setQuery(c)}>
-                  {c}
-                </Chip>
               ))}
             </View>
           </>
@@ -380,14 +396,27 @@ const styles = StyleSheet.create({
   popularRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.l,
-    paddingVertical: spacing.m,
-    minHeight: 44,
+    gap: spacing.m,
+    paddingVertical: spacing.s + 2,
+    minHeight: 36,
     borderRadius: radius.s,
   },
-  popularRank: { ...typography.bodyEmphasized, color: color.text.secondary, width: 20 },
-  popularText: { ...typography.body, color: color.text.primary, flex: 1 },
-  trendText: { ...typography.captionEmphasized },
+  popularRank: { ...typography.subheadlineEmphasized, color: color.text.secondary, width: 18 },
+  popularText: { ...typography.subheadline, color: color.text.primary, flex: 1 },
+  trendText: { ...typography.caption },
+
+  // 카테고리 가로 스크롤 칩 (지도 탭과 동일 스타일)
+  catScroll: { marginHorizontal: -spacing.l, flexGrow: 0 },
+  catRow: { gap: spacing.xs, paddingHorizontal: spacing.l, alignItems: 'center' },
+  catChip: {
+    paddingHorizontal: spacing.m,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radius.pill,
+    backgroundColor: color.surface.subtle,
+    borderWidth: 1,
+    borderColor: color.border.default,
+  },
+  catChipText: { ...typography.caption, color: color.text.secondary, fontWeight: '600' },
 
   suggestRow: {
     flexDirection: 'row',

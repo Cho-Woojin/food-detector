@@ -22,6 +22,8 @@ interface KakaoMapProps {
   onMapMoved?: () => void;
   /** 지도 빈 영역 클릭 또는 드래그 시작 — 선택 해제용 */
   onMapDismiss?: () => void;
+  /** 사용자 현재 위치 — 파란 점 + 정확도 반경 표시. accuracy는 m 단위 */
+  userLocation?: { lat: number; lng: number; accuracy?: number } | null;
 }
 
 export type KakaoMapHandle = {
@@ -191,6 +193,7 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
     forcedVisibleIds,
     onMapMoved,
     onMapDismiss,
+    userLocation,
   },
   ref
 ) {
@@ -205,6 +208,9 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
   const onMarkerClickRef = useRef(onMarkerClick);
   const onMapMovedRef = useRef(onMapMoved);
   const onMapDismissRef = useRef(onMapDismiss);
+  // 현위치 파란 점 + 정확도 반경
+  const userMarkerRef = useRef<any>(null);
+  const userCircleRef = useRef<any>(null);
   // 마커 클릭 시각 — 직후의 map click(같은 클릭에서 함께 fire되는 이벤트)을 무시하기 위함
   const lastMarkerClickRef = useRef(0);
   const selectedMarkerRef = useRef<MarkerEntry | null>(null);
@@ -622,6 +628,65 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
     map.panTo(new w.kakao.maps.LatLng(centerLat, centerLng));
     map.setLevel(zoom);
   }, [centerLat, centerLng, zoom]);
+
+  // 사용자 현위치 — 파란 점 마커 + 정확도 반경 원
+  // userLocation이 update되면 위치만 옮김 (재생성 X). 좌표 null이면 마커·원 제거.
+  useEffect(() => {
+    const w = window as any;
+    const map = mapInstanceRef.current;
+    if (!map || !w.kakao?.maps) return;
+
+    if (!userLocation) {
+      if (userMarkerRef.current) { userMarkerRef.current.setMap(null); userMarkerRef.current = null; }
+      if (userCircleRef.current) { userCircleRef.current.setMap(null); userCircleRef.current = null; }
+      return;
+    }
+
+    const pos = new w.kakao.maps.LatLng(userLocation.lat, userLocation.lng);
+    const accuracy = Math.max(50, Math.min(userLocation.accuracy ?? 80, 500)); // 50~500m clamp
+
+    // 마커 — 흰색 외곽링 + 파란 inner dot SVG (Google/Kakao Maps 스타일)
+    if (!userMarkerRef.current) {
+      const dotSvg =
+        `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">` +
+        `<defs><filter id="d" x="-50%" y="-50%" width="200%" height="200%">` +
+        `<feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="black" flood-opacity="0.25"/>` +
+        `</filter></defs>` +
+        `<circle cx="11" cy="11" r="9" fill="white" filter="url(#d)"/>` +
+        `<circle cx="11" cy="11" r="6" fill="#3B82F6"/>` +
+        `</svg>`;
+      const dotUri = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(dotSvg)}`;
+      const img = new w.kakao.maps.MarkerImage(
+        dotUri,
+        new w.kakao.maps.Size(22, 22),
+        { offset: new w.kakao.maps.Point(11, 11) }
+      );
+      userMarkerRef.current = new w.kakao.maps.Marker({
+        position: pos, image: img, zIndex: 2500, clickable: false,
+      });
+      userMarkerRef.current.setMap(map);
+    } else {
+      userMarkerRef.current.setPosition(pos);
+    }
+
+    // 정확도 반경 원 — 파란 fill 약간, stroke 살짝
+    if (!userCircleRef.current) {
+      userCircleRef.current = new w.kakao.maps.Circle({
+        center: pos,
+        radius: accuracy,
+        strokeWeight: 1,
+        strokeColor: '#3B82F6',
+        strokeOpacity: 0.4,
+        strokeStyle: 'solid',
+        fillColor: '#3B82F6',
+        fillOpacity: 0.12,
+      });
+      userCircleRef.current.setMap(map);
+    } else {
+      userCircleRef.current.setPosition(pos);
+      userCircleRef.current.setRadius(accuracy);
+    }
+  }, [userLocation?.lat, userLocation?.lng, userLocation?.accuracy]);
 
   // 좋아요 상태 변화 → 활성 마커들의 이미지/z-index만 교체 (재생성 X)
   useEffect(() => {

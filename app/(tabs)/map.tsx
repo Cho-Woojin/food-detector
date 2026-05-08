@@ -65,7 +65,25 @@ export default function MapScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<CategoryKey | 'ALL'>('ALL');
   const [mapMoved, setMapMoved] = useState(false);
+  const [userLoc, setUserLoc] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null);
   const likedIds = useLikedIds();
+
+  // 사용자 위치 실시간 추적 — 권한 허용된 경우 watchPosition으로 갱신
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return;
+    const id = navigator.geolocation.watchPosition(
+      (pos) => {
+        setUserLoc({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+        });
+      },
+      () => { /* 권한 거부 시 silently 무시 */ },
+      { enableHighAccuracy: false, maximumAge: 30_000, timeout: 8000 },
+    );
+    return () => navigator.geolocation.clearWatch(id);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -186,6 +204,7 @@ export default function MapScreen() {
               mapType="ROADMAP"
               likedIds={likedIds}
               forcedVisibleIds={forcedVisibleIds}
+              userLocation={userLoc}
               onMapMoved={() => setMapMoved(true)}
               centerLat={center.lat}
               centerLng={center.lng}
