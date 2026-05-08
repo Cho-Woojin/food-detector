@@ -42,7 +42,6 @@ export default function LandingScreen() {
 
   const next = () => setStep((s) => Math.min(TOTAL_STEPS, (s + 1)) as Step);
   const back = () => setStep((s) => Math.max(1, (s - 1)) as Step);
-  const skipToSignup = () => setStep(5);
   const goEnter = () => {
     markLandingSkipped();
     router.replace('/(tabs)' as any);
@@ -75,10 +74,9 @@ export default function LandingScreen() {
           query={searchQuery}
           setQuery={setSearchQuery}
           onNext={next}
-          onSkip={skipToSignup}
         />}
-        {step === 3 && <StepTrust onNext={next} onSkip={skipToSignup} />}
-        {step === 4 && <StepReport onNext={next} onSkip={skipToSignup} />}
+        {step === 3 && <StepTrust onNext={next} />}
+        {step === 4 && <StepReport onNext={next} />}
         {step === 5 && <StepSignup onSkip={goEnter} />}
       </Animated.View>
     </View>
@@ -106,18 +104,20 @@ function ProgressBar({ step, total }: { step: number; total: number }) {
 function StepProblem({ onNext }: { onNext: () => void }) {
   return (
     <>
-      <View style={styles.center}>
-        <Image source={Mascots.warning} style={styles.heroMascot} resizeMode="contain" />
+      <View style={styles.textTop}>
         <View style={styles.brandRow}>
           <Image source={Logos.symbol} style={styles.brandSymbol} resizeMode="contain" />
           <Text style={styles.brand}>식탐정</Text>
         </View>
-        <Text style={styles.bigQuote}>
+        <Text style={styles.bigQuote2}>
           오늘 먹는 음식,{'\n'}정말 안전할까요?
         </Text>
-        <Text style={styles.subBody}>
-          식약처 위생등급·행정처분 데이터로{'\n'}서울 12만 식당의 위생을 알려드려요.
+        <Text style={styles.subBodyLeft}>
+          식약처 위생등급·행정처분 데이터로 서울 12만 식당의 위생을 알려드려요.
         </Text>
+      </View>
+      <View style={styles.imageBelow}>
+        <Image source={Mascots.warning} style={styles.heroMascot} resizeMode="contain" />
       </View>
       <PrimaryNext label="시작하기" onPress={onNext} />
     </>
@@ -126,26 +126,26 @@ function StepProblem({ onNext }: { onNext: () => void }) {
 
 // ===== Step 2: 검색 경험 =====
 function StepSearch({
-  rows, query, setQuery, onNext, onSkip,
+  rows, query, setQuery, onNext,
 }: {
   rows: RecomputedRow[];
   query: string;
   setQuery: (s: string) => void;
   onNext: () => void;
-  onSkip: () => void;
 }) {
   const q = query.trim();
-  const hits = q.length === 0 ? [] : rows.filter((r) => r.n.includes(q)).slice(0, 4);
+  const hits = q.length === 0 ? [] : rows.filter((r) => r.n.includes(q)).slice(0, 3);
 
   return (
     <>
-      <View style={{ flex: 1 }}>
-        <Image source={Onboarding.investigate} style={styles.illustration} resizeMode="contain" />
+      <View style={styles.textTop}>
         <Text style={styles.bigQuote2}>안전한 식당을 한눈에</Text>
         <Text style={styles.subBodyLeft}>
           식당명을 입력하면 식탐정의 위생 점수와 등급을 바로 확인할 수 있어요.
         </Text>
+      </View>
 
+      <View style={{ gap: spacing.s }}>
         <TextInput
           value={query}
           onChangeText={setQuery}
@@ -154,53 +154,55 @@ function StepSearch({
           style={styles.searchInput}
           returnKeyType="search"
         />
-
-        <View style={styles.searchResults}>
-          {q.length > 0 && hits.length === 0 && (
-            <Text style={styles.searchEmpty}>매칭되는 식당이 없어요</Text>
-          )}
-          {hits.map((r) => (
-            <View key={r.i} style={styles.searchItem}>
-              <Image
-                source={r.gr === 'GOLDEN' ? Cheese.gold : r.gr === 'SILVER' ? Cheese.silver : Cheese.bronze}
-                style={styles.searchCheese}
-                resizeMode="contain"
-              />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.searchName} numberOfLines={1}>{r.n}</Text>
-                <Text style={styles.searchMeta}>{r.c} · {r.g}</Text>
-              </View>
-              <Text style={styles.searchScore}>{r.s}점</Text>
+        {q.length > 0 && hits.length === 0 && (
+          <Text style={styles.searchEmpty}>매칭되는 식당이 없어요</Text>
+        )}
+        {hits.map((r) => (
+          <View key={r.i} style={styles.searchItem}>
+            <Image
+              source={r.gr === 'GOLDEN' ? Cheese.gold : r.gr === 'SILVER' ? Cheese.silver : Cheese.bronze}
+              style={styles.searchCheese}
+              resizeMode="contain"
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.searchName} numberOfLines={1}>{r.n}</Text>
+              <Text style={styles.searchMeta}>{r.c} · {r.g}</Text>
             </View>
-          ))}
-        </View>
+            <Text style={styles.searchScore}>{r.s}점</Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.imageBelow}>
+        <Image source={Onboarding.investigate} style={styles.illustration} resizeMode="contain" />
       </View>
       <PrimaryNext label="다음" onPress={onNext} />
-      <SecondaryButton label="건너뛰기" onPress={onSkip} />
     </>
   );
 }
 
 // ===== Step 3: 데이터 신뢰 =====
-function StepTrust({ onNext, onSkip }: { onNext: () => void; onSkip: () => void }) {
+function StepTrust({ onNext }: { onNext: () => void }) {
   return (
     <>
-      <View style={{ flex: 1 }}>
-        <Image source={Mascots.badge} style={styles.illustration} resizeMode="contain" />
+      <View style={styles.textTop}>
         <Text style={styles.bigQuote2}>식약처 공식 데이터 기반</Text>
         <Text style={styles.subBodyLeft}>
           12만 식당의 위생등급·행정처분·모범음식점 인증 정보를 모두 검증해 평가해요.
         </Text>
+      </View>
 
-        <View style={styles.trustGrid}>
-          <TrustCard emoji="🛡️" title="위생등급제" sub="식약처 공식 인증" />
-          <TrustCard emoji="⚖️" title="행정처분 이력" sub="자치구·식약처" />
-          <TrustCard emoji="🏆" title="모범음식점" sub="자치구 인증" />
-          <TrustCard emoji="🤝" title="사장님 인증" sub="직접 등록" />
-        </View>
+      <View style={styles.trustGrid}>
+        <TrustCard emoji="🛡️" title="위생등급제" sub="식약처 공식 인증" />
+        <TrustCard emoji="⚖️" title="행정처분 이력" sub="자치구·식약처" />
+        <TrustCard emoji="🏆" title="모범음식점" sub="자치구 인증" />
+        <TrustCard emoji="🤝" title="사장님 인증" sub="직접 등록" />
+      </View>
+
+      <View style={styles.imageBelow}>
+        <Image source={Mascots.badge} style={styles.heroMascot} resizeMode="contain" />
       </View>
       <PrimaryNext label="다음" onPress={onNext} />
-      <SecondaryButton label="건너뛰기" onPress={onSkip} />
     </>
   );
 }
@@ -216,11 +218,10 @@ function TrustCard({ emoji, title, sub }: { emoji: string; title: string; sub: s
 }
 
 // ===== Step 4: 사용자 제보 가치 =====
-function StepReport({ onNext, onSkip }: { onNext: () => void; onSkip: () => void }) {
+function StepReport({ onNext }: { onNext: () => void }) {
   return (
     <>
-      <View style={{ flex: 1 }}>
-        <Image source={Onboarding.celebrate} style={styles.illustration} resizeMode="contain" />
+      <View style={styles.textTop}>
         <Text style={styles.bigQuote2}>
           사용자들의 위생 제보가{'\n'}더 안전한 선택을 만들어요
         </Text>
@@ -228,22 +229,24 @@ function StepReport({ onNext, onSkip }: { onNext: () => void; onSkip: () => void
           직접 방문한 식당, 위생 상태를 알려주세요.{'\n'}
           3초 체크만으로도 다른 사람에게 도움이 돼요.
         </Text>
+      </View>
 
-        {/* 별점 데모 */}
+      <View style={{ gap: spacing.s }}>
         <View style={styles.starDemo}>
           <StarRow rating={5} size={32} />
           <Text style={styles.starDemoLabel}>5점 만점 — 매우 위생적</Text>
         </View>
-
-        {/* 예시 리뷰 */}
         <View style={styles.reviewSampleList}>
           <ReviewSample stars={5} text="주방이 깨끗했어요" />
           <ReviewSample stars={4} text="식기가 위생적이었어요" />
           <ReviewSample stars={2} text="식기에 음식 자국" />
         </View>
       </View>
+
+      <View style={styles.imageBelow}>
+        <Image source={Onboarding.celebrate} style={styles.illustration} resizeMode="contain" />
+      </View>
       <PrimaryNext label="다음" onPress={onNext} />
-      <SecondaryButton label="건너뛰기" onPress={onSkip} />
     </>
   );
 }
@@ -279,10 +282,13 @@ function ReviewSample({ stars, text }: { stars: number; text: string }) {
 function StepSignup({ onSkip }: { onSkip: () => void }) {
   return (
     <>
-      <View style={styles.center}>
-        <Image source={Mascots.thanks} style={styles.heroMascot} resizeMode="contain" />
+      <View style={styles.textTop}>
         <Text style={styles.brand}>준비 완료!</Text>
-        <Text style={styles.subBody}>이제 식탐정과 함께 안전한 식사를 시작해보세요.</Text>
+        <Text style={styles.subBodyLeft}>이제 식탐정과 함께 안전한 식사를 시작해보세요.</Text>
+      </View>
+
+      <View style={styles.imageBelow}>
+        <Image source={Mascots.thanks} style={styles.heroMascot} resizeMode="contain" />
       </View>
 
       <View style={styles.signupCta}>
@@ -326,18 +332,6 @@ function PrimaryNext({ label, onPress, disabled }: { label: string; onPress: () 
   );
 }
 
-function SecondaryButton({ label, onPress }: { label: string; onPress: () => void }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      style={({ pressed }) => [styles.secondaryBtn, pressed && { opacity: 0.7 }]}>
-      <Text style={styles.secondaryBtnText}>{label}</Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.surface.canvas, paddingHorizontal: spacing.xl },
 
@@ -351,7 +345,9 @@ const styles = StyleSheet.create({
   progressSegIdle: { backgroundColor: color.border.default },
 
   body: { flex: 1, justifyContent: 'space-between' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  // 텍스트가 위, 이미지가 아래로 가는 표준 레이아웃
+  textTop: { paddingTop: spacing.s },
+  imageBelow: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 120 },
 
   // 공통 텍스트
   heroMascot: { width: mascotSize.hero, height: mascotSize.hero, marginBottom: spacing.l },
@@ -441,12 +437,4 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   primaryBtnText: { ...typography.bodyEmphasized, color: '#fff', fontSize: 16 },
-  secondaryBtn: {
-    height: 52,
-    borderRadius: radius.l,
-    backgroundColor: color.fill.tertiary,
-    alignItems: 'center', justifyContent: 'center',
-    marginTop: spacing.s,
-  },
-  secondaryBtnText: { ...typography.bodyEmphasized, color: color.text.secondary, fontSize: 16 },
 });
