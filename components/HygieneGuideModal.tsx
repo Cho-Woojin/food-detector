@@ -108,8 +108,8 @@ const styles = StyleSheet.create({
   },
   sheet: {
     backgroundColor: color.surface.subtle,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
+    borderTopLeftRadius: radius.xxl,
+    borderTopRightRadius: radius.xxl,
     maxHeight: '85%',
   },
   handle: {

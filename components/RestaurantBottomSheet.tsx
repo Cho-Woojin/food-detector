@@ -222,7 +222,7 @@ export const RestaurantBottomSheet = forwardRef<RestaurantBottomSheetHandle, Pro
 );
 
 const styles = StyleSheet.create({
-  bg: { backgroundColor: color.surface.subtle, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl },
+  bg: { backgroundColor: color.surface.subtle, borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl },
   handle: { backgroundColor: color.border.default, width: 40, height: 4 },
   content: {
     flex: 1,

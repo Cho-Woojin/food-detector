@@ -76,8 +76,8 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: color.surface.subtle,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
+    borderTopLeftRadius: radius.xxl,
+    borderTopRightRadius: radius.xxl,
     maxHeight: '85%',
   },
   handle: {

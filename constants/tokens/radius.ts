@@ -1,10 +1,12 @@
-// Corner radius scale. 14 / 10 / 6 are mapped to s/m/l/xl in code.
+// Corner radius scale.
+// 토스/배민 영향 — 카드 24~32, 작은 요소 10~14 사이. 둥글둥글한 친근한 인상.
 
 export const radius = {
-  s: 8,
-  m: 12,
-  l: 16,
-  xl: 20,
+  s: 10,
+  m: 14,
+  l: 20,
+  xl: 24,   // 일반 카드 / 모달
+  xxl: 32,  // 히어로 카드
   pill: 999,
 } as const;
 

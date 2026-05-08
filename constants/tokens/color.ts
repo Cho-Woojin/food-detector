@@ -14,14 +14,17 @@ export const color = {
   },
 
   // ===== Surface (background hierarchy) =====
+  // 토스 영향 — canvas는 살짝 톤 다운된 회색, 카드는 흰색으로 떠보이는 구조
   surface: {
-    canvas:    '#FFFFFF',
-    subtle:    '#FFFFFF',
+    canvas:    '#F7F8FA',  // 살짝 차가운 회색
+    subtle:    '#FFFFFF',  // 카드/시트
     elevated:  '#FFFFFF',
     overlay:   'rgba(0,0,0,0.40)',
     disabled:  '#F2F2F7',
     mascotBg:  '#FFFFFF',
     ownerBg:   '#F5F3FF',
+    tintBlue:  '#EFF4FB',  // 히어로 카드 배경
+    tintGreen: 'rgba(34,197,94,0.06)', // 부드러운 그린 면
   },
 
   // ===== Text =====

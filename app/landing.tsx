@@ -361,7 +361,7 @@ function gradeLabel(g: string): string {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: color.surface.subtle, paddingHorizontal: spacing.xl },
+  root: { flex: 1, backgroundColor: color.surface.canvas, paddingHorizontal: spacing.xl },
 
   // 진행 바
   progressRow: { flexDirection: 'row', gap: 4, marginBottom: spacing.l },
@@ -400,7 +400,7 @@ const styles = StyleSheet.create({
   goldItem: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.m,
     paddingVertical: spacing.s + 2, paddingHorizontal: spacing.m,
-    backgroundColor: color.surface.canvas, borderRadius: radius.l,
+    backgroundColor: color.surface.subtle, borderRadius: radius.l,
   },
   goldEmoji: { fontSize: 22 },
   goldName: { ...typography.bodyEmphasized, color: color.text.primary, marginBottom: 2 },
@@ -409,11 +409,10 @@ const styles = StyleSheet.create({
 
   // Step 5 검색
   searchInput: {
-    height: 48,
+    height: 52,
     borderRadius: radius.l,
-    borderWidth: 1,
-    borderColor: color.border.default,
-    backgroundColor: color.surface.canvas,
+    borderWidth: 0,
+    backgroundColor: color.surface.subtle,
     paddingHorizontal: spacing.m,
     fontSize: 16,
     color: color.text.primary,
@@ -424,7 +423,7 @@ const styles = StyleSheet.create({
   searchItem: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.m,
     paddingVertical: spacing.s + 2, paddingHorizontal: spacing.m,
-    backgroundColor: color.surface.canvas, borderRadius: radius.m,
+    backgroundColor: color.surface.subtle, borderRadius: radius.m,
   },
   searchName: { ...typography.bodyEmphasized, color: color.text.primary, marginBottom: 2 },
   searchMeta: { ...typography.caption, color: color.text.secondary },
@@ -433,9 +432,9 @@ const styles = StyleSheet.create({
   // Step 6 결과
   resultLabel: { ...typography.captionEmphasized, color: color.text.secondary, marginTop: spacing.l, marginBottom: spacing.m },
   resultCard: {
-    backgroundColor: color.surface.canvas,
-    padding: spacing.l,
-    borderRadius: radius.xl,
+    backgroundColor: color.surface.tintBlue,
+    padding: spacing.xl,
+    borderRadius: radius.xxl,
     alignItems: 'center',
     marginBottom: spacing.l,
   },
