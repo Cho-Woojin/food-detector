@@ -6,24 +6,32 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '@/components/Icon';
 import { Cheese, Logos, Mascots } from '@/constants/Assets';
 import { riskLevels } from '@/constants/Colors';
-import { color, elevation, radius, spacing, typography, type RiskLevel } from '@/constants/tokens';
+import { color, radius, spacing, typography, type RiskLevel } from '@/constants/tokens';
 import {
   Card,
   Chip,
   IconButton,
-  MetricCard,
   SearchBar,
   SectionHeader,
 } from '@/components/ui';
 import { ensureRecomputedIndex } from '@/utils/dataStore';
+import { getCachedLocation } from '@/utils/location';
 
-const DISTRICT = '강남구';
-const RISK_LEVEL: RiskLevel = 3;
-const ENV = { temp: 28.6, humidity: 65, foodPoisoning: '주의' };
+// 데모용 — 실제 환경 지수는 추후 기상·식약처·대기 데이터 연동
+const ENV = {
+  temp: { value: 28.6, label: '평년 +1°', tone: 'warning' as const },
+  humidity: { value: 65, label: '높음', tone: 'warning' as const },
+  airQuality: { value: 'PM10 45', label: '보통', tone: 'success' as const },
+  uv: { value: 'UV 7', label: '강함', tone: 'warning' as const },
+  foodPoison: { value: '주의', label: '비브리오 ↑', tone: 'warning' as const },
+};
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const risk = riskLevels[RISK_LEVEL];
+  // 위치 기반 자치구 — 허용했으면 그 구, 아니면 강남구 fallback
+  const district = getCachedLocation()?.gu ?? '강남구';
+  const riskLevel: RiskLevel = 3; // 추후 실시간 데이터 연동
+  const risk = riskLevels[riskLevel];
 
   const [goldenCheese, setGoldenCheese] = useState<
     { id: string; name: string; score: number; district: string }[]
@@ -45,7 +53,7 @@ export default function HomeScreen() {
       setGoldenCheese(golden);
 
       const picks = rows
-        .filter((r) => r.g === DISTRICT && (r.gr === 'GOLDEN' || r.gr === 'SILVER' || r.gr === 'BRONZE'))
+        .filter((r) => r.g === district && (r.gr === 'GOLDEN' || r.gr === 'SILVER' || r.gr === 'BRONZE'))
         .sort((a, b) => b.s - a.s)
         .slice(0, 3)
         .map((r) => ({
@@ -60,7 +68,7 @@ export default function HomeScreen() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [district]);
 
   return (
     <View style={styles.root}>
@@ -79,26 +87,29 @@ export default function HomeScreen() {
           style={{ marginBottom: spacing.l }}
         />
 
-        {/* Risk card */}
+        {/* Risk hero card */}
         <RiskCard
-          district={DISTRICT}
-          riskLevel={RISK_LEVEL}
+          district={district}
+          riskLevel={riskLevel}
           accent={risk.color}
           bgColor={risk.bgColor}
           labelKr={risk.labelKr}
           mascotKey={risk.mascot}
-          env={ENV}
+          message={risk.message}
         />
+
+        {/* 환경 카드 — 5개 가로 스크롤 */}
+        <EnvCardsRow />
 
         {/* 1. Today's menu guide — 위험 단계 기반 추천 (액션 가이드) */}
         <SectionHeader title="오늘 추천 메뉴" subtitle="위험 단계 기반" marginTop="xxl" />
-        <TodayMenuCard riskLevel={RISK_LEVEL} district={DISTRICT} />
+        <TodayMenuCard riskLevel={riskLevel} district={district} />
 
         {/* 2. 내 동네 추천 — 사용자 자치구 안 인기 식당 */}
         {districtPicks.length > 0 ? (
           <>
             <SectionHeader
-              title={`${DISTRICT} 인기 식당`}
+              title={`${district} 인기 식당`}
               subtitle="내 동네에서 평가 높은 식당"
               trailing={{ label: '전체보기', icon: 'forward' }}
               marginTop="xxl"
@@ -173,7 +184,7 @@ function Header() {
   );
 }
 
-// ===== Risk Card =====
+// ===== Risk Card (Toss-style hero) =====
 
 function RiskCard(props: {
   district: string;
@@ -182,37 +193,85 @@ function RiskCard(props: {
   bgColor: string;
   labelKr: string;
   mascotKey: keyof typeof Mascots;
-  env: { temp: number; humidity: number; foodPoisoning: string };
+  message: string;
 }) {
-  const { district, riskLevel, accent, bgColor, labelKr, mascotKey, env } = props;
+  const { district, riskLevel, accent, bgColor, labelKr, mascotKey, message } = props;
 
   return (
-    <View style={styles.cardWrapper}>
-      <Card variant="tinted" bgColor={bgColor} padding="xxl" radius="xl" style={(elevation.card as any)}>
-        <Text style={styles.cardHeading}>오늘의 식중독 위험 단계</Text>
-        <View style={styles.locationRow}>
-          <Icon name="location" size={13} color={color.text.secondary} />
-          <Text style={styles.locationText}>{district}</Text>
-        </View>
-
-        <View style={styles.stageRow}>
-          <View style={styles.stageCol}>
-            <Text style={[styles.bigStageLabel, { color: accent }]}>{labelKr}</Text>
-            <Text style={[styles.bigStageSub, { color: accent }]}>{riskLevel}단계 / 5단계</Text>
-            <Text style={styles.time}>12:00 기준</Text>
-          </View>
-          <Image source={Mascots[mascotKey]} style={styles.bigMascot} resizeMode="contain" />
-        </View>
-      </Card>
-
-      <View style={styles.metricsRow}>
-        <MetricCard icon="thermometer" label="기온" value={`${env.temp}°C`} tone={tempTone(env.temp)} />
-        <MetricCard icon="water" label="습도" value={`${env.humidity}%`} tone={humidityTone(env.humidity)} />
-        <MetricCard icon="bug" label="식중독 발생" value={env.foodPoisoning} tone={statusTone(env.foodPoisoning)} />
+    <Card variant="tinted" bgColor={bgColor} padding="xxl" radius="xxl">
+      <View style={styles.locationRow}>
+        <Icon name="location" size={13} color={color.text.secondary} />
+        <Text style={styles.locationText}>{district} · 12:00 기준</Text>
       </View>
-    </View>
+      <Text style={styles.cardHeading}>오늘의 식중독 위험</Text>
+
+      <View style={styles.stageRow}>
+        <View style={styles.stageCol}>
+          {/* 위험 단계 시각 바 */}
+          <View style={styles.levelDots}>
+            {[1, 2, 3, 4, 5].map((i) => (
+              <View
+                key={i}
+                style={[
+                  styles.levelDot,
+                  { backgroundColor: i <= riskLevel ? accent : 'rgba(0,0,0,0.08)' },
+                ]}
+              />
+            ))}
+          </View>
+          <Text style={[styles.bigStageLabel, { color: accent }]}>{labelKr}</Text>
+          <Text style={[styles.bigStageSub, { color: accent }]}>{riskLevel}단계 / 5단계</Text>
+        </View>
+        <Image source={Mascots[mascotKey]} style={styles.bigMascot} resizeMode="contain" />
+      </View>
+
+      {/* 한줄 가이드 */}
+      <View style={styles.guidanceRow}>
+        <Icon name="bulb" size={16} color={accent} />
+        <Text style={[styles.guidanceText, { color: color.text.primary }]}>{message}</Text>
+      </View>
+    </Card>
   );
 }
+
+// ===== 환경 카드 row — 5개 가로 스크롤 =====
+
+function EnvCardsRow() {
+  const items = [
+    { icon: '🌡️', value: `${ENV.temp.value}°C`, label: '기온', sub: ENV.temp.label, tone: ENV.temp.tone },
+    { icon: '💧', value: `${ENV.humidity.value}%`, label: '습도', sub: ENV.humidity.label, tone: ENV.humidity.tone },
+    { icon: '🦠', value: ENV.foodPoison.value, label: '식중독', sub: ENV.foodPoison.label, tone: ENV.foodPoison.tone },
+    { icon: '🌫️', value: ENV.airQuality.label, label: '대기질', sub: ENV.airQuality.value, tone: ENV.airQuality.tone },
+    { icon: '☀️', value: ENV.uv.label, label: '자외선', sub: ENV.uv.value, tone: ENV.uv.tone },
+  ];
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.envRow}
+      style={{ marginTop: spacing.m, marginHorizontal: -spacing.l }}>
+      {items.map((it) => (
+        <View key={it.label} style={[styles.envCard, { backgroundColor: TONE_BG[it.tone] }]}>
+          <Text style={styles.envEmoji}>{it.icon}</Text>
+          <Text style={[styles.envValue, { color: TONE_FG[it.tone] }]}>{it.value}</Text>
+          <Text style={styles.envLabel}>{it.label}</Text>
+          <Text style={styles.envSub}>{it.sub}</Text>
+        </View>
+      ))}
+    </ScrollView>
+  );
+}
+
+const TONE_BG: Record<'success' | 'warning' | 'danger', string> = {
+  success: 'rgba(34,197,94,0.10)',
+  warning: 'rgba(245,158,11,0.10)',
+  danger:  'rgba(239,68,68,0.10)',
+};
+const TONE_FG: Record<'success' | 'warning' | 'danger', string> = {
+  success: '#22C55E',
+  warning: '#F59E0B',
+  danger:  '#EF4444',
+};
 
 // ===== Restaurant Card (shared across home sections) =====
 
@@ -299,25 +358,6 @@ function TodayMenuCard({ riskLevel, district }: { riskLevel: RiskLevel; district
   );
 }
 
-// ===== Tone helpers =====
-
-type Tone = 'success' | 'warning' | 'danger';
-function tempTone(t: number): Tone {
-  if (t >= 30) return 'danger';
-  if (t >= 25) return 'warning';
-  return 'success';
-}
-function humidityTone(h: number): Tone {
-  if (h >= 80) return 'danger';
-  if (h >= 60) return 'warning';
-  return 'success';
-}
-function statusTone(s: string): Tone {
-  if (s.includes('위험')) return 'danger';
-  if (s.includes('주의') || s.includes('경계')) return 'warning';
-  return 'success';
-}
-
 // ===== Styles =====
 
 const styles = StyleSheet.create({
@@ -355,11 +395,40 @@ const styles = StyleSheet.create({
     gap: spacing.m,
     marginTop: spacing.l,
   },
-  stageCol: { flex: 1, minHeight: 160, justifyContent: 'center' },
-  bigMascot: { width: 160, height: 160 },
+  stageCol: { flex: 1, minHeight: 140, justifyContent: 'center' },
+  bigMascot: { width: 140, height: 140 },
   bigStageLabel: { ...typography.display, marginTop: spacing.s },
   bigStageSub: { ...typography.subheadlineEmphasized, marginTop: spacing.xs },
   time: { ...typography.caption, color: color.text.tertiary, marginTop: spacing.s },
+
+  // 위험 단계 dot 시각화
+  levelDots: { flexDirection: 'row', gap: 6 },
+  levelDot: { width: 18, height: 6, borderRadius: 3 },
+
+  // 한줄 가이드
+  guidanceRow: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.s,
+    marginTop: spacing.l,
+    backgroundColor: color.surface.subtle,
+    paddingHorizontal: spacing.m, paddingVertical: spacing.s + 2,
+    borderRadius: radius.l,
+  },
+  guidanceText: { ...typography.subheadlineEmphasized, flex: 1 },
+
+  // 환경 카드 row
+  envRow: { gap: spacing.s, paddingHorizontal: spacing.l },
+  envCard: {
+    width: 100,
+    paddingVertical: spacing.m,
+    paddingHorizontal: spacing.s,
+    borderRadius: radius.l,
+    alignItems: 'center',
+    gap: 2,
+  },
+  envEmoji: { fontSize: 24, marginBottom: spacing.xxs },
+  envValue: { fontSize: 16, fontWeight: '700' },
+  envLabel: { ...typography.caption, color: color.text.primary, fontWeight: '600' },
+  envSub: { ...typography.footnote, color: color.text.secondary },
 
   bubble: {
     backgroundColor: color.surface.subtle,
