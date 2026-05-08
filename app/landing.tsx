@@ -14,6 +14,7 @@ import { color, mascotSize, radius, spacing, typography } from '@/constants/toke
 import { loginWithKakao } from '@/utils/kakaoAuth';
 import { markLandingSkipped } from '@/utils/landing';
 import { ensureRecomputedIndex, RecomputedRow } from '@/utils/dataStore';
+import { requestUserLocation, getCachedLocation } from '@/utils/location';
 
 const KAKAO_YELLOW = '#FEE500';
 const KAKAO_TEXT = '#191919';
@@ -137,22 +138,27 @@ function StepProblem({ onNext, onSkip }: { onNext: () => void; onSkip: () => voi
 // ===== Step 3: 위치 허용 =====
 function StepLocation({ onNext }: { onNext: (gu?: string) => void }) {
   const [requesting, setRequesting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const requestLocation = () => {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      onNext();
-      return;
-    }
+  // 이미 권한 받은 적이 있으면 캐시에서 즉시 사용 (24h)
+  useEffect(() => {
+    const cached = getCachedLocation();
+    if (cached) onNext(cached.gu);
+    // 의존성 비워서 마운트 1회만
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const requestLocation = async () => {
     setRequesting(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        // 추후: 좌표 → 자치구 reverse geocoding. 지금은 강남구 기본값
-        setRequesting(false);
-        onNext('강남구');
-      },
-      () => { setRequesting(false); onNext(); },
-      { timeout: 8000 },
-    );
+    setError(null);
+    const loc = await requestUserLocation();
+    setRequesting(false);
+    if (loc) {
+      onNext(loc.gu);
+    } else {
+      // 거부됐거나 실패 — 사용자에게 안내. 건너뛰기로 계속 가능.
+      setError('위치 권한이 거부됐어요. 건너뛰기로 둘러볼 수 있어요.');
+    }
   };
 
   return (
@@ -160,7 +166,10 @@ function StepLocation({ onNext }: { onNext: (gu?: string) => void }) {
       <View style={styles.center}>
         <Text style={styles.questionEmoji}>🐭</Text>
         <Text style={styles.bigQuote}>주변 식당 위험도를{'\n'}알려드릴게요</Text>
-        <Text style={styles.subBody}>현재 위치 기반으로 가까운 안전한 식당과 위험 알림을 받을 수 있어요.</Text>
+        <Text style={styles.subBody}>
+          현재 위치를 기준으로 가까운 자치구의{'\n'}안전 식당과 위험 알림을 받을 수 있어요.
+        </Text>
+        {error && <Text style={styles.errorText}>{error}</Text>}
       </View>
       <PrimaryNext
         label={requesting ? '위치 확인 중...' : '현재 위치 사용'}
@@ -380,6 +389,7 @@ const styles = StyleSheet.create({
   bigQuote: { fontSize: 22, fontWeight: '700', color: color.text.primary, textAlign: 'center', lineHeight: 32, marginBottom: spacing.m },
   bigQuote2: { fontSize: 20, fontWeight: '700', color: color.text.primary, marginBottom: spacing.s },
   subBody: { ...typography.body, color: color.text.secondary, textAlign: 'center', lineHeight: 22 },
+  errorText: { ...typography.caption, color: color.status.danger, textAlign: 'center', marginTop: spacing.m },
 
   // Step 4 위험지수
   locationTag: { ...typography.captionEmphasized, color: color.text.secondary, marginBottom: spacing.s },
