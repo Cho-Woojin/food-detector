@@ -7,6 +7,13 @@ const SRC = path.join(__dirname, '..', '_archive', 'restaurants_with_scores.csv'
 const OUT_DIR = path.join(__dirname, '..', 'data', 'by-gu');
 const INDEX_OUT = path.join(__dirname, '..', 'data', 'restaurants-index.json');
 
+if (!fs.existsSync(SRC)) {
+  console.error(`✗ CSV 입력 파일을 찾을 수 없습니다: ${SRC}`);
+  console.error(`  → _archive/restaurants_with_scores.csv를 준비해주세요.`);
+  console.error(`  → 갱신 절차는 docs/05_DATA.md 참조.`);
+  process.exit(1);
+}
+
 // 자치구 영문 slug (URL/파일 안전)
 const GU_SLUG = {
   '종로구': 'jongno', '중구': 'junggu', '용산구': 'yongsan', '성동구': 'seongdong',

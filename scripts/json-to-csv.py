@@ -19,6 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SRC = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / 'backup_v5' / 'restaurants_final_v2.json'
 DST = ROOT / '_archive' / 'restaurants_with_scores.csv'
+DST.parent.mkdir(parents=True, exist_ok=True)
 
 # 친구 csv 컬럼 순서 그대로 + 신규 컬럼 추가
 COLUMNS = [
@@ -62,7 +63,7 @@ def main():
             src = r.get('source', '')
             src_count[src] = src_count.get(src, 0) + 1
 
-            mgtno = r.get('mgtno', '').strip()
+            mgtno = (r.get('mgtno') or '').strip()
             if not mgtno:
                 # 카카오 신규 식당 — kakao_id로 합성
                 kid = r.get('kakao_id', '')
@@ -71,7 +72,7 @@ def main():
             # 좌표 (LOCALDATA는 보통 lat/lng 있음 — Phase 4에서 EPSG5174→4326 변환했음)
             lat = r.get('lat')
             lng = r.get('lng')
-            if not lat or not lng:
+            if lat is None or lng is None:
                 no_coord += 1
 
             row = {
