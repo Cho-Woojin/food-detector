@@ -158,6 +158,7 @@ export default function ProfileScreen() {
         <LoggedInCard
           nickname={kakaoUser.nickname}
           profileImage={kakaoUser.profileImage}
+          ownedCount={ownedIds.length}
           onLogout={() => logoutFromKakao()}
         />
       ) : (
@@ -252,10 +253,16 @@ function GuestCard({ likedCount, onLogin }: { likedCount: number; onLogin: () =>
 }
 
 function LoggedInCard({
-  nickname, profileImage, onLogout,
-}: { nickname: string; profileImage?: string; onLogout: () => void }) {
+  nickname, profileImage, ownedCount, onLogout,
+}: {
+  nickname: string;
+  profileImage?: string;
+  ownedCount: number;
+  onLogout: () => void;
+}) {
   const likedCount = useLikedIds().size;
   const reviewCount = useMyReviews().length;
+  const isOwner = ownedCount > 0;
   return (
     <Card variant="elevated" padding="l" style={{ marginTop: spacing.l }}>
       <View style={styles.guestRow}>
@@ -267,8 +274,20 @@ function LoggedInCard({
           </View>
         )}
         <View style={{ flex: 1 }}>
-          <Text style={styles.guestName}>{nickname}</Text>
-          <Text style={styles.emailText}>카카오 계정 연결됨</Text>
+          <View style={styles.profileNameRow}>
+            <Text style={styles.guestName} numberOfLines={1}>{nickname}</Text>
+            {isOwner ? (
+              <View style={styles.profileOwnerBadge} accessibilityLabel="사장님 인증 계정">
+                <Icon name="logo" size={11} color={color.text.onBrand} />
+                <Text style={styles.profileOwnerBadgeText}>
+                  사장님{ownedCount > 1 ? ` ${ownedCount}곳` : ''}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+          <Text style={styles.emailText}>
+            {isOwner ? '사장님 인증 — 식탐정 신뢰 영역 반영' : '카카오 계정 연결됨'}
+          </Text>
         </View>
         <Button variant="ghost" size="sm" onPress={onLogout}>
           로그아웃
@@ -373,6 +392,29 @@ const styles = StyleSheet.create({
   guestName: { ...typography.bodyEmphasized, color: color.text.primary, marginBottom: spacing.xxs },
   guestBody: { ...typography.caption, color: color.text.secondary },
   emailText: { ...typography.caption, color: color.text.secondary },
+
+  // 프로필 카드 — 닉네임 옆 사장님 뱃지
+  profileNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.xxs,
+  },
+  profileOwnerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: spacing.s,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    backgroundColor: color.brand.primary,
+  },
+  profileOwnerBadgeText: {
+    ...typography.footnote,
+    fontWeight: '700',
+    color: color.text.onBrand,
+    letterSpacing: 0.3,
+  },
 
   avatar: {
     width: mascotSize.inline,
