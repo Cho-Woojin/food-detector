@@ -26,9 +26,11 @@ export type OwnerPost = {
 };
 
 export type OwnerEdit = {
+  address?: string;
   phone?: string;
   hours?: string;
   closedDay?: string;
+  intro?: string;          // 가게 소개글 (장문 가능)
   updatedAt: number;
 };
 
@@ -132,6 +134,18 @@ export function useIsOwnerOf(
   const map = useSyncExternalStore(subscribe, () => ownership, () => ownership);
   if (!restaurantId || userId == null) return false;
   return map[restaurantId] === userId;
+}
+
+// 훅 — 현재 사용자가 사장님으로 지정된 모든 식당 id 목록
+// 내정보 "내 가게 관리" 메뉴 분기에 사용 (없음/1개/N개)
+export function useMyOwnedRestaurantIds(userId: number | undefined | null): string[] {
+  const map = useSyncExternalStore(subscribe, () => ownership, () => ownership);
+  return useMemo(() => {
+    if (userId == null) return [];
+    return Object.entries(map)
+      .filter(([, uid]) => uid === userId)
+      .map(([rid]) => rid);
+  }, [map, userId]);
 }
 
 // ============================================================

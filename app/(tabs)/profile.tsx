@@ -10,6 +10,7 @@ import { useLikedIds } from '@/utils/favorites';
 import { ensureRecomputedById } from '@/utils/dataStore';
 import { loginWithKakao, logoutFromKakao, useKakaoUser } from '@/utils/kakaoAuth';
 import { useMyReviews } from '@/utils/reviews';
+import { useMyOwnedRestaurantIds } from '@/utils/owner';
 
 
 type MenuItem = {
@@ -29,7 +30,9 @@ export default function ProfileScreen() {
   const likedCount = likedIds.size;
   const kakaoUser = useKakaoUser();
   const reviewCount = useMyReviews().length;
+  const ownedIds = useMyOwnedRestaurantIds(kakaoUser?.id ?? null);
   const [breakdown, setBreakdown] = useState<GradeBreakdown>({ GOLDEN: 0, SILVER: 0, BRONZE: 0, OTHER: 0 });
+  const [singleOwnedName, setSingleOwnedName] = useState<string | null>(null);
   const [guideListOpen, setGuideListOpen] = useState(false);
 
   // 좋아요한 식당의 등급별 분포 계산 — 데이터 로드 후 1회
@@ -52,6 +55,43 @@ export default function ProfileScreen() {
     return () => { cancelled = true; };
   }, [likedIds]);
 
+  // 가게 1곳만 등록된 경우 — 메뉴에 가게명 미리보기 노출용
+  useEffect(() => {
+    if (ownedIds.length !== 1) { setSingleOwnedName(null); return; }
+    let cancelled = false;
+    ensureRecomputedById().then((map) => {
+      if (cancelled) return;
+      setSingleOwnedName(map.get(ownedIds[0])?.n ?? null);
+    });
+    return () => { cancelled = true; };
+  }, [ownedIds]);
+
+  // 사장님 메뉴 항목 — 가게 0개: 입증, 1개: 해당 가게 상세, 2개+: 리스트
+  const ownerMenuItem: MenuItem = (() => {
+    if (ownedIds.length === 0) {
+      return {
+        icon: 'logo',
+        label: '내 가게 입증하기',
+        value: '신청',
+        onPress: () => router.push('/owner/apply' as any),
+      };
+    }
+    if (ownedIds.length === 1) {
+      return {
+        icon: 'logo',
+        label: '내 가게 관리',
+        value: singleOwnedName ?? '1곳',
+        onPress: () => router.push(`/restaurant/${ownedIds[0]}` as any),
+      };
+    }
+    return {
+      icon: 'logo',
+      label: '내 가게 관리',
+      value: `${ownedIds.length}곳`,
+      onPress: () => router.push('/my-stores' as any),
+    };
+  })();
+
   const sections: MenuSection[] = [
     {
       title: '활동',
@@ -70,6 +110,10 @@ export default function ProfileScreen() {
         },
         { icon: 'camera', label: '업로드한 사진', comingSoon: true, disabled: true },
       ],
+    },
+    {
+      title: '사장님',
+      items: [ownerMenuItem],
     },
     {
       title: '안전 가이드',

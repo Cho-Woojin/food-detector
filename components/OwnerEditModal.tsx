@@ -20,13 +20,14 @@ export type OwnerEditModalProps = {
   visible: boolean;
   restaurantId: string;
   // 현재 표시 중인 값 (raw 또는 raw+edit 합성치) — placeholder로 노출
-  initial: { phone?: string; hours?: string; closedDay?: string };
+  initial: { address?: string; phone?: string; hours?: string; closedDay?: string; intro?: string };
   // 이미 저장된 사장님 수정값 (수정 안 된 필드는 비워둠)
   current?: OwnerEdit | null;
   onClose: () => void;
 };
 
 const PHONE_RX = /^[0-9-+\s()]*$/;
+const MAX_INTRO = 500;
 
 export function OwnerEditModal({
   visible,
@@ -35,26 +36,32 @@ export function OwnerEditModal({
   current,
   onClose,
 }: OwnerEditModalProps) {
+  const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
   const [hours, setHours] = useState('');
   const [closedDay, setClosedDay] = useState('');
+  const [intro, setIntro] = useState('');
 
   // 모달 열릴 때 현재 저장된 사장님 수정값으로 초기화
   useEffect(() => {
     if (!visible) return;
+    setAddress(current?.address ?? '');
     setPhone(current?.phone ?? '');
     setHours(current?.hours ?? '');
     setClosedDay(current?.closedDay ?? '');
-  }, [visible, current?.phone, current?.hours, current?.closedDay]);
+    setIntro(current?.intro ?? '');
+  }, [visible, current?.address, current?.phone, current?.hours, current?.closedDay, current?.intro]);
 
   const phoneValid = PHONE_RX.test(phone);
 
   const handleSubmit = () => {
     if (!phoneValid) return;
     setOwnerEdit(restaurantId, {
+      address: address.trim() || undefined,
       phone: phone.trim() || undefined,
       hours: hours.trim() || undefined,
       closedDay: closedDay.trim() || undefined,
+      intro: intro.trim() || undefined,
     });
     onClose();
   };
@@ -74,6 +81,13 @@ export function OwnerEditModal({
           </View>
 
           <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+            <Field
+              label="주소"
+              value={address}
+              onChange={setAddress}
+              placeholder={initial.address ?? '서울특별시 ...'}
+            />
+
             <Field
               label="전화번호"
               value={phone}
@@ -95,6 +109,15 @@ export function OwnerEditModal({
               value={closedDay}
               onChange={setClosedDay}
               placeholder={initial.closedDay ?? '매주 일요일'}
+            />
+
+            <Field
+              label="소개글"
+              value={intro}
+              onChange={(v) => setIntro(v.slice(0, MAX_INTRO))}
+              placeholder={initial.intro ?? '가게의 자랑·운영 철학·재료 등을 자유롭게 적어주세요'}
+              multiline
+              counter={`${intro.length} / ${MAX_INTRO}`}
             />
 
             <Text style={styles.hint}>
@@ -125,6 +148,8 @@ function Field({
   placeholder,
   keyboardType,
   error,
+  multiline,
+  counter,
 }: {
   label: string;
   value: string;
@@ -132,6 +157,8 @@ function Field({
   placeholder?: string;
   keyboardType?: 'default' | 'phone-pad';
   error?: string;
+  multiline?: boolean;
+  counter?: string;
 }) {
   return (
     <View style={styles.fieldBlock}>
@@ -142,10 +169,17 @@ function Field({
         placeholder={placeholder}
         placeholderTextColor={color.text.tertiary}
         keyboardType={keyboardType}
-        style={[styles.input, error ? styles.inputError : null]}
+        multiline={multiline}
+        numberOfLines={multiline ? 5 : undefined}
+        style={[
+          styles.input,
+          multiline ? styles.inputMultiline : null,
+          error ? styles.inputError : null,
+        ]}
         accessibilityLabel={label}
       />
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {counter ? <Text style={styles.counterText}>{counter}</Text> : null}
     </View>
   );
 }
@@ -190,8 +224,10 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: color.text.primary,
   },
+  inputMultiline: { minHeight: 110, textAlignVertical: 'top' },
   inputError: { borderWidth: 1, borderColor: color.status.danger },
   errorText: { ...typography.footnote, color: color.status.danger, marginTop: spacing.xxs },
+  counterText: { ...typography.footnote, color: color.text.tertiary, textAlign: 'right', marginTop: spacing.xxs },
 
   hint: { ...typography.caption, color: color.text.tertiary, marginTop: spacing.s },
 

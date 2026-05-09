@@ -316,7 +316,12 @@ export default function RestaurantDetail() {
           <OwnerEditModal
             visible={editOpen}
             restaurantId={restaurant.id}
-            initial={{ phone: restaurant.phone, hours: restaurant.hours, closedDay: restaurant.closedDay }}
+            initial={{
+              address: restaurant.address,
+              phone: restaurant.phone,
+              hours: restaurant.hours,
+              closedDay: restaurant.closedDay,
+            }}
             current={ownerEdit}
             onClose={() => setEditOpen(false)}
           />
@@ -586,7 +591,18 @@ function ReviewTab({
 
   return (
     <View>
-      <ReviewComposeCTA restaurantId={restaurant.id} />
+      {isOwner ? (
+        <Card variant="tinted" padding="m" radius="l" style={{ marginBottom: spacing.l }}>
+          <View style={styles.ownerNoticeRow}>
+            <Icon name="logo" size={14} color={color.brand.primary} />
+            <Text style={styles.ownerNoticeText}>
+              내 가게에는 리뷰를 작성할 수 없어요. 답글로 고객 피드백에 응대해 주세요.
+            </Text>
+          </View>
+        </Card>
+      ) : (
+        <ReviewComposeCTA restaurantId={restaurant.id} />
+      )}
 
       <View style={styles.reviewSummary}>
         <Text style={styles.reviewCount}>총 {totalCount}건</Text>
@@ -795,10 +811,12 @@ function InfoTab({
   const posts = useOwnerPostsFor(restaurant.id);
 
   // raw + 사장님 수정값 합성. 빈 문자열은 raw 유지.
+  const address = ownerEdit?.address || restaurant.address;
   const phone = ownerEdit?.phone || restaurant.phone;
   const hours = ownerEdit?.hours || restaurant.hours;
   const closedDay = ownerEdit?.closedDay || restaurant.closedDay;
-  const isEdited = !!ownerEdit && (ownerEdit.phone || ownerEdit.hours || ownerEdit.closedDay);
+  const intro = ownerEdit?.intro || '';
+  const isEdited = !!ownerEdit && (ownerEdit.address || ownerEdit.phone || ownerEdit.hours || ownerEdit.closedDay || ownerEdit.intro);
 
   return (
     <View>
@@ -813,10 +831,17 @@ function InfoTab({
             </View>
           ) : null}
         </View>
-        <InfoRow label="주소" value={restaurant.address} />
+        <InfoRow label="주소" value={address} />
         <InfoRow label="전화" value={phone} />
         <InfoRow label="영업" value={hours} />
         <InfoRow label="휴무" value={closedDay} />
+
+        {intro ? (
+          <View style={styles.introBlock}>
+            <Text style={styles.introLabel}>사장님 소개</Text>
+            <Text style={styles.introText}>{intro}</Text>
+          </View>
+        ) : null}
 
         {isOwner ? (
           <View style={{ marginTop: spacing.m }}>
@@ -1270,6 +1295,17 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   editedBadgeText: { ...typography.footnote, fontWeight: '700', color: color.brand.primary },
+  introBlock: {
+    marginTop: spacing.m,
+    paddingTop: spacing.m,
+    borderTopWidth: 1,
+    borderTopColor: color.border.default,
+  },
+  introLabel: { ...typography.captionEmphasized, color: color.text.secondary, marginBottom: spacing.xs },
+  introText: { ...typography.subheadline, color: color.text.primary, lineHeight: 22 },
+
+  ownerNoticeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.s },
+  ownerNoticeText: { flex: 1, ...typography.caption, color: color.text.secondary },
 
   ownerSection: { marginTop: spacing.xl },
   ownerSectionHeader: { marginBottom: spacing.m },

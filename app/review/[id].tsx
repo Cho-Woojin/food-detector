@@ -8,6 +8,7 @@ import { Button, Card, Chip, IconButton } from '@/components/ui';
 import { color, radius, spacing, typography } from '@/constants/tokens';
 import { findRestaurantById } from '@/utils/dataStore';
 import { loginWithKakao, useKakaoUser } from '@/utils/kakaoAuth';
+import { useIsOwnerOf } from '@/utils/owner';
 import { FOREIGN_OBJECTS, addReview, sentimentFromRating, tagsFor, type ReviewSentiment } from '@/utils/reviews';
 
 const RATING_LABEL: Record<number, string> = {
@@ -29,6 +30,7 @@ export default function ReviewComposeScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const kakaoUser = useKakaoUser();
+  const isOwnerOfThisStore = useIsOwnerOf(typeof id === 'string' ? id : null, kakaoUser?.id ?? null);
   const [restaurantName, setRestaurantName] = useState<string>('');
   const [rating, setRating] = useState(0);
   const [tags, setTags] = useState<Set<string>>(new Set());
@@ -159,6 +161,32 @@ export default function ReviewComposeScreen() {
                 loginWithKakao();
               }}>
               카카오로 로그인
+            </Button>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  // 내 가게에는 리뷰 작성 차단 — 사장님은 답글로 응대 (자기 가게 셀프 리뷰 방지)
+  if (isOwnerOfThisStore) {
+    return (
+      <View style={styles.root}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={[styles.topBar, { paddingTop: insets.top + spacing.xs }]}>
+          <IconButton icon="back" size="md" accessibilityLabel="뒤로 가기" onPress={() => router.back()} />
+          <Text style={styles.topTitle}>위생 리뷰 작성</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <View style={styles.gateWrap}>
+          <Icon name="logo" size={44} color={color.brand.primary} />
+          <Text style={styles.gateTitle}>내 가게에는 리뷰를 작성할 수 없어요</Text>
+          <Text style={styles.gateBody}>
+            대신 고객님 리뷰에 답글을 남기거나, 정보 탭에서 사장님 인증 게시글로 가게의 노력을 알려주세요.
+          </Text>
+          <View style={{ width: '100%', marginTop: spacing.l }}>
+            <Button variant="primary" size="lg" fullWidth onPress={() => router.replace(`/restaurant/${id}` as any)}>
+              가게 페이지로 돌아가기
             </Button>
           </View>
         </View>
