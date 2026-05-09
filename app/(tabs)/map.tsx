@@ -6,9 +6,11 @@ import { Cheese } from '@/constants/Assets';
 import { SearchBar } from '@/components/ui';
 import { color, elevation, radius, spacing, typography } from '@/constants/tokens';
 import { CategoryKey, GuKey, Restaurant } from '@/constants/Restaurant';
+import type { Grade } from '@/constants/MockData';
 import { loadRestaurantsByGu } from '@/utils/loadData';
 import { useLikedIds } from '@/utils/favorites';
 import { getCachedLocation } from '@/utils/location';
+import { adjustedScoreAndGrade, useReviewImpactMap } from '@/utils/reviews';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -56,7 +58,9 @@ export default function MapScreen() {
   const targetId = typeof params.id === 'string' ? params.id : undefined;
   const mapHandleRef = useRef<KakaoMapHandle>(null);
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
-  const [selected, setSelected] = useState<Restaurant | null>(null);
+  // 선택된 마커는 id로만 보관 — 리뷰 보정으로 식당 객체가 새로 생성되어도
+  // 바텀시트가 항상 최신 score/grade를 반영하도록 selected는 adjustedRestaurants에서 derive
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   // 진입 시 캐시된 사용자 위치(있으면) 기준, 없으면 서울 중심
   const [center, setCenter] = useState(() => {
     const cached = getCachedLocation();
@@ -91,8 +95,8 @@ export default function MapScreen() {
       try {
         const all = await Promise.all(ALL_GUS.map((g) => loadRestaurantsByGu(g)));
         if (cancelled) return;
-        // 좌표 있는 식당만 + 5축 기반 재계산 점수/등급 적용
-        // score/grade는 빌드타임에 사전 계산된 값을 그대로 사용 (recomputeFromRaw 제거 — 첫 진입 -2~3초)
+        // 좌표 있는 식당만. score는 사전 계산값, grade는 loadData.adapt에서
+        // deriveGrade(score)로 정규화돼 도착 — 모든 화면이 같은 임계값을 공유.
         const merged = all.flat().filter((r) => r.lat && r.lng && r.grade);
         setRestaurants(merged);
       } catch (e) {
@@ -104,11 +108,31 @@ export default function MapScreen() {
     };
   }, []);
 
+  const impactMap = useReviewImpactMap();
+
+  // 위생 리뷰 보정 — 점수/등급을 동기화해서 마커 색상·검색 결과 점수가 모두 일치하게
+  // 리뷰 변경 시 영향 받은 식당만 재계산되도록 dep 분리
+  const adjustedRestaurants = useMemo(() => {
+    if (impactMap.size === 0) return restaurants;
+    return restaurants.map((r) => {
+      const impact = impactMap.get(r.id);
+      if (!impact) return r;
+      const { score, grade } = adjustedScoreAndGrade(r, impact);
+      return { ...r, score, grade } as Restaurant;
+    });
+  }, [restaurants, impactMap]);
+
   // 카테고리 필터 적용된 결과
   const visible = useMemo(() => {
-    if (categoryFilter === 'ALL') return restaurants;
-    return restaurants.filter((r) => r.cat === categoryFilter);
-  }, [restaurants, categoryFilter]);
+    if (categoryFilter === 'ALL') return adjustedRestaurants;
+    return adjustedRestaurants.filter((r) => r.cat === categoryFilter);
+  }, [adjustedRestaurants, categoryFilter]);
+
+  // selected 객체는 매 렌더마다 adjustedRestaurants에서 lookup — 리뷰 보정 즉시 반영
+  const selected = useMemo<Restaurant | null>(() => {
+    if (!selectedId) return null;
+    return adjustedRestaurants.find((r) => r.id === selectedId) ?? null;
+  }, [selectedId, adjustedRestaurants]);
 
   // 검색 매칭된 마커 — 줌/등급 무관 강제 표시 (수집중 마커도 검색 시 노출)
   const forcedVisibleIds = useMemo(() => {
@@ -123,15 +147,15 @@ export default function MapScreen() {
 
   // 식당 상세 → 지도 보기로 진입 시 해당 식당으로 자동 이동 + 선택
   useEffect(() => {
-    if (!targetId || restaurants.length === 0) return;
-    const target = restaurants.find((r) => r.id === targetId);
+    if (!targetId || adjustedRestaurants.length === 0) return;
+    const target = adjustedRestaurants.find((r) => r.id === targetId);
     if (target) {
-      setSelected(target);
+      setSelectedId(target.id);
       setCenter({ lat: target.lat, lng: target.lng });
       // 필터로 가려져 있으면 전체로 풀어준다
       if (categoryFilter !== 'ALL' && target.cat !== categoryFilter) setCategoryFilter('ALL');
     }
-  }, [targetId, restaurants]);
+  }, [targetId, adjustedRestaurants]);
 
   const handleLocate = () => {
     // 1) 이미 watchPosition으로 userLoc 있으면 즉시 거기로 이동 (가장 빠름)
@@ -185,7 +209,7 @@ export default function MapScreen() {
   }, [searchQuery, visible]);
 
   const pickSearchResult = (r: Restaurant) => {
-    setSelected(r);
+    setSelectedId(r.id);
     setCenter({ lat: r.lat, lng: r.lng });
     mapHandleRef.current?.panTo(r.lat, r.lng);
     mapHandleRef.current?.setLevel(3);
@@ -224,17 +248,17 @@ export default function MapScreen() {
               centerLat={center.lat}
               centerLng={center.lng}
               zoom={targetId ? 3 : 5}
-              selectedId={targetId ?? selected?.id ?? null}
+              selectedId={targetId ?? selectedId ?? null}
               onMarkerClick={(r) => {
                 // 다른 마커 클릭 시 시트가 한 번 내려갔다 다시 올라오도록 잠깐 닫고 재오픈
-                if (selected && selected.id !== r.id) {
-                  setSelected(null);
-                  setTimeout(() => setSelected(r), 260);
+                if (selectedId && selectedId !== r.id) {
+                  setSelectedId(null);
+                  setTimeout(() => setSelectedId(r.id), 260);
                 } else {
-                  setSelected(r);
+                  setSelectedId(r.id);
                 }
               }}
-              onMapDismiss={() => setSelected(null)}
+              onMapDismiss={() => setSelectedId(null)}
             />
           ) : (
             <View style={styles.mobileFallback}>
@@ -342,7 +366,7 @@ export default function MapScreen() {
         {/* 마커 클릭 시 노출되는 바텀시트 — 요약(collapsed) ↔ 결과 카드(expanded) */}
         <RestaurantBottomSheet
           restaurant={selected}
-          onClose={() => setSelected(null)}
+          onClose={() => setSelectedId(null)}
         />
       </View>
     </View>
