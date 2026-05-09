@@ -295,13 +295,16 @@ export function reviewAxisFromImpact(
 // 등급은 항상 deriveGrade(보정 점수)로 파생 — 리뷰 0건이어도 동일한 임계값을 거치므로
 // 지도 마커·바텀시트·상세·좋아요·검색·홈이 같은 식당에 대해 동일 cheese 등급을 보장.
 //
-// 5축 그래프의 D축은 시각적으로만 reviewAxisFromImpact로 변형 (그래프와 합산
-// 점수가 수학적으로 100% 일치하진 않지만, 둘 다 "사용자 리뷰 반영" 표시).
+// ownerImpact: 사장님 인증 게시글에서 비롯된 C축 신뢰 가산 (선택). 리뷰 영향과 함께
+// 합산되어 최종 점수에 반영. 5축 그래프의 D축은 시각적으로만 reviewAxisFromImpact로 변형
+// (그래프와 합산 점수가 수학적으로 100% 일치하진 않지만, 둘 다 "보정 반영" 표시).
 export function adjustedScoreAndGrade(
   raw: Restaurant,
   impact: ReviewScoreImpact,
+  ownerDelta: number = 0,
 ): { score: number; grade: Grade } {
-  const score = applyReviewImpact(raw.score, impact);
+  const reviewed = applyReviewImpact(raw.score, impact);
+  const score = Math.max(0, Math.min(100, reviewed + ownerDelta));
   return { score, grade: deriveGrade(score) };
 }
 
@@ -365,7 +368,7 @@ export function useImpactFor(restaurantId: string | undefined | null): ReviewSco
   }, [impactMap, restaurantId]);
 }
 
-const EMPTY_IMPACT: ReviewScoreImpact = {
+export const EMPTY_REVIEW_IMPACT: ReviewScoreImpact = {
   delta: 0,
   ratingDelta: 0,
   foreignPenalty: 0,
@@ -375,3 +378,4 @@ const EMPTY_IMPACT: ReviewScoreImpact = {
   foreignTotal: 0,
   reviewCount: 0,
 };
+const EMPTY_IMPACT = EMPTY_REVIEW_IMPACT;

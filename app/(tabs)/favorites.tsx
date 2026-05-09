@@ -7,7 +7,8 @@ import { AnimatedHeart, AppHeader, Chip, EmptyState, IconButton, Screen } from '
 import type { Restaurant as RawRestaurant } from '@/constants/Restaurant';
 import { ensureRawById, ensureRecomputedIndex } from '@/utils/dataStore';
 import { toggleLike as toggleLikeStore, useLikedIds } from '@/utils/favorites';
-import { adjustedScoreAndGrade, useReviewImpactMap } from '@/utils/reviews';
+import { adjustedScoreAndGrade, EMPTY_REVIEW_IMPACT, useReviewImpactMap } from '@/utils/reviews';
+import { useOwnerImpactMap } from '@/utils/owner';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -55,6 +56,7 @@ export default function FavoritesScreen() {
   const [rawMap, setRawMap] = useState<Map<string, RawRestaurant> | null>(null);
   const likedIds = useLikedIds();
   const impactMap = useReviewImpactMap();
+  const ownerImpactMap = useOwnerImpactMap();
 
   // 좋아요한 ID들의 메타정보를 인덱스에서 조회 (G/S/B만 좋아요 카드로 표시)
   // raw 데이터도 같이 캐싱 → 상세 페이지와 동일한 5축 axes 산식 사용
@@ -82,19 +84,24 @@ export default function FavoritesScreen() {
     };
   }, [likedIds]);
 
-  // 위생 리뷰 보정 — 상세 페이지와 동일한 5축 axes 산식 사용 (raw 데이터로 buildAxes)
+  // 위생 리뷰 + 사장님 인증 보정 — 상세 페이지와 동일한 산식 (raw 데이터로 axes 빌드)
   // INVESTIGATING으로 떨어지면 BRONZE로 클램프 (좋아요 화면은 G/S/B만)
   const adjusted = useMemo(() => {
-    if (impactMap.size === 0 || !rawMap) return favorites;
+    if (impactMap.size === 0 && ownerImpactMap.size === 0) return favorites;
+    if (!rawMap) return favorites;
     return favorites.map((f) => {
       const impact = impactMap.get(f.id);
+      const owner = ownerImpactMap.get(f.id);
       const raw = rawMap.get(f.id);
-      if (!impact || impact.reviewCount === 0 || !raw) return f;
-      const { score, grade } = adjustedScoreAndGrade(raw, impact);
+      if (!raw) return f;
+      if (!impact && !owner) return f;
+      const reviewImp = impact ?? EMPTY_REVIEW_IMPACT;
+      const ownerDelta = owner?.delta ?? 0;
+      const { score, grade } = adjustedScoreAndGrade(raw, reviewImp, ownerDelta);
       const safeGrade: Grade = grade === 'INVESTIGATING' ? 'BRONZE' : grade;
       return { ...f, score, grade: safeGrade };
     });
-  }, [favorites, impactMap, rawMap]);
+  }, [favorites, impactMap, ownerImpactMap, rawMap]);
 
   const filtered = useMemo(() => {
     let list = filter === '전체' ? adjusted : adjusted.filter((f) => f.grade === filter);

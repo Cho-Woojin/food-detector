@@ -10,7 +10,8 @@ import type { Grade } from '@/constants/MockData';
 import { loadRestaurantsByGu } from '@/utils/loadData';
 import { useLikedIds } from '@/utils/favorites';
 import { getCachedLocation } from '@/utils/location';
-import { adjustedScoreAndGrade, useReviewImpactMap } from '@/utils/reviews';
+import { adjustedScoreAndGrade, EMPTY_REVIEW_IMPACT, useReviewImpactMap } from '@/utils/reviews';
+import { useOwnerImpactMap } from '@/utils/owner';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -109,18 +110,22 @@ export default function MapScreen() {
   }, []);
 
   const impactMap = useReviewImpactMap();
+  const ownerImpactMap = useOwnerImpactMap();
 
-  // 위생 리뷰 보정 — 점수/등급을 동기화해서 마커 색상·검색 결과 점수가 모두 일치하게
-  // 리뷰 변경 시 영향 받은 식당만 재계산되도록 dep 분리
+  // 위생 리뷰 + 사장님 게시글 보정 — 점수/등급을 동기화해서 마커 색상·검색 결과 점수가 일치
+  // 둘 중 하나라도 영향이 있으면 재계산. r 객체는 변경된 식당만 새로 만들어 메모 효율 유지.
   const adjustedRestaurants = useMemo(() => {
-    if (impactMap.size === 0) return restaurants;
+    if (impactMap.size === 0 && ownerImpactMap.size === 0) return restaurants;
     return restaurants.map((r) => {
       const impact = impactMap.get(r.id);
-      if (!impact) return r;
-      const { score, grade } = adjustedScoreAndGrade(r, impact);
+      const owner = ownerImpactMap.get(r.id);
+      if (!impact && !owner) return r;
+      const reviewImp = impact ?? EMPTY_REVIEW_IMPACT;
+      const ownerDelta = owner?.delta ?? 0;
+      const { score, grade } = adjustedScoreAndGrade(r, reviewImp, ownerDelta);
       return { ...r, score, grade } as Restaurant;
     });
-  }, [restaurants, impactMap]);
+  }, [restaurants, impactMap, ownerImpactMap]);
 
   // 카테고리 필터 적용된 결과
   const visible = useMemo(() => {
