@@ -171,9 +171,6 @@ export default function ProfileScreen() {
       {/* 좋아요 등급별 분포 — 데이터 있을 때만 */}
       {likedCount > 0 && <LikedBreakdownCard breakdown={breakdown} total={likedCount} />}
 
-      {/* Owner-mode banner */}
-      <OwnerBanner />
-
       {/* Menu sections */}
       {sections.map((section, sIdx) => (
         <View key={section.title} style={[styles.section, sIdx === 0 && { marginTop: spacing.xxl }]}>
@@ -305,31 +302,6 @@ function LoggedInCard({
   );
 }
 
-function OwnerBanner() {
-  return (
-    <Card
-      variant="elevated"
-      padding="l"
-      bgColor={color.surface.ownerBg}
-      style={{ marginTop: spacing.l }}>
-      <View style={styles.ownerRow}>
-        <Image source={Mascots.badge} style={styles.ownerMascot} resizeMode="contain" />
-        <View style={{ flex: 1 }}>
-          <View style={styles.ownerTitleRow}>
-            <Text style={styles.ownerTitle}>내 가게 입증하기</Text>
-            <View style={styles.soonBadge}>
-              <Text style={styles.soonBadgeText}>준비 중</Text>
-            </View>
-          </View>
-          <Text style={styles.ownerBody}>
-            사장님이 식탐정에서 가게 위생을 직접 인증해보세요
-          </Text>
-        </View>
-      </View>
-    </Card>
-  );
-}
-
 function Stat({ value, label }: { value: string; label: string }) {
   return (
     <View style={styles.statBox}>
@@ -438,11 +410,6 @@ const styles = StyleSheet.create({
   statDivider: { width: 1, backgroundColor: color.border.default },
 
   // Owner banner
-  ownerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.m },
-  ownerMascot: { width: mascotSize.inline, height: mascotSize.inline },
-  ownerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.xxs },
-  ownerTitle: { ...typography.bodyEmphasized, color: color.text.primary },
-  ownerBody: { ...typography.caption, color: color.text.secondary },
 
   // 좋아요 분포 카드
   statHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.s },
