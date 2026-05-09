@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const proj4 = require('proj4');
 
-const SRC = path.join(__dirname, '..', 'data', 'restaurants_with_scores.csv');
+const SRC = path.join(__dirname, '..', '_archive', 'restaurants_with_scores.csv');
 const OUT_DIR = path.join(__dirname, '..', 'data', 'by-gu');
 const INDEX_OUT = path.join(__dirname, '..', 'data', 'restaurants-index.json');
 
@@ -60,6 +60,7 @@ const SEOUL_GU = new Set([
 const RAW_MAP = {
   '한식': '한식',
   '냉면집': '한식',
+  '구내식당': '한식',
   '중식': '중식',
   '중국식': '중식',
   '일식': '일식',
@@ -70,15 +71,22 @@ const RAW_MAP = {
   '패밀리레스트랑': '양식',
   '분식': '분식',
   '김밥(도시락)': '도시락',
+  '도시락': '도시락',
+  '치킨': '치킨',
   '치킨·호프': '치킨',
   '통닭(치킨)': '치킨',
   '호프/통닭': '치킨',
   '카페·디저트': '카페디저트',
   '까페': '카페디저트',
+  '카페': '카페디저트',
   '커피숍': '카페디저트',
   '전통찻집': '카페디저트',
   '키즈카페': '카페디저트',
   '라이브카페': '카페디저트',
+  '다방': '카페디저트',
+  '아이스크림': '카페디저트',
+  '과자점': '카페디저트',
+  '떡카페': '카페디저트',
   '고기·구이': '고기',
   '식육(숯불구이)': '고기',
   '뷔페': '뷔페',
@@ -86,13 +94,28 @@ const RAW_MAP = {
   '술집': '술집',
   '정종/대포집/소주방': '술집',
   '감성주점': '술집',
+  '단란주점': '술집',
+  '유흥주점': '술집',
   '패스트푸드': '패스트푸드',
   '외국음식전문점(인도, 태국 등)': '아시안',
+  '외국음식전문점(인도,태국등)': '아시안',  // 띄어쓰기 없는 LOCALDATA 표기
   '탕류(보신용)': '찜탕',
   '출장조리': '기타',
   '이동조리': '기타',
   '푸드트럭': '기타',
   '기타': '기타',
+  '기타 휴게음식점': '기타',
+  '일반조리판매': '기타',
+  '간식': '기타',
+  '음식점': '기타',
+  '백화점': '기타',
+  '철도역구내': '기타',
+  '고속도로': '기타',
+  '관광호텔': '기타',
+  '극장': '기타',
+  '유원지': '기타',
+  '공항': '기타',
+  '푸드코트': '기타',
 };
 
 // 우선순위 순서 (위에서부터 매칭되면 적용)
@@ -280,6 +303,7 @@ for (const r of rows) {
   const gu = (r.gu || '').trim();
   if (!SEOUL_GU.has(gu)) continue;
 
+  // 좌표: x,y(EPSG5174)가 있으면 변환, 없으면 lat,lng(EPSG4326) 직접 사용
   const x = num(r.x);
   const y = num(r.y);
   let lat = null, lng = null;
@@ -288,6 +312,15 @@ for (const r of rows) {
       const [lon, la] = toWGS84(x, y);
       if (Number.isFinite(la) && Number.isFinite(lon)) { lat = +la.toFixed(6); lng = +lon.toFixed(6); }
     } catch {}
+  }
+  // Fallback: lat,lng가 csv에 직접 있으면 사용 (Phase 4 통합 csv는 이쪽)
+  if (lat === null) {
+    const directLat = num(r.lat);
+    const directLng = num(r.lng);
+    if (directLat !== null && directLng !== null) {
+      lat = +directLat.toFixed(6);
+      lng = +directLng.toFixed(6);
+    }
   }
   if (lat !== null) stats.geoOk++; else stats.geoFail++;
 
