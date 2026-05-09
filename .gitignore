@@ -41,3 +41,6 @@ yarn-error.*
 /android
 .env
 .env.local
+
+# 로컬 보관용 (git 제외) — 옛 데이터 파일, CSV 원본 등
+/_archive
