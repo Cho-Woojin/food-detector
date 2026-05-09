@@ -462,10 +462,14 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
           return entry;
         };
 
-        // ===== Viewport + 줌레벨 기반 가상화 =====
-        // - viewport 안에 있고 + 현재 level이 GRADE_STYLE.minLevel 이하인 식당만
-        //   실제 kakao.maps.Marker 객체를 만들어 setMap. 떠나면 destroy.
-        // - 12만 건을 사전 생성하지 않고 보이는 수백 개만 유지 → 메모리/CPU 절감
+        // ===== Viewport + 줌레벨 + 픽셀 그리드 dedup 기반 가상화 =====
+        // - viewport 안에 있고 + 현재 level이 GRADE_STYLE.minLevel 이하인 식당만 후보
+        // - 후보들 중 픽셀 좌표가 가까운(겹치는) 마커는 우선순위 낮은 쪽을 컬링
+        //   → 같은 자리에 마커가 빽빽이 쌓이는 현상 방지
+        // - 우선순위: must-show(좋아요/검색강제) > GOLDEN > score 내림차순
+        //   (높은 점수 식당이 같은 위치 경쟁에서 항상 이김)
+        // - cellSize는 픽셀 기준 절대값 → 줌 인할수록 자연스럽게 더 많은 마커 노출
+        const PIXEL_CELL = 56; // 마커 bubble 너비 36 + 여백 20
         const applyViewport = () => {
           if (!mapInstanceRef.current) return;
           const bounds = map.getBounds();
@@ -475,32 +479,67 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
           const north = ne.getLat(), east = ne.getLng();
           const level = map.getLevel();
 
-          // 1) 원하는 id 집합 계산
-          // - GOLDEN: 9개뿐이라 viewport 무시하고 항상 표시
-          // - 좋아요 / 강제 표시(검색): 줌 레벨·viewport 무시하고 항상 표시 (수집중 등급도 노출)
-          // - 그 외: viewport + minLevel 둘 다 통과해야 표시
+          // 1) 후보 식당 + 우선순위 점수 계산
+          // - GOLDEN: 9개뿐이라 viewport 무시하고 항상 후보
+          // - 좋아요 / 강제 표시(검색): 줌 레벨·viewport 무시하고 mustShow=true (dedup도 우회)
+          // - 그 외: viewport + minLevel 둘 다 통과해야 후보
           const liked = likedIdsRef.current;
           const forced = forcedVisibleIdsRef.current;
-          const want = new Set<string>();
-          const newcomers: Restaurant[] = [];
+          type Cand = { r: Restaurant; mustShow: boolean; pri: number };
+          const candidates: Cand[] = [];
           for (const r of restaurantsRef.current) {
             if (!r.lat || !r.lng) continue;
             const isLiked = liked.has(r.id);
             const isForced = forced.has(r.id);
             const isGold = r.grade === 'GOLDEN';
-            if (!isLiked && !isForced) {
+            const mustShow = isLiked || isForced;
+            if (!mustShow) {
               const minLv = GRADE_STYLE[r.grade]?.minLevel ?? 3;
-              if (minLv < 0) continue; // NEEDS_DATA 등 자동 표시 X
+              if (minLv < 0) continue;
               if (level > minLv) continue;
               if (!isGold) {
                 if (r.lat < south || r.lat > north || r.lng < west || r.lng > east) continue;
               }
             }
+            // 우선순위: mustShow → GOLDEN → score
+            const pri = (mustShow ? 1e9 : 0) + (isGold ? 1e8 : 0) + (r.score ?? 0);
+            candidates.push({ r, mustShow, pri });
+          }
+          candidates.sort((a, b) => b.pri - a.pri);
+
+          // 2) 픽셀 그리드 dedup
+          // - proj가 없거나(초기 idle 전) 실패하면 dedup 없이 통과 (드물게 발생)
+          const proj = (map as any).getProjection ? (map as any).getProjection() : null;
+          const occupied = new Set<string>();
+          const cellKey = (cx: number, cy: number) => `${cx}|${cy}`;
+          const want = new Set<string>();
+          const wantedList: Restaurant[] = [];
+          for (const { r, mustShow } of candidates) {
+            let cx = 0, cy = 0, hasPx = false;
+            if (proj && typeof proj.containerPointFromCoords === 'function') {
+              try {
+                const pt = proj.containerPointFromCoords(new kakao.maps.LatLng(r.lat, r.lng));
+                cx = Math.floor(pt.x / PIXEL_CELL);
+                cy = Math.floor(pt.y / PIXEL_CELL);
+                hasPx = true;
+              } catch { /* fallback: dedup skip */ }
+            }
+            if (!mustShow && hasPx) {
+              // 3×3 셀 이웃 검사 — 셀 경계에 걸친 마커도 충돌로 판정
+              let blocked = false;
+              for (let dx = -1; dx <= 1 && !blocked; dx++) {
+                for (let dy = -1; dy <= 1 && !blocked; dy++) {
+                  if (occupied.has(cellKey(cx + dx, cy + dy))) blocked = true;
+                }
+              }
+              if (blocked) continue;
+            }
+            if (hasPx) occupied.add(cellKey(cx, cy));
             want.add(r.id);
-            if (!markersByIdRef.current.has(r.id)) newcomers.push(r);
+            wantedList.push(r);
           }
 
-          // 2) 더 이상 필요 없는 마커 제거
+          // 3) 더 이상 필요 없는 마커 제거
           for (const [id, entry] of markersByIdRef.current) {
             if (!want.has(id)) {
               entry.marker.setMap(null);
@@ -510,8 +549,9 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
             }
           }
 
-          // 3) 신규 마커 생성 (이미 정렬돼 있어 점수 높은 것부터 = 상위 등급 우선)
-          for (const r of newcomers) {
+          // 4) 신규 마커 생성
+          for (const r of wantedList) {
+            if (markersByIdRef.current.has(r.id)) continue;
             const entry = createEntry(r);
             entry.marker.setMap(map);
             markersByIdRef.current.set(r.id, entry);
