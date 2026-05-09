@@ -104,6 +104,27 @@ export async function ensureRecomputedIndex(): Promise<RecomputedRow[]> {
   return recomputedPromise;
 }
 
+// raw Restaurant id 매핑 — 5축 axes 빌드에 필요 (좋아요·지도 보정 등)
+let rawById: Map<string, Restaurant> | null = null;
+let rawByIdPromise: Promise<Map<string, Restaurant>> | null = null;
+
+export async function ensureRawById(): Promise<Map<string, Restaurant>> {
+  if (rawById) return rawById;
+  if (!rawByIdPromise) {
+    rawByIdPromise = (async () => {
+      const idx = await ensureIndex();
+      const m = new Map<string, Restaurant>();
+      for (const gu of idx.meta.gus) {
+        const arr = await ensureGu(gu);
+        for (const r of arr) m.set(r.id, r);
+      }
+      rawById = m;
+      return m;
+    })();
+  }
+  return rawByIdPromise;
+}
+
 let recomputedById: Map<string, RecomputedRow> | null = null;
 
 export async function ensureRecomputedById(): Promise<Map<string, RecomputedRow>> {

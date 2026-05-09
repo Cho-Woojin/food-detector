@@ -1,5 +1,5 @@
-import { Alert, Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useEffect, useState } from 'react';
+import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -10,9 +10,19 @@ import { AxisScore, Grade, Restaurant } from '@/constants/MockData';
 import { color, elevation, mascotSize, motion, radius, spacing, typography } from '@/constants/tokens';
 import { AnimatedHeart, Button, Card, CheeseBadge, Chip, IconButton, SkeletonCard } from '@/components/ui';
 import { findRestaurantById } from '@/utils/dataStore';
-import { toUIRestaurant } from '@/utils/adapter';
+import { deriveGrade, toUIRestaurant } from '@/utils/adapter';
 import { toggleLike, useIsLiked } from '@/utils/favorites';
+import { loginWithKakao, useKakaoUser } from '@/utils/kakaoAuth';
+import {
+  applyReviewImpact,
+  removeReview,
+  reviewAxisFromImpact,
+  useImpactFor,
+  useMyReviews,
+  useMyReviewsFor,
+} from '@/utils/reviews';
 import { ShareSheet } from '@/components/ShareSheet';
+import { HygieneReviewCard } from '@/components/HygieneReviewCard';
 
 const TABS = ['평가', '리뷰', '정보'] as const;
 type Tab = (typeof TABS)[number];
@@ -46,11 +56,29 @@ export default function RestaurantDetail() {
     };
   }, [id]);
 
+  // 점수 보정은 모든 사용자 리뷰 (백엔드 집계 시뮬), 표시는 본인 리뷰만 분리
+  const reviewImpact = useImpactFor(typeof id === 'string' ? id : null);
+
+  // D축('리뷰 분석')에 사용자 위생 리뷰 반영 → 5축 그래프와 합산 점수 일관 유지
+  const adjustedAxes = useMemo(() => {
+    if (!restaurant) return [];
+    if (reviewImpact.reviewCount === 0) return restaurant.axes;
+    const reviewAxis = reviewAxisFromImpact(reviewImpact, restaurant.score / 100);
+    return restaurant.axes.map((a) =>
+      a.key === 'review' ? { ...a, ...reviewAxis } : a,
+    );
+  }, [restaurant, reviewImpact]);
+
+  // 점수는 raw 사전 계산 + delta (지도·좋아요와 동일 산식). 그래프 D축은 시각만 override.
+  const adjustedScore = restaurant ? applyReviewImpact(restaurant.score, reviewImpact) : 0;
+  const adjustedGrade = useMemo(() => deriveGrade(adjustedScore), [adjustedScore]);
+  const impactDelta = restaurant ? adjustedScore - restaurant.score : 0;
+
   if (loading) return <LoadingState />;
   if (!restaurant) return <NotFoundState />;
 
-  const mascot = MASCOT_BY_GRADE[restaurant.grade];
-  const cheeseFg = color.cheese[restaurant.grade].fg;
+  const mascot = MASCOT_BY_GRADE[adjustedGrade];
+  const cheeseFg = color.cheese[adjustedGrade].fg;
 
   return (
     <View style={styles.root}>
@@ -78,10 +106,32 @@ export default function RestaurantDetail() {
           <Image source={Mascots[mascot]} style={styles.summaryMascot} resizeMode="contain" />
           <Text style={styles.summaryLabel}>검사 결과 종합</Text>
           <View style={styles.summaryScoreRow}>
-            <Text style={[styles.summaryScore, { color: cheeseFg }]}>{restaurant.score}</Text>
+            <Text style={[styles.summaryScore, { color: cheeseFg }]}>{adjustedScore}</Text>
             <Text style={styles.summaryScoreUnit}>/ 100점</Text>
           </View>
-          <CheeseBadge grade={restaurant.grade} size="md" showLabel style={styles.summaryBadge} />
+          {reviewImpact.reviewCount > 0 && (
+            <View style={styles.summaryDeltaWrap}>
+              <Text
+                style={[
+                  styles.summaryDelta,
+                  { color: impactDelta > 0
+                      ? color.status.success
+                      : impactDelta < 0
+                        ? color.status.danger
+                        : color.text.secondary },
+                ]}>
+                {impactDelta > 0 ? '+' : ''}{impactDelta}점 — 위생 리뷰 {reviewImpact.reviewCount}건 반영
+              </Text>
+              <Text style={styles.summaryDeltaSub}>
+                별점 평균 {reviewImpact.rawAvg.toFixed(1)}
+                {reviewImpact.foreignReports > 0
+                  ? ` · 이물질 ${reviewImpact.foreignTotal}건`
+                  : ''}
+                {' · 기본 '}{restaurant.score}점
+              </Text>
+            </View>
+          )}
+          <CheeseBadge grade={adjustedGrade} size="md" showLabel style={styles.summaryBadge} />
         </Card>
 
         {/* 2. 음식점 명 + 카테고리 — 가운데 정렬, 좋아요는 이름 옆 */}
@@ -126,7 +176,15 @@ export default function RestaurantDetail() {
         </View>
 
         {/* Tab content */}
-        {tab === '평가' && <SummaryTab restaurant={restaurant} />}
+        {tab === '평가' && (
+          <SummaryTab
+            restaurant={restaurant}
+            axes={adjustedAxes}
+            baseScore={restaurant.score}
+            adjustedScore={adjustedScore}
+            impactDelta={impactDelta}
+          />
+        )}
         {tab === '리뷰' && <ReviewTab restaurant={restaurant} />}
         {tab === '정보' && <InfoTab restaurant={restaurant} />}
 
@@ -163,8 +221,8 @@ export default function RestaurantDetail() {
           name: restaurant.name,
           cat: restaurant.category,
           gu: restaurant.district.split(' ')[0] || '',
-          score: restaurant.score,
-          grade: restaurant.grade as any,
+          score: adjustedScore,
+          grade: adjustedGrade as any,
         }}
         onClose={() => setShareOpen(false)}
       />
@@ -204,7 +262,19 @@ function NotFoundState() {
   );
 }
 
-function SummaryTab({ restaurant }: { restaurant: Restaurant }) {
+function SummaryTab({
+  restaurant,
+  axes,
+  baseScore,
+  adjustedScore,
+  impactDelta,
+}: {
+  restaurant: Restaurant;
+  axes: AxisScore[];
+  baseScore: number;
+  adjustedScore: number;
+  impactDelta: number;
+}) {
   return (
     <View>
       <AIMenuGuideCard guide={restaurant.menuGuide} />
@@ -213,22 +283,46 @@ function SummaryTab({ restaurant }: { restaurant: Restaurant }) {
         <Text style={styles.cardTitle}>식탐정 평가 요약</Text>
         <View style={{ alignItems: 'center', marginTop: spacing.m }}>
           <SpiderChart5
-            axes={restaurant.axes.map((a) => ({
+            axes={axes.map((a) => ({
               key: a.key,
               label: a.label,
               score: a.score,
               max: a.max,
             }))}
             size={240}
-            centerLabel={`${restaurant.score}점`}
+            centerLabel={`${adjustedScore}점`}
           />
         </View>
+        {impactDelta !== 0 && (
+          <View style={styles.scoreFlow}>
+            <View style={styles.scoreFlowItem}>
+              <Text style={styles.scoreFlowLabel}>5축 합산</Text>
+              <Text style={styles.scoreFlowValue}>{baseScore}점</Text>
+            </View>
+            <Icon name="forward" size={14} color={color.text.tertiary} />
+            <View style={styles.scoreFlowItem}>
+              <Text style={styles.scoreFlowLabel}>리뷰 보정</Text>
+              <Text
+                style={[
+                  styles.scoreFlowValue,
+                  { color: impactDelta > 0 ? color.status.success : color.status.danger },
+                ]}>
+                {impactDelta > 0 ? '+' : ''}{impactDelta}점
+              </Text>
+            </View>
+            <Icon name="forward" size={14} color={color.text.tertiary} />
+            <View style={styles.scoreFlowItem}>
+              <Text style={styles.scoreFlowLabel}>종합</Text>
+              <Text style={[styles.scoreFlowValueEmphasis]}>{adjustedScore}점</Text>
+            </View>
+          </View>
+        )}
       </Card>
 
       <Text style={styles.sectionTitle}>식탐정 평가 상세</Text>
       <Card variant="elevated" padding="none" radius="l">
-        {restaurant.axes.map((a, i) => (
-          <AxisRow key={a.key} axis={a} index={i} showDivider={i < restaurant.axes.length - 1} />
+        {axes.map((a, i) => (
+          <AxisRow key={a.key} axis={a} index={i} showDivider={i < axes.length - 1} />
         ))}
       </Card>
 
@@ -318,113 +412,41 @@ function AdminActionsCard({ actions }: { actions: import('@/constants/MockData')
   );
 }
 
-const HYGIENE_TAGS = [
-  '주방 깨끗',
-  '직원 위생',
-  '식기 청결',
-  '재료 신선',
-  '냄새 없음',
-  '벌레 없음',
-];
-
-function ReviewComposeCard({ restaurantName }: { restaurantName: string }) {
-  const [rating, setRating] = useState(0);
-  const [body, setBody] = useState('');
-  const [tags, setTags] = useState<Set<string>>(new Set());
-  const [submitting, setSubmitting] = useState(false);
-
-  const canSubmit = rating > 0 && body.trim().length >= 5 && !submitting;
-
-  const toggleTag = (t: string) => {
-    setTags((prev) => {
-      const next = new Set(prev);
-      if (next.has(t)) next.delete(t);
-      else next.add(t);
-      return next;
-    });
-  };
-
-  const handleSubmit = () => {
-    if (!canSubmit) return;
-    setSubmitting(true);
-    setTimeout(() => {
-      Alert.alert('리뷰가 등록됐어요', `${restaurantName}에 위생 리뷰를 남겼어요. 식탐정이 검토 후 반영해요.`);
-      setRating(0);
-      setBody('');
-      setTags(new Set());
-      setSubmitting(false);
-    }, 400);
-  };
-
+function ReviewComposeCTA({ restaurantId }: { restaurantId: string }) {
+  const kakaoUser = useKakaoUser();
+  const loggedIn = !!kakaoUser;
   return (
     <Card variant="elevated" padding="l" radius="l" style={{ marginBottom: spacing.l }}>
-      <View style={styles.composeHeader}>
-        <Text style={styles.composeTitle}>위생 리뷰 남기기</Text>
-        <Text style={styles.composeHint}>이 식당 다녀온 분만 남겨주세요</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.m }}>
+        <View style={styles.ctaIconWrap}>
+          <Icon name="pencil" size={22} color={color.brand.primary} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.composeTitle}>위생 리뷰 남기기</Text>
+          <Text style={styles.composeHint}>
+            {loggedIn
+              ? '다녀온 곳의 주방·식기·재료 상태를 알려주세요'
+              : '리뷰는 책임을 위해 로그인이 필요해요'}
+          </Text>
+        </View>
       </View>
-
-      {/* Rating stars */}
-      <View style={styles.starsRow}>
-        {[1, 2, 3, 4, 5].map((i) => (
-          <Pressable
-            key={i}
-            onPress={() => setRating(i)}
-            hitSlop={6}
-            accessibilityRole="button"
-            accessibilityLabel={`${i}점`}
-            accessibilityState={{ selected: rating >= i }}
-            style={styles.starBtn}>
-            <Icon
-              name="star"
-              size={32}
-              color={i <= rating ? color.brand.secondary : color.border.default}
-            />
-          </Pressable>
-        ))}
-        {rating > 0 ? (
-          <Text style={styles.ratingValue}>{rating}.0</Text>
-        ) : null}
-      </View>
-
-      {/* Body input */}
-      <TextInput
-        value={body}
-        onChangeText={setBody}
-        placeholder="주방, 직원 위생, 식기 상태 등 본인이 본 그대로 적어주세요 (최소 5자)"
-        placeholderTextColor={color.text.tertiary}
-        multiline
-        textAlignVertical="top"
-        style={styles.composeInput}
-        accessibilityLabel="리뷰 본문"
-      />
-      <Text style={styles.charCount}>{body.length} / 500</Text>
-
-      {/* Hygiene tags */}
-      <Text style={styles.composeBlockLabel}>위생 태그 (해당하는 것 모두)</Text>
-      <View style={styles.composeTagsRow}>
-        {HYGIENE_TAGS.map((t) => (
-          <Chip
-            key={t}
-            variant="filter"
-            size="sm"
-            selected={tags.has(t)}
-            onPress={() => toggleTag(t)}>
-            {t}
-          </Chip>
-        ))}
-      </View>
-
-      {/* Submit */}
       <View style={{ marginTop: spacing.m }}>
         <Button
-          variant="primary"
+          variant={loggedIn ? 'primary' : 'kakao'}
           size="md"
           fullWidth
-          disabled={!canSubmit}
-          loading={submitting}
-          leftIcon="pencil"
-          onPress={handleSubmit}>
-          리뷰 등록하기
+          leftIcon={loggedIn ? 'pencil' : 'chat'}
+          onPress={() => {
+            if (loggedIn) {
+              router.push(`/review/${restaurantId}`);
+            } else {
+              if (typeof sessionStorage !== 'undefined') {
+                sessionStorage.setItem('food-detector:pending-review', restaurantId);
+              }
+              loginWithKakao();
+            }
+          }}>
+          {loggedIn ? '리뷰 작성하기' : '카카오로 로그인'}
         </Button>
       </View>
     </Card>
@@ -432,18 +454,49 @@ function ReviewComposeCard({ restaurantName }: { restaurantName: string }) {
 }
 
 function ReviewTab({ restaurant }: { restaurant: Restaurant }) {
+  const kakaoUser = useKakaoUser();
+  const myReviews = useMyReviewsFor(restaurant.id);
+  const allMyReviews = useMyReviews();
+  const totalCount = restaurant.reviewCount + myReviews.length;
+  const hygieneCount = restaurant.hygieneReviewCount + myReviews.length;
+  const myNickname = kakaoUser?.nickname ?? '나';
+
+  const handleDelete = (id: string) => {
+    if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+      if (!window.confirm('이 리뷰를 삭제할까요?')) return;
+    }
+    removeReview(id);
+  };
+
+  // mock author별 리뷰 수 (이 식당 내에서)
+  const mockAuthorCount = new Map<string, number>();
+  for (const rv of restaurant.reviews) {
+    mockAuthorCount.set(rv.author, (mockAuthorCount.get(rv.author) ?? 0) + 1);
+  }
+
   return (
     <View>
-      <ReviewComposeCard restaurantName={restaurant.name} />
+      <ReviewComposeCTA restaurantId={restaurant.id} />
 
       <View style={styles.reviewSummary}>
-        <Text style={styles.reviewCount}>총 {restaurant.reviewCount}건</Text>
-        <Text style={styles.reviewHygiene}>위생 리뷰 {restaurant.hygieneReviewCount}건</Text>
+        <Text style={styles.reviewCount}>총 {totalCount}건</Text>
+        <Text style={styles.reviewHygiene}>위생 리뷰 {hygieneCount}건</Text>
       </View>
+
+      {myReviews.map((rv) => (
+        <HygieneReviewCard
+          key={rv.id}
+          review={rv}
+          nickname={myNickname}
+          totalReviews={allMyReviews.length}
+          onDelete={() => handleDelete(rv.id)}
+        />
+      ))}
+
       {restaurant.reviews.map((rv) => (
         <View key={rv.id} style={styles.reviewCard}>
           <View style={styles.reviewHeader}>
-            <Text style={styles.reviewAuthor}>{rv.author}</Text>
+            <Text style={styles.reviewAuthor} numberOfLines={1}>{rv.author}</Text>
             <View style={styles.reviewStarsRow}>
               {Array.from({ length: 5 }).map((_, i) => (
                 <Icon
@@ -454,6 +507,7 @@ function ReviewTab({ restaurant }: { restaurant: Restaurant }) {
                 />
               ))}
             </View>
+            <Text style={styles.reviewMeta}>리뷰 {mockAuthorCount.get(rv.author) ?? 1}건</Text>
             <Text style={styles.reviewDate}>{rv.date}</Text>
           </View>
           <Text style={styles.reviewBody}>{rv.body}</Text>
@@ -575,6 +629,33 @@ const styles = StyleSheet.create({
   summaryScoreRow: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.xs },
   summaryScore: { ...typography.display, fontSize: 56, lineHeight: 60 },
   summaryScoreUnit: { ...typography.subheadline, color: color.text.tertiary },
+  summaryDeltaWrap: {
+    marginTop: spacing.xxs,
+    alignItems: 'center',
+    gap: 2,
+  },
+  scoreFlow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.s,
+    marginTop: spacing.m,
+    paddingTop: spacing.m,
+    borderTopWidth: 1,
+    borderTopColor: color.border.default,
+  },
+  scoreFlowItem: { alignItems: 'center', gap: 2 },
+  scoreFlowLabel: { ...typography.caption, color: color.text.tertiary },
+  scoreFlowValue: { ...typography.subheadlineEmphasized, color: color.text.primary },
+  scoreFlowValueEmphasis: { ...typography.bodyEmphasized, color: color.brand.primary },
+  summaryDelta: {
+    ...typography.captionEmphasized,
+  },
+  summaryDeltaSub: {
+    ...typography.caption,
+    color: color.text.tertiary,
+    textAlign: 'center',
+  },
   summaryBadge: { marginTop: spacing.xs },
 
   // 2. Name block (가운데 정렬)
@@ -727,51 +808,24 @@ const styles = StyleSheet.create({
   },
   adminTranslatedText: { flex: 1, ...typography.subheadline, color: color.text.primary, fontWeight: '500' },
 
-  // Review compose
-  composeHeader: { marginBottom: spacing.m },
+  // Review compose CTA
   composeTitle: { ...typography.bodyEmphasized, color: color.text.primary, marginBottom: spacing.xxs },
   composeHint: { ...typography.caption, color: color.text.secondary },
-
-  starsRow: {
-    flexDirection: 'row',
+  ctaIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(34,197,94,0.10)',
     alignItems: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.m,
+    justifyContent: 'center',
   },
-  starBtn: { padding: 2 },
-  ratingValue: {
-    ...typography.subheadlineEmphasized,
-    color: color.brand.secondary,
-    marginLeft: spacing.s,
-  },
-
-  composeInput: {
-    ...typography.subheadline,
-    color: color.text.primary,
-    minHeight: 96,
-    backgroundColor: color.fill.quaternary,
-    borderRadius: radius.m,
-    paddingHorizontal: spacing.m,
-    paddingTop: spacing.m,
-    paddingBottom: spacing.m,
-  },
-  charCount: {
-    ...typography.footnote,
-    color: color.text.tertiary,
-    textAlign: 'right',
-    marginTop: spacing.xxs,
-  },
-
-  composeBlockLabel: {
-    ...typography.captionEmphasized,
-    color: color.text.primary,
-    marginTop: spacing.m,
-    marginBottom: spacing.s,
-  },
-  composeTagsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.s,
+  deleteBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: color.fill.tertiary,
   },
 
   // Reviews
@@ -788,10 +842,11 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: color.border.default,
   },
-  reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.s, marginBottom: spacing.xs + 2 },
-  reviewAuthor: { ...typography.subheadlineEmphasized, color: color.text.primary },
+  reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs + 2, marginBottom: spacing.xs + 2 },
+  reviewAuthor: { flexShrink: 1, ...typography.subheadlineEmphasized, color: color.text.primary },
   reviewStarsRow: { flexDirection: 'row', gap: 1 },
-  reviewDate: { ...typography.footnote, color: color.text.tertiary, marginLeft: 'auto' },
+  reviewMeta: { ...typography.footnote, color: color.text.secondary },
+  reviewDate: { ...typography.footnote, color: color.text.tertiary },
   reviewBody: { ...typography.subheadline, color: color.text.primary, marginBottom: spacing.xs + 2 },
   reviewTagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   reviewTag: {
@@ -801,6 +856,26 @@ const styles = StyleSheet.create({
     backgroundColor: color.fill.tertiary,
   },
   reviewTagText: { ...typography.footnote, color: color.text.secondary, fontWeight: '500' },
+  foreignBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.s,
+    paddingVertical: 6,
+    borderRadius: radius.s,
+    backgroundColor: color.status.dangerSoft,
+    marginBottom: spacing.xs + 2,
+  },
+  foreignBannerText: {
+    ...typography.captionEmphasized,
+    color: color.status.danger,
+  },
+  reviewPhoto: {
+    width: 72,
+    height: 72,
+    borderRadius: radius.s,
+    backgroundColor: color.fill.quaternary,
+  },
 
   // Sticky CTA
   bottomCta: {

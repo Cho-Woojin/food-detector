@@ -4,8 +4,10 @@ import { Cheese } from '@/constants/Assets';
 import { color, radius, spacing, typography } from '@/constants/tokens';
 import { AnimatedHeart, AppHeader, Chip, EmptyState, IconButton, Screen } from '@/components/ui';
 // Chip is still used in the filter row above the list.
-import { ensureRecomputedIndex } from '@/utils/dataStore';
+import type { Restaurant as RawRestaurant } from '@/constants/Restaurant';
+import { ensureRawById, ensureRecomputedIndex } from '@/utils/dataStore';
 import { toggleLike as toggleLikeStore, useLikedIds } from '@/utils/favorites';
+import { adjustedScoreAndGrade, useReviewImpactMap } from '@/utils/reviews';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -50,12 +52,15 @@ export default function FavoritesScreen() {
   const [filter, setFilter] = useState<Filter>('전체');
   const [sort, setSort] = useState<SortKey>('score');
   const [favorites, setFavorites] = useState<Favorite[]>([]);
+  const [rawMap, setRawMap] = useState<Map<string, RawRestaurant> | null>(null);
   const likedIds = useLikedIds();
+  const impactMap = useReviewImpactMap();
 
   // 좋아요한 ID들의 메타정보를 인덱스에서 조회 (G/S/B만 좋아요 카드로 표시)
+  // raw 데이터도 같이 캐싱 → 상세 페이지와 동일한 5축 axes 산식 사용
   useEffect(() => {
     let cancelled = false;
-    ensureRecomputedIndex().then((rows) => {
+    Promise.all([ensureRecomputedIndex(), ensureRawById()]).then(([rows, raw]) => {
       if (cancelled) return;
       const list: Favorite[] = rows
         .filter((r) => likedIds.has(r.i))
@@ -70,21 +75,36 @@ export default function FavoritesScreen() {
           district: r.g,
         }));
       setFavorites(list);
+      setRawMap(raw);
     });
     return () => {
       cancelled = true;
     };
   }, [likedIds]);
 
+  // 위생 리뷰 보정 — 상세 페이지와 동일한 5축 axes 산식 사용 (raw 데이터로 buildAxes)
+  // INVESTIGATING으로 떨어지면 BRONZE로 클램프 (좋아요 화면은 G/S/B만)
+  const adjusted = useMemo(() => {
+    if (impactMap.size === 0 || !rawMap) return favorites;
+    return favorites.map((f) => {
+      const impact = impactMap.get(f.id);
+      const raw = rawMap.get(f.id);
+      if (!impact || impact.reviewCount === 0 || !raw) return f;
+      const { score, grade } = adjustedScoreAndGrade(raw, impact);
+      const safeGrade: Grade = grade === 'INVESTIGATING' ? 'BRONZE' : grade;
+      return { ...f, score, grade: safeGrade };
+    });
+  }, [favorites, impactMap, rawMap]);
+
   const filtered = useMemo(() => {
-    let list = filter === '전체' ? favorites : favorites.filter((f) => f.grade === filter);
+    let list = filter === '전체' ? adjusted : adjusted.filter((f) => f.grade === filter);
     list = list.filter((f) => likedIds.has(f.id));
     if (sort === 'score') list = [...list].sort((a, b) => b.score - a.score);
     if (sort === 'name') list = [...list].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
     return list;
-  }, [favorites, filter, sort, likedIds]);
+  }, [adjusted, filter, sort, likedIds]);
 
-  const totalCount = favorites.filter((f) => likedIds.has(f.id)).length;
+  const totalCount = adjusted.filter((f) => likedIds.has(f.id)).length;
   const allEmpty = totalCount === 0;
   const filterEmpty = !allEmpty && filtered.length === 0;
 

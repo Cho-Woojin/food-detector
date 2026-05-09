@@ -9,6 +9,7 @@ import { router } from 'expo-router';
 import { useLikedIds } from '@/utils/favorites';
 import { ensureRecomputedById } from '@/utils/dataStore';
 import { loginWithKakao, logoutFromKakao, useKakaoUser } from '@/utils/kakaoAuth';
+import { useMyReviews } from '@/utils/reviews';
 
 
 type MenuItem = {
@@ -27,6 +28,7 @@ export default function ProfileScreen() {
   const likedIds = useLikedIds();
   const likedCount = likedIds.size;
   const kakaoUser = useKakaoUser();
+  const reviewCount = useMyReviews().length;
   const [breakdown, setBreakdown] = useState<GradeBreakdown>({ GOLDEN: 0, SILVER: 0, BRONZE: 0, OTHER: 0 });
   const [guideListOpen, setGuideListOpen] = useState(false);
 
@@ -60,7 +62,12 @@ export default function ProfileScreen() {
           value: String(likedCount),
           onPress: () => router.push('/(tabs)/favorites' as any),
         },
-        { icon: 'pencil', label: '내가 쓴 위생 리뷰', comingSoon: true, disabled: true },
+        {
+          icon: 'pencil',
+          label: '내 위생 리뷰',
+          value: String(reviewCount),
+          onPress: () => router.push('/my-reviews' as any),
+        },
         { icon: 'camera', label: '업로드한 사진', comingSoon: true, disabled: true },
       ],
     },
@@ -192,7 +199,7 @@ function GuestCard({ likedCount, onLogin }: { likedCount: number; onLogin: () =>
         </View>
       </View>
       <View style={{ marginTop: spacing.m }}>
-        <Button variant="primary" size="md" fullWidth onPress={onLogin}>
+        <Button variant="kakao" size="md" fullWidth leftIcon="chat" onPress={onLogin}>
           카카오로 시작하기
         </Button>
       </View>
@@ -204,6 +211,7 @@ function LoggedInCard({
   nickname, profileImage, onLogout,
 }: { nickname: string; profileImage?: string; onLogout: () => void }) {
   const likedCount = useLikedIds().size;
+  const reviewCount = useMyReviews().length;
   return (
     <Card variant="elevated" padding="l" style={{ marginTop: spacing.l }}>
       <View style={styles.guestRow}>
@@ -226,7 +234,7 @@ function LoggedInCard({
       <View style={styles.statsRow}>
         <Stat value={String(likedCount)} label="좋아요" />
         <View style={styles.statDivider} />
-        <Stat value="—" label="리뷰" />
+        <Stat value={String(reviewCount)} label="리뷰" />
         <View style={styles.statDivider} />
         <Stat value="—" label="사진" />
       </View>
@@ -401,5 +409,69 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: spacing.xxl,
     marginBottom: spacing.xxl,
+  },
+
+  // 내 위생 리뷰 row
+  reviewRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.s,
+    paddingVertical: spacing.s,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: color.border.default,
+  },
+  reviewRowHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: spacing.s,
+  },
+  reviewRowName: {
+    flex: 1,
+    ...typography.bodyEmphasized,
+    color: color.text.primary,
+  },
+  reviewRowDate: { ...typography.caption, color: color.text.tertiary },
+  reviewRowStars: {
+    flexDirection: 'row',
+    gap: 1,
+    marginTop: spacing.xxs,
+  },
+  reviewRowAlertBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.s,
+    paddingVertical: 4,
+    borderRadius: radius.s,
+    backgroundColor: color.status.dangerSoft,
+    alignSelf: 'flex-start',
+  },
+  reviewRowAlertText: { ...typography.captionEmphasized, color: color.status.danger },
+  reviewRowTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  reviewRowChip: {
+    paddingHorizontal: spacing.s,
+    paddingVertical: 2,
+    borderRadius: radius.s,
+  },
+  reviewRowChipText: { ...typography.captionEmphasized },
+  reviewRowBody: {
+    ...typography.subheadline,
+    color: color.text.secondary,
+    marginTop: spacing.xs,
+  },
+  reviewRowDelete: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: color.fill.tertiary,
   },
 });

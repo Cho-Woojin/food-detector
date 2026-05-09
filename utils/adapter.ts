@@ -70,7 +70,7 @@ function rateGap(r: Restaurant): Rated {
   return { score: r.e, rating: '주의', tone: 'red' };
 }
 
-function buildAxes(r: Restaurant): AxisScore[] {
+export function buildAxes(r: Restaurant): AxisScore[] {
   const a = rateHygiene(r);
   const b = rateAdmin(r);
   const c = rateTrust(r);
@@ -260,25 +260,6 @@ function buildReviews(grade: GradeKey): Review[] {
   ];
 }
 
-// ---------- 등급/그레이드 ----------
-function normalizeGrade(g: GradeKey): Grade {
-  if (g === 'GOLDEN') return 'GOLDEN';
-  if (g === 'SILVER') return 'SILVER';
-  if (g === 'BRONZE') return 'BRONZE';
-  return 'INVESTIGATING'; // WARNING / NEEDS_DATA → INVESTIGATING으로 통합 표시
-}
-
-function gradeLabelKr(g: GradeKey): string {
-  switch (g) {
-    case 'GOLDEN': return '골든 치즈';
-    case 'SILVER': return '실버 치즈';
-    case 'BRONZE': return '브론즈 치즈';
-    case 'WARNING': return '요주의';
-    case 'NEEDS_DATA': return '데이터 부족';
-    default: return '수사 중';
-  }
-}
-
 // ---------- 주소 → 동/지역 ----------
 function extractDistrict(r: Restaurant): string {
   // "서울특별시 강남구 자곡로 186, ..." → "강남구 자곡동" (간단 추출)
@@ -321,19 +302,19 @@ function gradeLabelFromUI(g: Grade): string {
   return '수사 중';
 }
 
-// JSON 사전계산값을 그대로 사용. 모든 화면(지도/상세/좋아요/검색/홈)이 동일 값 보도록 통일.
+// 등급은 score에서 deriveGrade로 파생 — 단일 임계값(85/70/55)을 모든 화면이 공유.
 // 5축 객체 빌드 등의 비용 없이 ref만 반환하므로 빠름.
 export function recomputeFromRaw(r: Restaurant): { score: number; grade: Grade } {
-  return { score: r.score, grade: normalizeGrade(r.grade) };
+  return { score: r.score, grade: deriveGrade(r.score) };
 }
 
 // ---------- 메인 어댑터 (상세) ----------
 export function toUIRestaurant(r: Restaurant): UIRestaurant {
-  // 점수/등급은 JSON 사전계산값을 그대로 사용 (지도·좋아요와 일관)
+  // 점수는 사전 계산 그대로, 등급은 deriveGrade로 파생 (지도·좋아요·검색·홈과 동일 산식)
   // 5축은 spider chart 시각화 용도로만 빌드 (점수에는 영향 X)
   const axes = buildAxes(r);
   const score = r.score;
-  const grade = normalizeGrade(r.grade);
+  const grade = deriveGrade(score);
   const labelKr = gradeLabelFromUI(grade);
 
   const scoreSummary =
@@ -372,4 +353,3 @@ export function toUIRestaurant(r: Restaurant): UIRestaurant {
   };
 }
 
-export { gradeLabelKr };

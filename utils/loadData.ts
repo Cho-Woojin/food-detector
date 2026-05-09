@@ -1,5 +1,6 @@
 // utils/loadData.ts
-import { CategoryKey, GradeKey, GuKey, Restaurant, RestaurantIndex, RiskTag } from '@/constants/Restaurant';
+import { CategoryKey, GuKey, Restaurant, RestaurantIndex, RiskTag } from '@/constants/Restaurant';
+import { deriveGrade } from '@/utils/adapter';
 
 // 25개 자치구 lazy import (slug 기반)
 const dataMap: Record<GuKey, () => Promise<RawRestaurant[]>> = {
@@ -52,17 +53,10 @@ interface RawRestaurant {
   geoFallback?: boolean;
 }
 
-// 새 grade(S/A/B/C/D/F) → 앱 GradeKey
-function mapGrade(g: RawRestaurant['grade']): GradeKey {
-  switch (g) {
-    case 'S': return 'GOLDEN';
-    case 'A': return 'SILVER';
-    case 'B': return 'BRONZE';
-    case 'C': return 'NEEDS_DATA';
-    case 'D': return 'WARNING';
-    case 'F': return 'INVESTIGATING';
-  }
-}
+// 등급은 score 단일 소스에서 deriveGrade로 파생.
+// JSON의 사전 계산 grade(S/A/B/C/D/F)는 무시 — 상세/지도/좋아요/홈/검색이
+// 동일한 임계값(85/70/55)으로 cheese 등급을 보도록 통일하기 위함.
+// (이전 mapGrade는 JSON 임계값과 deriveGrade 임계값이 어긋나 화면별 cheese가 달라지는 버그 원인이었음)
 
 function adapt(r: RawRestaurant): Restaurant {
   return {
@@ -75,7 +69,7 @@ function adapt(r: RawRestaurant): Restaurant {
     lat: r.lat,
     lng: r.lng,
     score: r.score,
-    grade: mapGrade(r.grade),
+    grade: deriveGrade(r.score),
     a: 0, b: 0, c: 0, d: 0, e: 0,
     hyg: r.flags.hygieneDesignated ? 1 : 0,
     mod: r.flags.hasModel ? 1 : 0,

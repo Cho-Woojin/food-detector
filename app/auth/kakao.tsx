@@ -28,7 +28,16 @@ export default function KakaoCallback() {
       .then((user) => {
         if (user) {
           markLandingSkipped(); // 로그인 = 더 이상 랜딩 보일 필요 X
-          router.replace('/(tabs)' as any);
+          // 리뷰 작성 도중 로그인했다면 해당 식당 작성 페이지로 복귀
+          const pending = typeof sessionStorage !== 'undefined'
+            ? sessionStorage.getItem('food-detector:pending-review')
+            : null;
+          if (pending) {
+            sessionStorage.removeItem('food-detector:pending-review');
+            router.replace(`/review/${pending}` as any);
+          } else {
+            router.replace('/(tabs)' as any);
+          }
         } else {
           setError('카카오 로그인에 실패했어요');
         }
