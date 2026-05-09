@@ -468,10 +468,18 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
         //   → 같은 자리에 마커가 빽빽이 쌓이는 현상 방지
         // - 우선순위: must-show(좋아요/검색강제) > GOLDEN > score 내림차순
         //   (높은 점수 식당이 같은 위치 경쟁에서 항상 이김)
-        // - cellSize는 픽셀 기준 절대값 → 줌 인할수록 자연스럽게 더 많은 마커 노출
-        // - 최대 줌인(level 1, 20m)에서는 dedup 우회 — 사용자가 마커 개별 식별 가능한 단계
-        const PIXEL_CELL = 56; // 마커 bubble 너비 36 + 여백 20
+        // - cellSize는 줌 레벨별 progressive — 확대할수록 dedup이 풀리며 더 많은
+        //   마커가 자연스럽게 노출. 최대 줌인(level 1, 20m)에선 완전 off.
         const NO_DEDUP_LEVEL = 1; // 이 레벨 이하면 모든 후보 그대로 통과
+        // 줌 레벨 → dedup 셀 크기(px). 마커 bubble 너비는 36px이라 셀이 36 이하이면
+        // 사실상 dedup 효과 없음. 줌 인할수록 셀을 줄여 progressive reveal을 보장.
+        const cellSizeForLevel = (lv: number): number => {
+          if (lv <= 1) return 0;     // off (NO_DEDUP_LEVEL)
+          if (lv <= 2) return 36;    // 30m — 거의 모든 마커 노출
+          if (lv <= 3) return 44;    // 50m
+          if (lv <= 4) return 52;    // 100m
+          return 60;                 // 250m(5)+: 가장 빽빽 가능 → 셀 키워 최상위만 노출
+        };
         const applyViewport = () => {
           if (!mapInstanceRef.current) return;
           const bounds = map.getBounds();
@@ -517,9 +525,11 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
           candidates.sort((a, b) => b.pri - a.pri);
 
           // 2) 픽셀 그리드 dedup
-          // - 최대 줌인(level ≤ NO_DEDUP_LEVEL): 모든 후보 통과 (dedup off)
+          // - 셀 크기는 줌 레벨에 따라 단계적으로 변화 (progressive reveal 보장)
+          // - 셀 크기 0 (level ≤ NO_DEDUP_LEVEL): 모든 후보 통과
           // - proj가 없거나(초기 idle 전) 실패하면 dedup 없이 통과 (드물게 발생)
-          const skipDedup = level <= NO_DEDUP_LEVEL;
+          const cellSize = cellSizeForLevel(level);
+          const skipDedup = cellSize === 0;
           const proj = (map as any).getProjection ? (map as any).getProjection() : null;
           const occupied = new Set<string>();
           const cellKey = (cx: number, cy: number) => `${cx}|${cy}`;
@@ -530,8 +540,8 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
             if (!skipDedup && proj && typeof proj.containerPointFromCoords === 'function') {
               try {
                 const pt = proj.containerPointFromCoords(new kakao.maps.LatLng(r.lat, r.lng));
-                cx = Math.floor(pt.x / PIXEL_CELL);
-                cy = Math.floor(pt.y / PIXEL_CELL);
+                cx = Math.floor(pt.x / cellSize);
+                cy = Math.floor(pt.y / cellSize);
                 hasPx = true;
               } catch { /* fallback: dedup skip */ }
             }
