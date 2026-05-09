@@ -2,7 +2,7 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { Icon } from '@/components/Icon';
 import { Cheese } from '@/constants/Assets';
 import { color, radius, spacing, typography } from '@/constants/tokens';
-import { AnimatedHeart, AppHeader, Chip, EmptyState, IconButton, Screen } from '@/components/ui';
+import { AnimatedHeart, AppHeader, Card, Chip, EmptyState, IconButton, Screen } from '@/components/ui';
 // Chip is still used in the filter row above the list.
 import type { Restaurant as RawRestaurant } from '@/constants/Restaurant';
 import { ensureRawById, ensureRecomputedIndex } from '@/utils/dataStore';
@@ -170,6 +170,16 @@ export default function FavoritesScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
+        {totalCount > 0 ? (
+          <BreakdownCard
+            counts={{
+              GOLDEN: adjusted.filter((f) => likedIds.has(f.id) && f.grade === 'GOLDEN').length,
+              SILVER: adjusted.filter((f) => likedIds.has(f.id) && f.grade === 'SILVER').length,
+              BRONZE: adjusted.filter((f) => likedIds.has(f.id) && f.grade === 'BRONZE').length,
+            }}
+            total={totalCount}
+          />
+        ) : null}
         {filtered.map((item, i) => (
           <View key={item.id}>
             <RestaurantRow
@@ -261,6 +271,49 @@ function RestaurantRow({
   );
 }
 
+// 좋아요 분포 — profile에서 옮겨옴. G/S/B만 카운트 (favorites는 이 셋만 표시).
+function BreakdownCard({
+  counts,
+  total,
+}: {
+  counts: { GOLDEN: number; SILVER: number; BRONZE: number };
+  total: number;
+}) {
+  const data = [
+    { key: 'GOLDEN' as const, count: counts.GOLDEN, label: '골든', fg: color.cheese.GOLDEN.fg },
+    { key: 'SILVER' as const, count: counts.SILVER, label: '실버', fg: color.cheese.SILVER.fg },
+    { key: 'BRONZE' as const, count: counts.BRONZE, label: '브론즈', fg: color.cheese.BRONZE.fg },
+  ];
+  return (
+    <Card variant="elevated" padding="l" style={styles.breakdownCard}>
+      <View style={styles.breakdownHeader}>
+        <Text style={styles.breakdownTitle}>나의 좋아요 분포</Text>
+        <Text style={styles.breakdownTotal}>총 {total}곳</Text>
+      </View>
+      <View style={styles.breakdownBar}>
+        {data.map((d) =>
+          d.count > 0 ? (
+            <View
+              key={d.key}
+              style={[styles.breakdownBarSeg, { flex: d.count, backgroundColor: d.fg }]}
+            />
+          ) : null
+        )}
+      </View>
+      <View style={styles.breakdownLegend}>
+        {data.map((d) => (
+          <View key={d.key} style={styles.breakdownChip}>
+            <View style={[styles.breakdownDot, { backgroundColor: d.fg }]} />
+            <Text style={styles.breakdownChipText}>
+              {d.label} {d.count}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </Card>
+  );
+}
+
 const styles = StyleSheet.create({
   controlBar: {
     flexDirection: 'row',
@@ -284,6 +337,29 @@ const styles = StyleSheet.create({
   sortText: { ...typography.captionEmphasized, color: color.text.secondary },
 
   scrollContent: { paddingTop: spacing.xs, paddingBottom: spacing.xxl },
+
+  // 좋아요 분포 카드
+  breakdownCard: { marginHorizontal: spacing.l, marginBottom: spacing.m },
+  breakdownHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginBottom: spacing.s,
+  },
+  breakdownTitle: { ...typography.bodyEmphasized, color: color.text.primary },
+  breakdownTotal: { ...typography.caption, color: color.text.tertiary },
+  breakdownBar: {
+    flexDirection: 'row',
+    height: 8,
+    borderRadius: radius.pill,
+    overflow: 'hidden',
+    backgroundColor: color.fill.tertiary,
+  },
+  breakdownBarSeg: { height: '100%' },
+  breakdownLegend: { flexDirection: 'row', gap: spacing.m, marginTop: spacing.s, flexWrap: 'wrap' },
+  breakdownChip: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  breakdownDot: { width: 8, height: 8, borderRadius: 4 },
+  breakdownChipText: { ...typography.caption, color: color.text.secondary, fontWeight: '600' },
 
   // List row (no card, no shadow)
   row: {

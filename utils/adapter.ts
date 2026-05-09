@@ -340,7 +340,6 @@ export function toUIRestaurant(r: Restaurant): UIRestaurant {
     phone: r.phone && r.phone !== 'None' ? r.phone : '정보 없음',
     hours: defaultHours(r.cat),
     closedDay: '매장 문의',
-    status: '영업중',
     highlight: r.hyg ? '식약처 위생등급 보유' : undefined,
     reviewCount: 0,
     hygieneReviewCount: 0,

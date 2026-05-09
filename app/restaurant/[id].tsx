@@ -133,14 +133,6 @@ export default function RestaurantDetail() {
             <Text style={styles.ownerBadgeText}>사장님</Text>
           </View>
         ) : null}
-        {isAdmin ? (
-          <IconButton
-            icon="star"
-            size="md"
-            accessibilityLabel="사장님 지정 (관리자)"
-            onPress={() => setGrantOpen(true)}
-          />
-        ) : null}
         <IconButton
           icon="share"
           size="md"
@@ -195,9 +187,16 @@ export default function RestaurantDetail() {
         </Card>
 
         {/* 2. 음식점 명 + 카테고리 — 가운데 정렬, 좋아요는 이름 옆 */}
+        {/* 관리자는 가게명 long-press로 사장님 지정 모달 진입 (숨김 입구 — 일반 사용자에게 보이지 않음) */}
         <View style={styles.nameBlock}>
           <View style={styles.nameRow}>
-            <Text style={styles.nameCenter} numberOfLines={2}>{restaurant.name}</Text>
+            <Pressable
+              onLongPress={() => { if (isAdmin) setGrantOpen(true); }}
+              delayLongPress={600}
+              accessibilityRole={isAdmin ? 'button' : undefined}
+              accessibilityLabel={isAdmin ? '관리자 — 길게 눌러 사장님 지정' : undefined}>
+              <Text style={styles.nameCenter} numberOfLines={2}>{restaurant.name}</Text>
+            </Pressable>
             <AnimatedHeart
               active={liked}
               size={22}
@@ -208,12 +207,10 @@ export default function RestaurantDetail() {
           <Text style={styles.categoryCenter}>{restaurant.category}</Text>
         </View>
 
-        {/* 3. 위치 정보 */}
+        {/* 3. 위치 정보 — 자치구만 표시 (영업주기 데이터 없음) */}
         <View style={styles.locationBlock}>
           <Icon name="location" size={14} color={color.text.secondary} />
           <Text style={styles.locationText}>{restaurant.district}</Text>
-          <Text style={styles.locationDot}>·</Text>
-          <Text style={styles.locationStatus}>{restaurant.status}</Text>
         </View>
 
         {/* 4. 탭 */}

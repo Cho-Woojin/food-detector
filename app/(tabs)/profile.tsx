@@ -23,37 +23,14 @@ type MenuItem = {
 };
 type MenuSection = { title: string; items: MenuItem[] };
 
-type GradeBreakdown = { GOLDEN: number; SILVER: number; BRONZE: number; OTHER: number };
-
 export default function ProfileScreen() {
   const likedIds = useLikedIds();
   const likedCount = likedIds.size;
   const kakaoUser = useKakaoUser();
   const reviewCount = useMyReviews().length;
   const ownedIds = useMyOwnedRestaurantIds(kakaoUser?.id ?? null);
-  const [breakdown, setBreakdown] = useState<GradeBreakdown>({ GOLDEN: 0, SILVER: 0, BRONZE: 0, OTHER: 0 });
   const [singleOwnedName, setSingleOwnedName] = useState<string | null>(null);
   const [guideListOpen, setGuideListOpen] = useState(false);
-
-  // 좋아요한 식당의 등급별 분포 계산 — 데이터 로드 후 1회
-  useEffect(() => {
-    if (likedCount === 0) { setBreakdown({ GOLDEN: 0, SILVER: 0, BRONZE: 0, OTHER: 0 }); return; }
-    let cancelled = false;
-    ensureRecomputedById().then((map) => {
-      if (cancelled) return;
-      const next: GradeBreakdown = { GOLDEN: 0, SILVER: 0, BRONZE: 0, OTHER: 0 };
-      for (const id of likedIds) {
-        const row = map.get(id);
-        const gr = row?.gr;
-        if (gr === 'GOLDEN') next.GOLDEN++;
-        else if (gr === 'SILVER') next.SILVER++;
-        else if (gr === 'BRONZE') next.BRONZE++;
-        else next.OTHER++;
-      }
-      setBreakdown(next);
-    });
-    return () => { cancelled = true; };
-  }, [likedIds]);
 
   // 가게 1곳만 등록된 경우 — 메뉴에 가게명 미리보기 노출용
   useEffect(() => {
@@ -160,7 +137,6 @@ export default function ProfileScreen() {
           nickname={kakaoUser.nickname}
           profileImage={kakaoUser.profileImage}
           ownedCount={ownedIds.length}
-          onLogout={() => logoutFromKakao()}
         />
       ) : (
         <GuestCard
@@ -168,9 +144,6 @@ export default function ProfileScreen() {
           onLogin={async () => { await loginWithKakao(); }}
         />
       )}
-
-      {/* 좋아요 등급별 분포 — 데이터 있을 때만 */}
-      {likedCount > 0 && <LikedBreakdownCard breakdown={breakdown} total={likedCount} />}
 
       {/* Menu sections */}
       {sections.map((section, sIdx) => (
@@ -190,41 +163,20 @@ export default function ProfileScreen() {
 
       <Text style={styles.version}>식탐정 v1.0.0 · 식약처 LOCALDATA 기반</Text>
 
+      {/* 로그아웃 — 페이지 가장 아래 눈에 띄지 않는 텍스트 링크 */}
+      {kakaoUser ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="로그아웃"
+          onPress={() => logoutFromKakao()}
+          hitSlop={8}
+          style={({ pressed }) => [styles.logoutLink, pressed && { opacity: 0.5 }]}>
+          <Text style={styles.logoutLinkText}>로그아웃</Text>
+        </Pressable>
+      ) : null}
+
       <HygieneGuideListModal visible={guideListOpen} onClose={() => setGuideListOpen(false)} />
     </Screen>
-  );
-}
-
-function LikedBreakdownCard({ breakdown, total }: { breakdown: GradeBreakdown; total: number }) {
-  // 가로 비율 바 — 골드/실버/브론즈/기타
-  const data = [
-    { key: 'GOLDEN', count: breakdown.GOLDEN, label: '골든', fg: color.cheese.GOLDEN.fg },
-    { key: 'SILVER', count: breakdown.SILVER, label: '실버', fg: color.cheese.SILVER.fg },
-    { key: 'BRONZE', count: breakdown.BRONZE, label: '브론즈', fg: color.cheese.BRONZE.fg },
-    { key: 'OTHER', count: breakdown.OTHER, label: '기타', fg: color.text.tertiary },
-  ];
-  return (
-    <Card variant="elevated" padding="l" style={{ marginTop: spacing.l }}>
-      <View style={styles.statHeader}>
-        <Text style={styles.statTitle}>나의 좋아요 분포</Text>
-        <Text style={styles.statTotal}>총 {total}곳</Text>
-      </View>
-      <View style={styles.statBar}>
-        {data.map((d) =>
-          d.count > 0 ? (
-            <View key={d.key} style={[styles.statBarSeg, { flex: d.count, backgroundColor: d.fg }]} />
-          ) : null
-        )}
-      </View>
-      <View style={styles.statLegend}>
-        {data.map((d) => (
-          <View key={d.key} style={styles.statChip}>
-            <View style={[styles.statDot, { backgroundColor: d.fg }]} />
-            <Text style={styles.statChipText}>{d.label} {d.count}</Text>
-          </View>
-        ))}
-      </View>
-    </Card>
   );
 }
 
@@ -251,15 +203,12 @@ function GuestCard({ likedCount, onLogin }: { likedCount: number; onLogin: () =>
 }
 
 function LoggedInCard({
-  nickname, profileImage, ownedCount, onLogout,
+  nickname, profileImage, ownedCount,
 }: {
   nickname: string;
   profileImage?: string;
   ownedCount: number;
-  onLogout: () => void;
 }) {
-  const likedCount = useLikedIds().size;
-  const reviewCount = useMyReviews().length;
   const isOwner = ownedCount > 0;
   return (
     <Card variant="elevated" padding="l" style={{ marginTop: spacing.l }}>
@@ -283,32 +232,9 @@ function LoggedInCard({
               </View>
             ) : null}
           </View>
-          <Text style={styles.emailText}>
-            {isOwner ? '사장님 인증 — 식탐정 신뢰 영역 반영' : '카카오 계정 연결됨'}
-          </Text>
         </View>
-        <Button variant="ghost" size="sm" onPress={onLogout}>
-          로그아웃
-        </Button>
-      </View>
-
-      <View style={styles.statsRow}>
-        <Stat value={String(likedCount)} label="좋아요" />
-        <View style={styles.statDivider} />
-        <Stat value={String(reviewCount)} label="리뷰" />
-        <View style={styles.statDivider} />
-        <Stat value="—" label="사진" />
       </View>
     </Card>
-  );
-}
-
-function Stat({ value, label }: { value: string; label: string }) {
-  return (
-    <View style={styles.statBox}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
   );
 }
 
@@ -462,7 +388,20 @@ const styles = StyleSheet.create({
     color: color.text.tertiary,
     textAlign: 'center',
     marginTop: spacing.xxl,
-    marginBottom: spacing.xxl,
+    marginBottom: spacing.m,
+  },
+
+  // 로그아웃 — 페이지 가장 아래 텍스트 링크 (작고 흐릿)
+  logoutLink: {
+    alignSelf: 'center',
+    paddingVertical: spacing.s,
+    paddingHorizontal: spacing.m,
+    marginBottom: spacing.xl,
+  },
+  logoutLinkText: {
+    ...typography.footnote,
+    color: color.text.tertiary,
+    textDecorationLine: 'underline',
   },
 
   // 내 위생 리뷰 row
