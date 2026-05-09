@@ -473,12 +473,15 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
         const NO_DEDUP_LEVEL = 1; // 이 레벨 이하면 모든 후보 그대로 통과
         // 줌 레벨 → dedup 셀 크기(px). 마커 bubble 너비는 36px이라 셀이 36 이하이면
         // 사실상 dedup 효과 없음. 줌 인할수록 셀을 줄여 progressive reveal을 보장.
+        // 같은 셀 내 마커 1개만 허용 (3x3 이웃 검사는 너무 sparse해서 "이 지역에서 검색"
+        // 결과가 듬성듬성해지는 문제가 있어 1x1로 완화).
         const cellSizeForLevel = (lv: number): number => {
           if (lv <= 1) return 0;     // off (NO_DEDUP_LEVEL)
           if (lv <= 2) return 36;    // 30m — 거의 모든 마커 노출
-          if (lv <= 3) return 44;    // 50m
-          if (lv <= 4) return 52;    // 100m
-          return 60;                 // 250m(5)+: 가장 빽빽 가능 → 셀 키워 최상위만 노출
+          if (lv <= 3) return 40;    // 50m
+          if (lv <= 4) return 44;    // 100m
+          if (lv <= 5) return 48;    // 250m
+          return 56;                 // 500m+
         };
         const applyViewport = () => {
           if (!mapInstanceRef.current) return;
@@ -546,14 +549,8 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
               } catch { /* fallback: dedup skip */ }
             }
             if (!skipDedup && !mustShow && hasPx) {
-              // 3×3 셀 이웃 검사 — 셀 경계에 걸친 마커도 충돌로 판정
-              let blocked = false;
-              for (let dx = -1; dx <= 1 && !blocked; dx++) {
-                for (let dy = -1; dy <= 1 && !blocked; dy++) {
-                  if (occupied.has(cellKey(cx + dx, cy + dy))) blocked = true;
-                }
-              }
-              if (blocked) continue;
+              // 같은 셀에 이미 마커가 있으면 컬링 — 셀 경계에 걸친 미세 겹침은 허용
+              if (occupied.has(cellKey(cx, cy))) continue;
             }
             if (!skipDedup && hasPx) occupied.add(cellKey(cx, cy));
             want.add(r.id);
