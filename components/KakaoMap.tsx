@@ -469,7 +469,9 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
         // - 우선순위: must-show(좋아요/검색강제) > GOLDEN > score 내림차순
         //   (높은 점수 식당이 같은 위치 경쟁에서 항상 이김)
         // - cellSize는 픽셀 기준 절대값 → 줌 인할수록 자연스럽게 더 많은 마커 노출
+        // - 최대 줌인(level 1, 20m)에서는 dedup 우회 — 사용자가 마커 개별 식별 가능한 단계
         const PIXEL_CELL = 56; // 마커 bubble 너비 36 + 여백 20
+        const NO_DEDUP_LEVEL = 1; // 이 레벨 이하면 모든 후보 그대로 통과
         const applyViewport = () => {
           if (!mapInstanceRef.current) return;
           const bounds = map.getBounds();
@@ -482,9 +484,11 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
           // 1) 후보 식당 + 우선순위 점수 계산
           // - GOLDEN: 9개뿐이라 viewport 무시하고 항상 후보
           // - 좋아요 / 강제 표시(검색): 줌 레벨·viewport 무시하고 mustShow=true (dedup도 우회)
+          // - 최대 줌인(level ≤ NO_DEDUP_LEVEL): minLevel 제한 우회 — viewport 안의 모든 등급 마커 노출
           // - 그 외: viewport + minLevel 둘 다 통과해야 후보
           const liked = likedIdsRef.current;
           const forced = forcedVisibleIdsRef.current;
+          const showAll = level <= NO_DEDUP_LEVEL;
           type Cand = { r: Restaurant; mustShow: boolean; pri: number };
           const candidates: Cand[] = [];
           for (const r of restaurantsRef.current) {
@@ -494,11 +498,16 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
             const isGold = r.grade === 'GOLDEN';
             const mustShow = isLiked || isForced;
             if (!mustShow) {
-              const minLv = GRADE_STYLE[r.grade]?.minLevel ?? 3;
-              if (minLv < 0) continue;
-              if (level > minLv) continue;
-              if (!isGold) {
-                if (r.lat < south || r.lat > north || r.lng < west || r.lng > east) continue;
+              if (showAll) {
+                // viewport만 검사. minLevel/등급 무시.
+                if (!isGold && (r.lat < south || r.lat > north || r.lng < west || r.lng > east)) continue;
+              } else {
+                const minLv = GRADE_STYLE[r.grade]?.minLevel ?? 3;
+                if (minLv < 0) continue;
+                if (level > minLv) continue;
+                if (!isGold) {
+                  if (r.lat < south || r.lat > north || r.lng < west || r.lng > east) continue;
+                }
               }
             }
             // 우선순위: mustShow → GOLDEN → score
@@ -508,7 +517,9 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
           candidates.sort((a, b) => b.pri - a.pri);
 
           // 2) 픽셀 그리드 dedup
+          // - 최대 줌인(level ≤ NO_DEDUP_LEVEL): 모든 후보 통과 (dedup off)
           // - proj가 없거나(초기 idle 전) 실패하면 dedup 없이 통과 (드물게 발생)
+          const skipDedup = level <= NO_DEDUP_LEVEL;
           const proj = (map as any).getProjection ? (map as any).getProjection() : null;
           const occupied = new Set<string>();
           const cellKey = (cx: number, cy: number) => `${cx}|${cy}`;
@@ -516,7 +527,7 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
           const wantedList: Restaurant[] = [];
           for (const { r, mustShow } of candidates) {
             let cx = 0, cy = 0, hasPx = false;
-            if (proj && typeof proj.containerPointFromCoords === 'function') {
+            if (!skipDedup && proj && typeof proj.containerPointFromCoords === 'function') {
               try {
                 const pt = proj.containerPointFromCoords(new kakao.maps.LatLng(r.lat, r.lng));
                 cx = Math.floor(pt.x / PIXEL_CELL);
@@ -524,7 +535,7 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
                 hasPx = true;
               } catch { /* fallback: dedup skip */ }
             }
-            if (!mustShow && hasPx) {
+            if (!skipDedup && !mustShow && hasPx) {
               // 3×3 셀 이웃 검사 — 셀 경계에 걸친 마커도 충돌로 판정
               let blocked = false;
               for (let dx = -1; dx <= 1 && !blocked; dx++) {
@@ -534,7 +545,7 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
               }
               if (blocked) continue;
             }
-            if (hasPx) occupied.add(cellKey(cx, cy));
+            if (!skipDedup && hasPx) occupied.add(cellKey(cx, cy));
             want.add(r.id);
             wantedList.push(r);
           }
