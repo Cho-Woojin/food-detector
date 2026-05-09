@@ -92,29 +92,30 @@ export default function ProfileScreen() {
     };
   })();
 
+  const isOwner = ownedIds.length > 0;
+  const ownerSection: MenuSection = { title: '사장님', items: [ownerMenuItem] };
+  const activitySection: MenuSection = {
+    title: '활동',
+    items: [
+      {
+        icon: 'heart',
+        label: '좋아요한 식당',
+        value: String(likedCount),
+        onPress: () => router.push('/(tabs)/favorites' as any),
+      },
+      {
+        icon: 'pencil',
+        label: '내 위생 리뷰',
+        value: String(reviewCount),
+        onPress: () => router.push('/my-reviews' as any),
+      },
+      { icon: 'camera', label: '업로드한 사진', comingSoon: true, disabled: true },
+    ],
+  };
+
   const sections: MenuSection[] = [
-    {
-      title: '활동',
-      items: [
-        {
-          icon: 'heart',
-          label: '좋아요한 식당',
-          value: String(likedCount),
-          onPress: () => router.push('/(tabs)/favorites' as any),
-        },
-        {
-          icon: 'pencil',
-          label: '내 위생 리뷰',
-          value: String(reviewCount),
-          onPress: () => router.push('/my-reviews' as any),
-        },
-        { icon: 'camera', label: '업로드한 사진', comingSoon: true, disabled: true },
-      ],
-    },
-    {
-      title: '사장님',
-      items: [ownerMenuItem],
-    },
+    // 사장님 권한 보유 시 가게 관리가 가장 위 — 활동보다 우선
+    ...(isOwner ? [ownerSection, activitySection] : [activitySection, ownerSection]),
     {
       title: '안전 가이드',
       items: [
