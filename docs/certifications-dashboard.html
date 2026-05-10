@@ -438,17 +438,17 @@
   <g transform="translate(940, 130)">
     <rect class="src-box" width="240" height="60" fill="#f0f0f5" stroke="#94a3b8"/>
     <text x="14" y="32" class="src-text src-title" fill="#94a3b8">🧀 SILVER</text>
-    <text x="14" y="50" class="src-text src-sub">50~64점 (34,727건, 22.8%)</text>
+    <text x="14" y="50" class="src-text src-sub">40~64점 (36,687건, 24.1%)</text>
   </g>
   <g transform="translate(940, 210)">
     <rect class="src-box" width="240" height="60" fill="#fdf3e7" stroke="#cd7f32"/>
     <text x="14" y="32" class="src-text src-title" fill="#cd7f32">🧀 BRONZE</text>
-    <text x="14" y="50" class="src-text src-sub">&lt; 50점 (113,532건, 74.6%)</text>
+    <text x="14" y="50" class="src-text src-sub">&lt; 40점 (111,573건, 73.3%)</text>
   </g>
   <g transform="translate(940, 290)">
     <rect class="src-box" width="240" height="90" fill="#ffe5e3" stroke="#ff3b30"/>
     <text x="14" y="32" class="src-text src-title" fill="#ff3b30">🚨 ROTTEN</text>
-    <text x="14" y="50" class="src-text src-sub">&lt; 50점 + 과락 조건:</text>
+    <text x="14" y="50" class="src-text src-sub">&lt; 40점 + 과락 조건:</text>
     <text x="14" y="68" class="src-text src-sub">• 사용자 리뷰 10+ AND 평점≤2.0</text>
     <text x="14" y="86" class="src-text src-sub">• 위생직결 위반 (현재 23건)</text>
   </g>
@@ -529,7 +529,7 @@
 
 <h2>🎯 모든 인증 조합 → 점수 → 등급 → 식당 수</h2>
 
-<p style="font-size: 13px; color: var(--muted); margin-bottom: 16px;">베이스 25점 + 각 인증 독립 배점 + 페널티. 위생등급 없을 때만 (모범+안심+착한) cap 35. 활동 점수(사장님+사용자) 0일 때 기준. <b>GOLDEN ≥ 65, SILVER 50~64, BRONZE &lt; 50</b>.</p>
+<p style="font-size: 13px; color: var(--muted); margin-bottom: 16px;">베이스 25점 + 각 인증 독립 배점 + 페널티. 위생등급 없을 때만 (모범+안심+착한) cap 35. 활동 점수(사장님+사용자) 0일 때 기준. <b>GOLDEN ≥ 65, SILVER 40~64, BRONZE &lt; 40</b>.</p>
 
 <div class="scenario-grid">
 
@@ -678,7 +678,7 @@
     <div class="result"><div class="score">55</div><span class="grade-pill grade-SILVER">🧀 SILVER</span><span style="margin-left: auto; color: var(--muted); font-size: 12px;"><b>42</b>곳</span></div>
   </div>
 
-  <!-- BRONZE -->
+  <!-- 안심·착한 단독: 40점, SILVER (인증 1개 이상이면 SILVER 룰) -->
   <div class="scenario-card">
     <div class="combo">
       <span class="chip off chip-hg">위생</span>
@@ -687,7 +687,7 @@
       <span class="chip off chip-gp">착한</span>
     </div>
     <div class="calc">25 + 15 = 40</div>
-    <div class="result"><div class="score">40</div><span class="grade-pill grade-BRONZE">🧀 BRONZE</span><span style="margin-left: auto; color: var(--muted); font-size: 12px;"><b>980</b>곳</span></div>
+    <div class="result"><div class="score">40</div><span class="grade-pill grade-SILVER">🧀 SILVER</span><span style="margin-left: auto; color: var(--muted); font-size: 12px;"><b>980</b>곳</span></div>
   </div>
 
   <div class="scenario-card">
@@ -698,8 +698,11 @@
       <span class="chip on chip-gp">착한</span>
     </div>
     <div class="calc">25 + 15 = 40</div>
-    <div class="result"><div class="score">40</div><span class="grade-pill grade-BRONZE">🧀 BRONZE</span><span style="margin-left: auto; color: var(--muted); font-size: 12px;"><b>983</b>곳</span></div>
+    <div class="result"><div class="score">40</div><span class="grade-pill grade-SILVER">🧀 SILVER</span><span style="margin-left: auto; color: var(--muted); font-size: 12px;"><b>983</b>곳</span></div>
   </div>
+
+  <!-- BRONZE: 인증 0개 -->
+
 
   <div class="scenario-card" style="border-color: #cd7f32;">
     <div class="combo">
@@ -715,7 +718,7 @@
 </div>
 
 <p style="font-size: 13px; color: var(--muted); margin-top: 16px;">
-  💡 <b>활동 점수 더하면 등급 격상 가능</b>: 사장님 청소 인증 + 사용자 별점 리뷰가 더해짐. 예: 위생등급 단독(60) + 활동 5점 = 65 → GOLDEN. 또는 안심 단독(40) + 활동 10점 = 50 → SILVER. 아무것도 없는 식당(25)도 활동 만점(30) 받으면 55 → SILVER.<br>
+  💡 <b>활동 점수 더하면 등급 격상 가능</b>: 사장님 청소 인증 + 사용자 별점 리뷰가 더해짐. 예: 위생등급 단독(60) + 활동 5점 = 65 → GOLDEN. 아무것도 없는 식당(25)도 활동 15점 받으면 40 → SILVER.<br>
   <span style="margin-top: 8px; display: inline-block;">⚠️ <b>위생등급 없으면 GOLD 진입 불가</b> — 모범+안심+착한 4관왕이어도 cap 35로 묶여 SILVER가 한계 (활동 점수 추가 시 GOLD 가능).</span>
 </p>
 

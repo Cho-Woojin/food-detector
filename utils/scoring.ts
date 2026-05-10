@@ -21,10 +21,11 @@ export const SCORE_MAX = {
 
 // ===== 등급 임계값 =====
 // SILVER 임계값은 "트랩 치즈 면제 라인"도 겸함 — 이 값 이상이면 과락 있어도 BRONZE 이상.
+// SILVER 40: 인증 1개라도 받으면 SILVER (안심 단독 40 / 착한 단독 40 진입).
 // GOLDEN 65: 위생등급 + 추가 인증 1개+ 받은 식당이 launch 시점에도 GOLDEN 진입 가능.
 export const GRADE_THRESHOLDS = {
   GOLDEN: 65,
-  SILVER: 50,
+  SILVER: 40,
 } as const;
 
 // ===== 트랩 치즈 과락 조건 =====
