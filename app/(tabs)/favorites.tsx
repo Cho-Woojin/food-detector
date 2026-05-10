@@ -98,7 +98,9 @@ export default function FavoritesScreen() {
       const reviewImp = impact ?? EMPTY_REVIEW_IMPACT;
       const ownerDelta = owner?.delta ?? 0;
       const { score, grade } = adjustedScoreAndGrade(raw, reviewImp, ownerDelta);
-      const safeGrade: Grade = grade === 'INVESTIGATING' ? 'BRONZE' : grade;
+      // 좋아요 화면은 G/S/B만 표시 — ROTTEN까지 떨어지면 BRONZE로 클램프 유지
+      const safeGrade: Grade =
+        grade === 'GOLDEN' || grade === 'SILVER' || grade === 'BRONZE' ? grade : 'BRONZE';
       return { ...f, score, grade: safeGrade };
     });
   }, [favorites, impactMap, ownerImpactMap, rawMap]);

@@ -46,7 +46,7 @@ const MASCOT_BY_GRADE: Record<Grade, MascotKey> = {
   GOLDEN: 'ceremony',
   SILVER: 'thanks',
   BRONZE: 'thanks',
-  INVESTIGATING: 'search',
+  ROTTEN: 'warning',
 };
 
 export default function RestaurantDetail() {
