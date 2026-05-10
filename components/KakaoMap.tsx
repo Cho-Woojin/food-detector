@@ -57,6 +57,43 @@ const SELECTED_BOOST = 1;
 // background-image 또는 캔버스로 렌더하는 경우 적용 안 될 수 있어서 신뢰도 떨어짐.
 const SHADOW_PAD = 6;
 
+// 같은 좌표(같은 건물·다층 입주)에 식당이 N개 있으면 모두 같은 픽셀에 쌓여
+// 최상위 1개만 보이는 문제. 가장 점수 높은 마커는 원래 좌표 유지, 나머지를
+// 작은 ring(반경 ~25m)으로 균등 분포해서 모두 보이도록.
+// 좌표는 5소수점(약 1m) 기준으로 그룹핑 — 거의 같은 건물 입주가 대상.
+const COLOCATED_JITTER_RADIUS_M = 25; // ring 반경(m)
+const ONE_DEG_LAT_M = 111_111;        // 1° 위도 ≈ 111,111m
+function jitterColocated(list: Restaurant[]): Restaurant[] {
+  const groups = new Map<string, Restaurant[]>();
+  for (const r of list) {
+    if (!r.lat || !r.lng) continue;
+    const key = `${r.lat.toFixed(5)}|${r.lng.toFixed(5)}`;
+    const arr = groups.get(key);
+    if (arr) arr.push(r);
+    else groups.set(key, [r]);
+  }
+  const offsetById = new Map<string, { dLat: number; dLng: number }>();
+  for (const [, group] of groups) {
+    if (group.length <= 1) continue;
+    // 입력이 score desc 정렬 상태 → 첫 항목(최고점)은 원좌표 유지, 1번부터 ring 분배
+    const others = group.length - 1;
+    for (let i = 1; i < group.length; i++) {
+      const angle = (2 * Math.PI * (i - 1)) / others;
+      const dLat = (COLOCATED_JITTER_RADIUS_M * Math.cos(angle)) / ONE_DEG_LAT_M;
+      const cosLat = Math.cos((group[i].lat * Math.PI) / 180);
+      const dLng =
+        (COLOCATED_JITTER_RADIUS_M * Math.sin(angle)) / (ONE_DEG_LAT_M * Math.max(cosLat, 0.1));
+      offsetById.set(group[i].id, { dLat, dLng });
+    }
+  }
+  if (offsetById.size === 0) return list;
+  return list.map((r) => {
+    const off = offsetById.get(r.id);
+    if (!off) return r;
+    return { ...r, lat: r.lat + off.dLat, lng: r.lng + off.dLng };
+  });
+}
+
 // 픽사 스타일 3D 치즈 PNG 에셋을 base64로 마커 SVG에 임베드. 한 번만 로드.
 type CheeseB64 = { gold: string; silver: string; bronze: string };
 
@@ -223,9 +260,14 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
   // 최신 cheeseB64 ref — init useEffect가 한 번만 실행되므로 클로저가 stale해지지 않게 ref로 읽음
   const cheeseB64Ref = useRef<CheeseB64 | null>(null);
 
-  // 점수 내림차순 정렬 — 가까운 위치에 겹친 마커 중 등급 높은 것 우선
+  // 점수 내림차순 정렬 — 가까운 위치에 겹친 마커 중 등급 높은 것 우선.
+  // 같은 좌표(같은 건물·다층 입주) 식당은 작은 ring으로 흩어 배치 → 모두 보이게.
+  // 가장 점수 높은 마커가 원래 좌표 유지, 나머지는 25m 반경에 균등 분포.
   const sortedRestaurants = useMemo(
-    () => [...restaurants].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)),
+    () => {
+      const sorted = [...restaurants].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+      return jitterColocated(sorted);
+    },
     [restaurants]
   );
 
