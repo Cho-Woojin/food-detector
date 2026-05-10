@@ -1,4 +1,4 @@
-export type Grade = 'GOLDEN' | 'SILVER' | 'BRONZE' | 'INVESTIGATING';
+export type Grade = 'GOLDEN' | 'SILVER' | 'BRONZE' | 'ROTTEN';
 
 export type AxisKey = 'hygiene' | 'admin' | 'trust' | 'review' | 'gap';
 
@@ -392,7 +392,7 @@ export const RESTAURANTS: Restaurant[] = [
     id: '7',
     name: '봉천이네',
     category: '국밥',
-    grade: 'INVESTIGATING',
+    grade: 'ROTTEN',
     score: 64,
     distance: '1.5km',
     district: '관악구 봉천동',
@@ -405,7 +405,7 @@ export const RESTAURANTS: Restaurant[] = [
     hygieneReviewCount: 3,
     axes: investigatingAxes(),
     detectiveNote: '최근 행정처분 이력이 있어 식탐정이 지켜보고 있습니다.',
-    scoreSummary: '64점 수사 중 — 최근 행정처분 이력으로 식탐정이 모니터링',
+    scoreSummary: '64점 썩은 치즈 — 최근 행정처분 이력으로 식탐정이 모니터링',
     menuGuide: menuGuideGukbap(),
     adminActions: [
       {

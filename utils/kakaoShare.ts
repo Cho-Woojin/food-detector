@@ -45,25 +45,21 @@ type ShareRestaurant = {
   cat: string;
   gu: string;
   score: number;
-  grade: 'GOLDEN' | 'SILVER' | 'BRONZE' | 'INVESTIGATING' | 'WARNING' | 'NEEDS_DATA';
+  grade: 'GOLDEN' | 'SILVER' | 'BRONZE' | 'ROTTEN';
 };
 
 const GRADE_LABEL: Record<ShareRestaurant['grade'], string> = {
-  GOLDEN: '골든 치즈',
+  GOLDEN: '골드 치즈',
   SILVER: '실버 치즈',
   BRONZE: '브론즈 치즈',
-  WARNING: '주의',
-  INVESTIGATING: '조사 중',
-  NEEDS_DATA: '데이터 수집중',
+  ROTTEN: '썩은 치즈',
 };
 
 const GRADE_IMG: Record<ShareRestaurant['grade'], string> = {
   GOLDEN: '/cheese/gold.png',
   SILVER: '/cheese/silver.png',
   BRONZE: '/cheese/bronze.png',
-  WARNING: '/cheese/bronze.png',
-  INVESTIGATING: '/cheese/bronze.png',
-  NEEDS_DATA: '/cheese/bronze.png',
+  ROTTEN: '/cheese/bronze.png',
 };
 
 export async function shareRestaurantToKakao(r: ShareRestaurant): Promise<boolean> {

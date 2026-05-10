@@ -46,14 +46,54 @@ proj4.defs(
 );
 const toWGS84 = (x, y) => proj4('EPSG:5174', 'WGS84', [x, y]);
 
-// ---- Grade by score ----
-function gradeFor(score) {
-  if (score >= 90) return { grade: 'S', color: '#FFD700' };
-  if (score >= 75) return { grade: 'A', color: '#22C55E' };
-  if (score >= 60) return { grade: 'B', color: '#3B82F6' };
-  if (score >= 45) return { grade: 'C', color: '#F59E0B' };
-  if (score >= 30) return { grade: 'D', color: '#EF4444' };
-  return { grade: 'F', color: '#6B7280' };
+// ---- Data score (0~50) ----
+// 기본 25점 + 외부 시그널 가감. 자세한 룰은 data/SCORING_AND_SCHEMA.md
+//
+// 종합 점수(0~100)는 클라이언트에서 dataScore + ownerScore + userScore로 계산.
+// 등급(GOLDEN/SILVER/BRONZE/ROTTEN)도 클라이언트에서 deriveGrade()로 결정.
+// 따라서 split 결과 JSON에는 grade/color를 박지 않는다.
+const PUNISH_DELTAS = {
+  '영업소폐쇄': -50, '영업정지': -20, '품목제조정지': -15,
+  '과태료': -8, '과징금': -8, '시정명령': -3, '경고': -2,
+};
+
+function computeDataScore(flags) {
+  // flags: { hygieneDesignated, hasModel, evalGrade, punishTypes }
+  let data = 25;  // base
+  let hygiene = 0, evalDelta = 0, punish = 0, model = 0;
+
+  // 위생 / 평가 — mutually exclusive (위생등급이 우선)
+  if (flags.hygieneDesignated) {
+    hygiene = 20;
+    data += hygiene;
+  } else if (flags.evalGrade === '자율관리업소') {
+    evalDelta = 10; data += evalDelta;
+  } else if (flags.evalGrade === '일반관리업소') {
+    evalDelta = 3; data += evalDelta;
+  } else if (flags.evalGrade === '중점관리업소') {
+    evalDelta = -15; data += evalDelta;
+  } else if (flags.evalGrade === '평가불능업소') {
+    evalDelta = -5; data += evalDelta;
+  }
+
+  // 모범음식점 (독립적으로 가산)
+  if (flags.hasModel) {
+    model = 5;
+    data += model;
+  }
+
+  // 행정처분 (cumulative)
+  const types = (flags.punishTypes || '').split('|').filter(Boolean);
+  for (const t of types) {
+    const delta = PUNISH_DELTAS[t] ?? -3;
+    punish += delta;
+  }
+  data += punish;
+
+  // 0~50 클램프
+  data = Math.max(0, Math.min(50, data));
+
+  return { data, hygiene, evalDelta, punish, model };
 }
 
 // ---- Seoul 25 districts allowlist ----
@@ -297,7 +337,7 @@ console.log(`parsed ${rows.length} rows`);
 if (!fs.existsSync(OUT_DIR)) fs.mkdirSync(OUT_DIR, { recursive: true });
 
 const buckets = new Map();
-const stats = { total: 0, geoOk: 0, geoFail: 0, byGu: {}, byCat: {}, byGrade: {}, byRisk: {}, byMenu: {} };
+const stats = { total: 0, geoOk: 0, geoFail: 0, byGu: {}, byCat: {}, byDataScore: {}, byRisk: {}, byMenu: {} };
 
 const num = (v) => {
   if (v === undefined || v === null || v === '') return null;
@@ -331,8 +371,15 @@ for (const r of rows) {
   }
   if (lat !== null) stats.geoOk++; else stats.geoFail++;
 
-  const score = num(r.score) ?? 0;
-  const { grade, color } = gradeFor(score);
+  const flags = {
+    hygieneDesignated: bool(r.hygiene_designated),
+    hasModel: bool(r.has_model),
+    punishCount: num(r.punish_count) ?? 0,
+    punishTypes: r.punish_types || '',
+    evalGrade: r.eval_grade || '',
+  };
+  const breakdown = computeDataScore(flags);
+  const score = breakdown.data;  // 데이터 점수(0~50). 종합 점수는 클라이언트에서 +ownerScore+userScore.
   const category = reclassifyCategory(r.category, r.name);
   const riskTags = detectRisks(r.category, r.name);
   const menuHints = detectMenuHints(r.name);
@@ -347,22 +394,10 @@ for (const r of rows) {
     roadAddr: r.road_addr || '',
     phone: r.phone || '',
     lat, lng,
-    score, grade, color,
+    score,
+    breakdown,
+    flags,
     riskTags, menuHints,
-    breakdown: {
-      base: num(r.base_score) ?? 0,
-      hygiene: num(r.hygiene_designated_delta) ?? 0,
-      evalDelta: num(r.eval_delta) ?? 0,
-      punish: num(r.punish_delta) ?? 0,
-      model: num(r.model_delta) ?? 0,
-    },
-    flags: {
-      hygieneDesignated: bool(r.hygiene_designated),
-      hasModel: bool(r.has_model),
-      punishCount: num(r.punish_count) ?? 0,
-      punishTypes: r.punish_types || '',
-      evalGrade: r.eval_grade || '',
-    },
   };
 
   if (!buckets.has(gu)) buckets.set(gu, []);
@@ -371,7 +406,9 @@ for (const r of rows) {
   stats.total++;
   stats.byGu[gu] = (stats.byGu[gu] || 0) + 1;
   stats.byCat[category] = (stats.byCat[category] || 0) + 1;
-  stats.byGrade[grade] = (stats.byGrade[grade] || 0) + 1;
+  // 데이터 점수 분포 (0~50)
+  const bucket = score >= 50 ? '50' : score >= 40 ? '40-49' : score >= 30 ? '30-39' : score >= 20 ? '20-29' : score >= 10 ? '10-19' : '0-9';
+  stats.byDataScore[bucket] = (stats.byDataScore[bucket] || 0) + 1;
   for (const t of riskTags) stats.byRisk[t] = (stats.byRisk[t] || 0) + 1;
   for (const m of menuHints) stats.byMenu[m] = (stats.byMenu[m] || 0) + 1;
 }
@@ -419,7 +456,7 @@ fs.writeFileSync(
       gusCount,
       guSlug: guSlugMap,
       categories: Object.keys(stats.byCat).sort(),
-      gradesDistribution: stats.byGrade,
+      dataScoreDistribution: stats.byDataScore,
       riskDistribution: stats.byRisk,
       lastUpdated: new Date().toISOString().slice(0, 10),
     },
@@ -436,7 +473,7 @@ fs.writeFileSync(
     geo: { ok: stats.geoOk, fail: stats.geoFail },
     files: indexEntries,
     byCategory: stats.byCat,
-    byGrade: stats.byGrade,
+    byDataScore: stats.byDataScore,
     byRisk: stats.byRisk,
   }, null, 2)
 );

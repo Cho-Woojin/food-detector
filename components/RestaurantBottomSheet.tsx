@@ -71,12 +71,10 @@ const RISK_LABEL: Partial<Record<RiskTag, string>> = {
 
 // 등급별 표시 메타. 치즈 갯수 + 라벨 + 한줄평
 const GRADE_META: Record<GradeKey, { count: number; label: string; phrase: string }> = {
-  GOLDEN:        { count: 3, label: '골든 치즈',     phrase: '위생·신뢰 모두 우수' },
-  SILVER:        { count: 2, label: '실버 치즈',     phrase: '최근 위생 상태 양호' },
-  BRONZE:        { count: 1, label: '브론즈 치즈',    phrase: '일부 항목 개선 필요' },
-  WARNING:       { count: 0, label: '주의',         phrase: '행정처분 이력 있음' },
-  INVESTIGATING: { count: 0, label: '조사 중',       phrase: '식탐정이 모니터링 중' },
-  NEEDS_DATA:    { count: 0, label: '데이터 수집 중', phrase: '추가 정보 수집 필요' },
+  GOLDEN: { count: 3, label: '골드 치즈',   phrase: '데이터·사장님·사용자 모두 우수' },
+  SILVER: { count: 2, label: '실버 치즈',   phrase: '믿고 갈 수 있는 식당' },
+  BRONZE: { count: 1, label: '브론즈 치즈', phrase: '평범한 동네 식당' },
+  ROTTEN: { count: 0, label: '썩은 치즈',   phrase: '주의가 필요한 식당' },
 };
 
 
@@ -104,11 +102,12 @@ export const RestaurantBottomSheet = forwardRef<RestaurantBottomSheetHandle, Pro
     // 이전엔 if-early-return으로 두 BottomSheet를 분기 렌더했는데, restaurant 토글 시
     // 한쪽이 unmount → onClose fire → setSelected(null) 사이클로 시트가 떴다 사라짐.
     const cheeseFg = ui ? (color.cheese[ui.grade]?.fg ?? color.text.primary) : color.text.primary;
-    const meta = ui ? (GRADE_META[ui.grade] ?? GRADE_META.NEEDS_DATA) : GRADE_META.NEEDS_DATA;
+    const meta = ui ? (GRADE_META[ui.grade] ?? GRADE_META.BRONZE) : GRADE_META.BRONZE;
     const cheeseImg = !ui ? Cheese.bronze
       : ui.grade === 'GOLDEN' ? Cheese.gold
         : ui.grade === 'SILVER' ? Cheese.silver
-        : Cheese.bronze;
+        : ui.grade === 'BRONZE' ? Cheese.bronze
+        : null; // ROTTEN — 치즈 이미지 X (텍스트 라벨로 표시)
 
     const goDetail = () => { if (restaurant) router.push(`/restaurant/${restaurant.id}` as any); };
     const risks = restaurant?.riskTags ?? [];
@@ -150,8 +149,11 @@ export const RestaurantBottomSheet = forwardRef<RestaurantBottomSheetHandle, Pro
           {/* 점수 + 치즈 (이름보다 아래·작게) */}
           <View style={styles.scoreRow}>
             <Text style={[styles.score, { color: cheeseFg }]}>{ui.score}점</Text>
-            {meta.count > 0 && (
+            {meta.count > 0 && cheeseImg && (
               <Image source={cheeseImg} style={styles.cheeseIcon} resizeMode="contain" />
+            )}
+            {ui.grade === 'ROTTEN' && (
+              <Text style={[styles.score, { color: cheeseFg }]}>· 썩은 치즈</Text>
             )}
           </View>
 

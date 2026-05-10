@@ -101,17 +101,18 @@
       "패스트푸드",
       "한식"
     ],
-    "gradesDistribution": {
-      "C": 117728,
-      "A": 31763,
-      "F": 1407,
-      "D": 1088,
-      "B": 252
+    "dataScoreDistribution": {
+      "50": 3556,
+      "40-49": 28208,
+      "30-39": 6818,
+      "20-29": 111192,
+      "0-9": 2407,
+      "10-19": 57
     },
     "riskDistribution": {
       "raw_fish": 2866,
-      "raw_meat": 673,
       "shellfish_raw": 146,
+      "raw_meat": 673,
       "fugu": 91,
       "egg_raw": 2
     },

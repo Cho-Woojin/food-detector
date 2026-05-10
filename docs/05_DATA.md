@@ -1,6 +1,7 @@
 # 05. 데이터
 
 > 식탐정 서비스가 돌아가는 데 필요한 모든 데이터. 총 ~82MB, 전부 git 추적.
+> 점수 산정 룰의 자세한 명세는 [data/SCORING_AND_SCHEMA.md](../data/SCORING_AND_SCHEMA.md), 출처는 [data/DATA_SOURCES.md](../data/DATA_SOURCES.md).
 
 ## 📦 구조
 
@@ -10,7 +11,9 @@ data/
 │   ├── restaurants-{slug}.json × 25  # 152,238개 식당
 │   └── _index.json                   # split 빌드 메타
 ├── restaurants-index.json            # 자치구 인덱스 (3KB)
-└── hygiene-guides.json               # 위생 가이드 콘텐츠 (5KB)
+├── hygiene-guides.json               # 위생 가이드 콘텐츠 (5KB)
+├── DATA_SOURCES.md                   # 출처 명세 (10KB)
+└── SCORING_AND_SCHEMA.md             # 점수 + 스키마 명세 (19KB)
 ```
 
 `_archive/` (gitignore) — 옛 데이터 + 원본 CSV. 서비스 구동에는 불필요.
@@ -25,45 +28,48 @@ data/
 
 | 그룹 | 필드 | 용도 |
 |---|---|---|
-| 신원 | `id`, `name`, `category` | 검색·카드·필터 |
+| 신원 | `id`, `name`, `category`, `categoryRaw` | 검색·카드·필터 |
 | 위치 | `gu`, `addr`, `roadAddr`, `lat`, `lng`, `phone` | 지도 마커·상세 |
-| 평가 | `score` (0~100), `grade` (S~F), `color` | Hero 점수·치즈 등급 |
-| 점수 내역 | `breakdown.{base, hygiene, evalDelta, punish, model}` | "왜 N점?" 펼침 |
-| 인증/제재 | `flags.{hygieneDesignated, hasModel, punishCount, punishTypes, evalGrade}` | 뱃지·경고 |
+| 데이터 점수 | `score` (0~50), `breakdown.{data, hygiene, evalDelta, punish, model}` | 종합 점수 계산용 base |
+| 인증/제재 | `flags.{hygieneDesignated, hasModel, punishCount, punishTypes, evalGrade}` | 뱃지·경고·치즈 등급 분기 |
 | 위험 가이드 | `riskTags`, `menuHints` | 메뉴 카테고리 경고·시즌 가이드 |
 
-### grade 컷오프
+> JSON의 `score`는 **데이터 점수(0~50)** — 사장님·사용자 점수가 0인 초기값. 앱이 매 렌더 시 `score + ownerScore + userScore = 종합점수(0~100)`를 계산. 종합 점수와 등급은 JSON에 저장 X.
 
-`scripts/split-restaurants.js`의 `gradeFor()`에서 결정.
+### 종합 점수 = 50 + 25 + 25
 
-| score | grade | color |
+| 컴포넌트 | 만점 | 출처 | 초기값 |
+|---|---|---|---|
+| 데이터 | 50 | 식약처 + 행안부 공공데이터 (JSON `score`) | 시그널 없을 시 25 |
+| 사장님 | 25 | 사장님 청소 인증 (최근 30일) | 0 |
+| 사용자 | 25 | 사용자 별점 평균 × 5 | 0 |
+
+자세한 점수 룰·테이블은 [data/SCORING_AND_SCHEMA.md](../data/SCORING_AND_SCHEMA.md).
+
+### 치즈 등급 (4단계)
+
+`utils/scoring.ts`의 `deriveGrade()`에서 결정 — 종합 점수 + 과락 조건 결합.
+
+| 등급 | 조건 | 색상 |
 |---|---|---|
-| ≥ 90 | S | #FFD700 (골드) |
-| 75~89 | A | #22C55E (초록) |
-| 60~74 | B | #3B82F6 (파랑) |
-| 45~59 | C | #F59E0B (주황) |
-| 30~44 | D | #EF4444 (빨강) |
-| < 30 | F | #6B7280 (회색) |
+| **GOLDEN** (골드 치즈) | score ≥ 80 | `#F1C40F` |
+| **SILVER** (실버 치즈) | 50 ≤ score < 80 | `#94A3B8` |
+| **BRONZE** (브론즈 치즈) | score < 50 (기본) | `#CD7F32` |
+| **ROTTEN** (썩은 치즈) | score < 50 AND 과락 | `#FF3B30` |
 
-앱 표시 라벨(GOLDEN/SILVER/BRONZE/...) 매핑은 `utils/loadData.ts`의 `mapGrade()` 참조.
+**썩은 치즈 과락 조건** (50 미만일 때만 평가):
+- 과락 1: 사용자 리뷰 ≥ 10개 AND 사용자 점수 ≤ 10/25
+- 과락 2: 중점관리업소 OR 영업정지 OR 영업소폐쇄 OR 과태료/과징금
+- 둘 중 하나라도 → ROTTEN, 그 외엔 BRONZE
 
-### 점수 출처
-
-`score`와 `breakdown` 값은 **외부에서 미리 계산된 CSV** (`_archive/restaurants_with_scores.csv`)로 들어옴. split 스크립트는 자치구 분리·grade 매핑만 수행. 가중치 자체는 CSV 생성 단계에서 결정되며 이 저장소 외부.
-
-`breakdown` 5개 컴포넌트:
-- `base` — 기본 점수
-- `hygiene` — 식약처 위생등급 가산
-- `evalDelta` — 위생관리평가 ±
-- `punish` — 행정처분 감점
-- `model` — 행안부 모범음식점 가산
+> 50점 이상이면 과락이 있어도 SILVER 이상으로 클램프. 데이터 만점(50)이면 자동 SILVER 진입.
 
 ---
 
 ## 2️⃣ 자치구 인덱스 (`restaurants-index.json`)
 
 ```json
-{ "meta": { "totalCount": 152238, "gus": [...25개] } }
+{ "meta": { "totalCount": 152238, "gus": [...25개], "gusCount": {...}, ... } }
 ```
 
 GPS → 자치구 매핑, 로드할 chunk 결정에 사용.
@@ -78,18 +84,23 @@ GPS → 자치구 매핑, 로드할 chunk 결정에 사용.
 
 ## 🛠 갱신 절차
 
-1. 새 CSV 받음 → `_archive/restaurants_with_scores.csv`로 저장
-2. `node scripts/split-restaurants.js` 실행
+데이터 점수 룰 또는 분류 로직이 바뀌면:
+
+1. (필요 시) 새 CSV 받음 → `_archive/restaurants_with_scores.csv`로 저장
+2. `node scripts/split-restaurants.js` 실행 (CSV → 자치구별 JSON 재생성)
+   - 또는 CSV 없이 점수만 재계산: `node scripts/recompute-scores.js`
 3. 산출물 갱신: `data/by-gu/*.json` (25개) + `_index.json` + `restaurants-index.json`
-4. **이 문서도 함께 확인/갱신** — 필드 추가·삭제, grade 컷, 절차·전제 변경 시 필수
+4. **이 문서 + [data/SCORING_AND_SCHEMA.md](../data/SCORING_AND_SCHEMA.md)도 함께 갱신** — 필드·grade 컷·과락·절차 변경 시 필수
 5. `git commit` → Vercel 자동 배포
 
 ---
 
 ## ⚠️ 한계
 
+- **사장님 청소 인증 시스템은 개발 중** — `utils/owner.ts`에 구조만 있고 실제 인증 데이터는 아직 0. 기능 완성 시 자동 반영.
+- **사용자 리뷰는 로컬 storage** — 백엔드 부재 동안 `localStorage`에 영속. 디바이스 간 동기화 X.
 - **정적 스냅샷** — 신규 식당·신규 행정처분 즉시 반영 X (재빌드 필요)
-- **사용자 리뷰·사장님 인증 데이터 없음** — 5축 점수 중 일부 필드는 0
+- **데이터 점수만의 한계** — 위생등급 + 모범 식당도 데이터 점수 만점이 50/100. 사장님·사용자 활동 없으면 BRONZE에서 못 벗어남. 활성 식당 보상 구조.
 - **메인 hero 위험지수는 별개** — 환경·식중독은 추후 외부 API 예정
 
-본래 계획은 FastAPI + PostgreSQL + PostGIS 백엔드. 현재는 MVP용 정적 데이터.
+본래 계획은 FastAPI + PostgreSQL + PostGIS 백엔드. 현재는 MVP용 정적 데이터 + 클라이언트 storage.

@@ -1,6 +1,8 @@
 // constants/Restaurant.ts
 
-export type GradeKey = 'GOLDEN' | 'SILVER' | 'BRONZE' | 'INVESTIGATING' | 'WARNING' | 'NEEDS_DATA';
+// 4단계 치즈 등급 — utils/scoring.ts의 deriveGrade()로 결정.
+// GOLDEN ≥ 80, SILVER 60~79, BRONZE < 60 (기본), ROTTEN < 60 + 과락 조건
+export type GradeKey = 'GOLDEN' | 'SILVER' | 'BRONZE' | 'ROTTEN';
 
 // 새 카테고리 (CSV 재분류)
 export type CategoryKey =
@@ -27,8 +29,14 @@ export interface Restaurant {
   phone: string | null;
   lat: number;
   lng: number;
+  // 종합 점수(0~100). loadData에서는 dataScore(=초기 dataScore + 0 + 0)으로 설정,
+  // 화면이 owner/user 반영해 재계산 (adjustedScoreAndGrade) 시 갱신.
   score: number;
   grade: GradeKey;
+  // 점수 컴포넌트 (utils/scoring.ts와 일치)
+  dataScore: number;   // 0~50 (정적, JSON에서 옴)
+  ownerScore: number;  // 0~25 (런타임)
+  userScore: number;   // 0~25 (런타임)
   // 5축 (adapter가 합성)
   a: number; b: number; c: number; d: number; e: number;
   hyg: 0 | 1;
@@ -40,8 +48,14 @@ export interface Restaurant {
   // 신규
   riskTags?: RiskTag[];
   menuHints?: string[];
-  color?: string;          // grade 기반 마커 색상
   geoFallback?: boolean;   // 좌표가 자치구 centroid 폴백인지
+  // 썩은치즈 과락 평가용 (런타임)
+  userReviewCount?: number;
+  // 데이터 점수 세부 (UI breakdown 표시용)
+  dataBreakdown?: { hygiene: number; evalDelta: number; punish: number; model: number };
+  // 행정처분/평가 플래그 (deriveGrade에서 사용)
+  evalGrade?: string;
+  punishTypes?: string;
 }
 
 export interface RestaurantIndex {
@@ -51,7 +65,7 @@ export interface RestaurantIndex {
     gusCount: Record<GuKey, number>;
     guSlug: Record<GuKey, string>;
     categories: CategoryKey[];
-    gradesDistribution: Record<string, number>;
+    dataScoreDistribution?: Record<string, number>;
     riskDistribution?: Partial<Record<RiskTag, number>>;
     lastUpdated: string;
   };

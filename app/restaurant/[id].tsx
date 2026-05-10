@@ -10,17 +10,18 @@ import { AxisScore, Grade, Restaurant } from '@/constants/MockData';
 import { color, elevation, mascotSize, motion, radius, spacing, typography } from '@/constants/tokens';
 import { AnimatedHeart, Button, Card, CheeseBadge, Chip, IconButton, SkeletonCard } from '@/components/ui';
 import { findRestaurantById } from '@/utils/dataStore';
-import { deriveGrade, toUIRestaurant } from '@/utils/adapter';
+import { toUIRestaurant } from '@/utils/adapter';
 import { toggleLike, useIsLiked } from '@/utils/favorites';
 import { loginWithKakao, useKakaoUser } from '@/utils/kakaoAuth';
 import {
-  applyReviewImpact,
   removeReview,
   reviewAxisFromImpact,
   useImpactFor,
   useMyReviews,
   useMyReviewsFor,
 } from '@/utils/reviews';
+import { useOwnerScoreFor } from '@/utils/owner';
+import { deriveGrade, totalScoreOf } from '@/utils/scoring';
 import { ShareSheet } from '@/components/ShareSheet';
 import { HygieneReviewCard } from '@/components/HygieneReviewCard';
 
@@ -31,7 +32,7 @@ const MASCOT_BY_GRADE: Record<Grade, MascotKey> = {
   GOLDEN: 'ceremony',
   SILVER: 'thanks',
   BRONZE: 'thanks',
-  INVESTIGATING: 'search',
+  ROTTEN: 'warning',
 };
 
 export default function RestaurantDetail() {
@@ -40,6 +41,7 @@ export default function RestaurantDetail() {
   const [tab, setTab] = useState<Tab>('평가');
   const liked = useIsLiked(typeof id === 'string' ? id : null);
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
+  const [rawRestaurant, setRawRestaurant] = useState<import('@/constants/Restaurant').Restaurant | null>(null);
   const [loading, setLoading] = useState(true);
   const [shareOpen, setShareOpen] = useState(false);
 
@@ -48,6 +50,7 @@ export default function RestaurantDetail() {
     setLoading(true);
     findRestaurantById(String(id ?? '')).then((r) => {
       if (cancelled) return;
+      setRawRestaurant(r);
       setRestaurant(r ? toUIRestaurant(r) : null);
       setLoading(false);
     });
@@ -56,10 +59,11 @@ export default function RestaurantDetail() {
     };
   }, [id]);
 
-  // 점수 보정은 모든 사용자 리뷰 (백엔드 집계 시뮬), 표시는 본인 리뷰만 분리
+  // 점수 보정 — 사용자 리뷰 + 사장님 인증 (백엔드 집계 시뮬). 표시는 본인 리뷰만 분리.
   const reviewImpact = useImpactFor(typeof id === 'string' ? id : null);
+  const owner = useOwnerScoreFor(typeof id === 'string' ? id : null);
 
-  // D축('리뷰 분석')에 사용자 위생 리뷰 반영 → 5축 그래프와 합산 점수 일관 유지
+  // D축('리뷰 분석')에 사용자 위생 리뷰 반영 → 5축 그래프와 종합 점수 일관 유지
   const adjustedAxes = useMemo(() => {
     if (!restaurant) return [];
     if (reviewImpact.reviewCount === 0) return restaurant.axes;
@@ -69,10 +73,21 @@ export default function RestaurantDetail() {
     );
   }, [restaurant, reviewImpact]);
 
-  // 점수는 raw 사전 계산 + delta (지도·좋아요와 동일 산식). 그래프 D축은 시각만 override.
-  const adjustedScore = restaurant ? applyReviewImpact(restaurant.score, reviewImpact) : 0;
-  const adjustedGrade = useMemo(() => deriveGrade(adjustedScore), [adjustedScore]);
-  const impactDelta = restaurant ? adjustedScore - restaurant.score : 0;
+  // 종합 점수 = data + owner + user. 등급은 종합 점수 + 과락 조건.
+  const dataScore = rawRestaurant?.dataScore ?? restaurant?.score ?? 0;
+  const ownerScore = owner.score;
+  const userScore = reviewImpact.userScore;
+  const adjustedScore = totalScoreOf(dataScore, ownerScore, userScore);
+  const adjustedGrade = useMemo<Grade>(
+    () => deriveGrade({
+      score: adjustedScore,
+      flags: { evalGrade: rawRestaurant?.evalGrade, punishTypes: rawRestaurant?.punishTypes },
+      userScore,
+      userReviewCount: reviewImpact.reviewCount,
+    }) as Grade,
+    [adjustedScore, rawRestaurant, userScore, reviewImpact.reviewCount],
+  );
+  const impactDelta = adjustedScore - dataScore;
 
   if (loading) return <LoadingState />;
   if (!restaurant) return <NotFoundState />;
@@ -109,28 +124,26 @@ export default function RestaurantDetail() {
             <Text style={[styles.summaryScore, { color: cheeseFg }]}>{adjustedScore}</Text>
             <Text style={styles.summaryScoreUnit}>/ 100점</Text>
           </View>
-          {reviewImpact.reviewCount > 0 && (
-            <View style={styles.summaryDeltaWrap}>
-              <Text
-                style={[
-                  styles.summaryDelta,
-                  { color: impactDelta > 0
-                      ? color.status.success
-                      : impactDelta < 0
-                        ? color.status.danger
-                        : color.text.secondary },
-                ]}>
-                {impactDelta > 0 ? '+' : ''}{impactDelta}점 — 위생 리뷰 {reviewImpact.reviewCount}건 반영
-              </Text>
+          {/* 점수 구성: 데이터 + 사장님 + 사용자 */}
+          <View style={styles.summaryDeltaWrap}>
+            <Text style={styles.summaryDelta}>
+              데이터 {dataScore} + 사장님 {Math.round(ownerScore)} + 사용자 {Math.round(userScore)}
+            </Text>
+            {(reviewImpact.reviewCount > 0 || owner.count30d > 0) && (
               <Text style={styles.summaryDeltaSub}>
-                별점 평균 {reviewImpact.rawAvg.toFixed(1)}
+                {reviewImpact.reviewCount > 0
+                  ? `리뷰 ${reviewImpact.reviewCount}건 (★${reviewImpact.rawAvg.toFixed(1)})`
+                  : '리뷰 없음'}
+                {' · '}
+                {owner.count30d > 0
+                  ? `최근 30일 인증 ${owner.count30d}건`
+                  : '인증 없음'}
                 {reviewImpact.foreignReports > 0
                   ? ` · 이물질 ${reviewImpact.foreignTotal}건`
                   : ''}
-                {' · 기본 '}{restaurant.score}점
               </Text>
-            </View>
-          )}
+            )}
+          </View>
           <CheeseBadge grade={adjustedGrade} size="md" showLabel style={styles.summaryBadge} />
         </Card>
 
@@ -180,9 +193,10 @@ export default function RestaurantDetail() {
           <SummaryTab
             restaurant={restaurant}
             axes={adjustedAxes}
-            baseScore={restaurant.score}
+            dataScore={dataScore}
+            ownerScore={ownerScore}
+            userScore={userScore}
             adjustedScore={adjustedScore}
-            impactDelta={impactDelta}
           />
         )}
         {tab === '리뷰' && <ReviewTab restaurant={restaurant} />}
@@ -265,15 +279,17 @@ function NotFoundState() {
 function SummaryTab({
   restaurant,
   axes,
-  baseScore,
+  dataScore,
+  ownerScore,
+  userScore,
   adjustedScore,
-  impactDelta,
 }: {
   restaurant: Restaurant;
   axes: AxisScore[];
-  baseScore: number;
+  dataScore: number;
+  ownerScore: number;
+  userScore: number;
   adjustedScore: number;
-  impactDelta: number;
 }) {
   return (
     <View>
@@ -293,30 +309,27 @@ function SummaryTab({
             centerLabel={`${adjustedScore}점`}
           />
         </View>
-        {impactDelta !== 0 && (
-          <View style={styles.scoreFlow}>
-            <View style={styles.scoreFlowItem}>
-              <Text style={styles.scoreFlowLabel}>5축 합산</Text>
-              <Text style={styles.scoreFlowValue}>{baseScore}점</Text>
-            </View>
-            <Icon name="forward" size={14} color={color.text.tertiary} />
-            <View style={styles.scoreFlowItem}>
-              <Text style={styles.scoreFlowLabel}>리뷰 보정</Text>
-              <Text
-                style={[
-                  styles.scoreFlowValue,
-                  { color: impactDelta > 0 ? color.status.success : color.status.danger },
-                ]}>
-                {impactDelta > 0 ? '+' : ''}{impactDelta}점
-              </Text>
-            </View>
-            <Icon name="forward" size={14} color={color.text.tertiary} />
-            <View style={styles.scoreFlowItem}>
-              <Text style={styles.scoreFlowLabel}>종합</Text>
-              <Text style={[styles.scoreFlowValueEmphasis]}>{adjustedScore}점</Text>
-            </View>
+        <View style={styles.scoreFlow}>
+          <View style={styles.scoreFlowItem}>
+            <Text style={styles.scoreFlowLabel}>데이터</Text>
+            <Text style={styles.scoreFlowValue}>{dataScore}<Text style={styles.scoreFlowMax}> / 50</Text></Text>
           </View>
-        )}
+          <Text style={styles.scoreFlowPlus}>+</Text>
+          <View style={styles.scoreFlowItem}>
+            <Text style={styles.scoreFlowLabel}>사장님</Text>
+            <Text style={styles.scoreFlowValue}>{Math.round(ownerScore)}<Text style={styles.scoreFlowMax}> / 25</Text></Text>
+          </View>
+          <Text style={styles.scoreFlowPlus}>+</Text>
+          <View style={styles.scoreFlowItem}>
+            <Text style={styles.scoreFlowLabel}>사용자</Text>
+            <Text style={styles.scoreFlowValue}>{Math.round(userScore)}<Text style={styles.scoreFlowMax}> / 25</Text></Text>
+          </View>
+          <Icon name="forward" size={14} color={color.text.tertiary} />
+          <View style={styles.scoreFlowItem}>
+            <Text style={styles.scoreFlowLabel}>종합</Text>
+            <Text style={styles.scoreFlowValueEmphasis}>{adjustedScore}점</Text>
+          </View>
+        </View>
       </Card>
 
       <Text style={styles.sectionTitle}>식탐정 평가 상세</Text>
@@ -648,6 +661,8 @@ const styles = StyleSheet.create({
   scoreFlowLabel: { ...typography.caption, color: color.text.tertiary },
   scoreFlowValue: { ...typography.subheadlineEmphasized, color: color.text.primary },
   scoreFlowValueEmphasis: { ...typography.bodyEmphasized, color: color.brand.primary },
+  scoreFlowMax: { ...typography.footnote, color: color.text.tertiary },
+  scoreFlowPlus: { ...typography.captionEmphasized, color: color.text.tertiary, marginHorizontal: 2 },
   summaryDelta: {
     ...typography.captionEmphasized,
   },

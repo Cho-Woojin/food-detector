@@ -17,7 +17,7 @@ export type ShareTarget = {
   cat: string;
   gu: string;
   score: number;
-  grade: 'GOLDEN' | 'SILVER' | 'BRONZE' | 'INVESTIGATING' | 'WARNING' | 'NEEDS_DATA';
+  grade: 'GOLDEN' | 'SILVER' | 'BRONZE' | 'ROTTEN';
 };
 
 interface Props {
