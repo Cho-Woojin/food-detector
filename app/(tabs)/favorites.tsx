@@ -12,7 +12,7 @@ import { useOwnerImpactMap } from '@/utils/owner';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 
-type Grade = 'GOLDEN' | 'SILVER' | 'BRONZE';
+type Grade = 'GOLDEN' | 'SILVER' | 'BRONZE' | 'ROTTEN';
 type Favorite = {
   id: string;
   name: string;
@@ -35,7 +35,7 @@ const FILTER_LABEL: Record<Filter, string> = {
 };
 
 const SORT_LABEL: Record<SortKey, string> = {
-  score: '점수순',
+  score: '등급순',
   recent: '최근순',
   name: '이름순',
 };
@@ -44,10 +44,14 @@ const GRADE_LABEL: Record<Grade, string> = {
   GOLDEN: '골든 치즈',
   SILVER: '실버 치즈',
   BRONZE: '브론즈 치즈',
+  ROTTEN: '트랩 치즈',
 };
 
 const CHEESE_BY_GRADE = (g: Grade) =>
-  g === 'GOLDEN' ? Cheese.gold : g === 'SILVER' ? Cheese.silver : Cheese.bronze;
+  g === 'GOLDEN' ? Cheese.gold
+    : g === 'SILVER' ? Cheese.silver
+    : g === 'BRONZE' ? Cheese.bronze
+    : null; // ROTTEN — 치즈 이미지 없음
 
 export default function FavoritesScreen() {
   const [filter, setFilter] = useState<Filter>('전체');
@@ -98,8 +102,7 @@ export default function FavoritesScreen() {
       const reviewImp = impact ?? EMPTY_REVIEW_IMPACT;
       const ownerDelta = owner?.delta ?? 0;
       const { score, grade } = adjustedScoreAndGrade(raw, reviewImp, ownerDelta);
-      const safeGrade: Grade = grade === 'INVESTIGATING' ? 'BRONZE' : grade;
-      return { ...f, score, grade: safeGrade };
+      return { ...f, score, grade };
     });
   }, [favorites, impactMap, ownerImpactMap, rawMap]);
 
@@ -232,13 +235,17 @@ function RestaurantRow({
       accessibilityRole="button"
       accessibilityLabel={`${item.name} 상세 보기`}
       style={({ pressed }) => [styles.row, pressed && { backgroundColor: color.fill.quaternary }]}>
-      {/* Thumbnail */}
+      {/* Thumbnail — ROTTEN(트랩 치즈)은 치즈 이미지 대신 경고 아이콘 */}
       <View style={styles.thumb}>
-        <Image
-          source={CHEESE_BY_GRADE(item.grade)}
-          style={styles.thumbImg}
-          resizeMode="contain"
-        />
+        {CHEESE_BY_GRADE(item.grade) ? (
+          <Image
+            source={CHEESE_BY_GRADE(item.grade) as any}
+            style={styles.thumbImg}
+            resizeMode="contain"
+          />
+        ) : (
+          <Icon name="warning" size={28} color={color.status.danger} />
+        )}
       </View>
 
       {/* Info column */}
@@ -249,8 +256,6 @@ function RestaurantRow({
         </View>
 
         <View style={styles.scoreRow}>
-          <Text style={[styles.score, { color: cheeseFg }]}>{item.score}점</Text>
-          <Text style={styles.dot}>·</Text>
           <Text style={[styles.gradeLabel, { color: cheeseFg }]}>{GRADE_LABEL[item.grade]}</Text>
           <Text style={styles.dot}>·</Text>
           <Text style={styles.category}>{item.category}</Text>

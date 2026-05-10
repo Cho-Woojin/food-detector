@@ -5,9 +5,10 @@
 //   3) ownerEdits     : 사장님이 수정한 가게 정보 (영업시간·전화 등)
 //   4) reviewReplies  : 사용자 리뷰에 사장님이 다는 답글 (1리뷰 1답글)
 //
-// 점수 반영(C축 신뢰): 인증 게시글 N건 → 가산점. computeOwnerImpact() 참조.
+// 점수 반영(사장님 0~25): 인증 게시글 N건 → 가산점. computeOwnerImpact() 참조.
 
 import { useMemo, useSyncExternalStore } from 'react';
+import { ownerScoreFromCount, countWithinWindow } from '@/utils/scoring';
 
 const OWNERSHIP_KEY = 'food-detector:ownership';
 const POSTS_KEY = 'food-detector:owner-posts';
@@ -242,34 +243,35 @@ export function useReviewReply(reviewId: string | undefined | null): ReviewReply
 }
 
 // ============================================================
-// 5) Owner Score Impact — C축 신뢰 가산
+// 5) Owner Score Impact — 사장님 0~25
 // ============================================================
 //
-// 인증 게시글이 식탐정 스코어에 미치는 영향. 아래 정책으로 단순화:
-//   0건  → +0
-//   1건  → +3
-//   2건  → +5
-//   3건+ → +6 (상한)
-//
-// 리뷰 영향과 함께 합산되어 최종 점수에 반영. 최종 deriveGrade도 포함된 점수로 계산.
+// 점수 룰: data/SCORING_AND_SCHEMA.md §2 — 최근 30일 인증 N건 × 2.5점, 25점 만점.
+// utils/scoring.ts의 ownerScoreFromCount()/countWithinWindow()가 단일 산식.
 
 export type OwnerScoreImpact = {
-  delta: number;
-  postCount: number;
+  delta: number;        // 0~25
+  postCount: number;    // 최근 30일 인증 건수 (점수 산정 기준)
+  totalPostCount: number; // 누적 전체 인증 건수 (UI 표시용)
   hasOwner: boolean;
 };
 
-const EMPTY_OWNER_IMPACT: OwnerScoreImpact = { delta: 0, postCount: 0, hasOwner: false };
+const EMPTY_OWNER_IMPACT: OwnerScoreImpact = {
+  delta: 0,
+  postCount: 0,
+  totalPostCount: 0,
+  hasOwner: false,
+};
 
 export function computeOwnerImpact(restaurantId: string): OwnerScoreImpact {
   const list = posts.filter((p) => p.restaurantId === restaurantId);
-  const postCount = list.length;
-  const hasOwner = restaurantId in ownership;
-  let delta = 0;
-  if (postCount >= 3) delta = 6;
-  else if (postCount === 2) delta = 5;
-  else if (postCount === 1) delta = 3;
-  return { delta, postCount, hasOwner };
+  const recentCount = countWithinWindow(list.map((p) => p.createdAt));
+  return {
+    delta: ownerScoreFromCount(recentCount),
+    postCount: recentCount,
+    totalPostCount: list.length,
+    hasOwner: restaurantId in ownership,
+  };
 }
 
 // 식당 다수의 impact를 한꺼번에 — 지도/좋아요/검색 등에서 사용
@@ -277,20 +279,26 @@ export function useOwnerImpactMap(): Map<string, OwnerScoreImpact> {
   const allPosts = useOwnerPosts();
   const own = useSyncExternalStore(subscribe, () => ownership, () => ownership);
   return useMemo(() => {
-    const counts = new Map<string, number>();
+    const recentByRid = new Map<string, number>();
+    const totalByRid = new Map<string, number>();
+    const now = Date.now();
+    const WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
     for (const p of allPosts) {
-      counts.set(p.restaurantId, (counts.get(p.restaurantId) ?? 0) + 1);
+      totalByRid.set(p.restaurantId, (totalByRid.get(p.restaurantId) ?? 0) + 1);
+      if (now - p.createdAt <= WINDOW_MS) {
+        recentByRid.set(p.restaurantId, (recentByRid.get(p.restaurantId) ?? 0) + 1);
+      }
     }
     const out = new Map<string, OwnerScoreImpact>();
-    const ids = new Set<string>([...counts.keys(), ...Object.keys(own)]);
+    const ids = new Set<string>([...totalByRid.keys(), ...Object.keys(own)]);
     for (const id of ids) {
-      const postCount = counts.get(id) ?? 0;
-      const hasOwner = id in own;
-      let delta = 0;
-      if (postCount >= 3) delta = 6;
-      else if (postCount === 2) delta = 5;
-      else if (postCount === 1) delta = 3;
-      out.set(id, { delta, postCount, hasOwner });
+      const recent = recentByRid.get(id) ?? 0;
+      out.set(id, {
+        delta: ownerScoreFromCount(recent),
+        postCount: recent,
+        totalPostCount: totalByRid.get(id) ?? 0,
+        hasOwner: id in own,
+      });
     }
     return out;
   }, [allPosts, own]);

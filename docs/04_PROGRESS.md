@@ -24,7 +24,7 @@
 
 ### 화면
 - [x] **SCR-01 메인 페이지** — 식중독 hero + 환경 5카드 (`app/(tabs)/index.tsx`)
-- [x] **SCR-02 수사 보고서** — 5축·리뷰·행정·카카오톡 공유 (`app/restaurant/[id].tsx`)
+- [x] **SCR-02 수사 보고서** — 5축·리뷰·행정·카카오톡 공유 (`app/restaurant/[id].tsx`) → 50/25/25 모델로 리디자인 진행 중
 - [x] **SCR-03 검색** — 카테고리 상단 + 인기·최근 (`app/search.tsx`)
 - [x] **SCR-04 온보딩 (legacy)** — 랜딩으로 대체 (`app/onboarding.tsx`)
 - [x] **SCR-05 로그인** — 5단계 랜딩 + 카카오 OAuth redirect (`app/landing.tsx`, `app/auth/kakao.tsx`)
@@ -57,6 +57,13 @@
 - [ ] **SCR-10 사장님 시작** — 안내 모달 정도라도 붙임
 - [ ] **SCR-11 위생 사진 업로드** (P2 — 시간 여유 시)
 - [ ] 시드 데이터 분포 점검
+- [ ] **새 점수체계 리디자인** (`.claude/plans/sunny-mapping-matsumoto.md`)
+  - [ ] 워딩 변경: "썩은 치즈" → "트랩 치즈" (한글 라벨만, 코드 식별자 ROTTEN 유지)
+  - [ ] `TripartiteScoreBar` / `DataBreakdownCard` / `OwnerScoreCard` / `UserScoreCard` 신규 컴포넌트
+  - [ ] SCR-02 수사 보고서: 5축 스파이더 폐기 + 50/25/25 세그먼트 + breakdown 카드
+  - [ ] SCR-06 지도: ROTTEN 전용 ⚠️ 경고 마커 추가 (`KakaoMap.tsx` GRADE_STYLE/GRADE_ICON)
+  - [ ] 바텀시트: TripartiteScoreBar(compact) + ROTTEN 사유 칩
+  - [ ] `utils/adapter.ts` 5축 헬퍼·`SpiderChart5` 잔재 정리
 
 ## ⏳ D-1 ~ D-Day (5/13)
 

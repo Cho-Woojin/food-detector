@@ -6,7 +6,7 @@ const LABEL: Record<CheeseGradeKey, string> = {
   GOLDEN: '골드 치즈',
   SILVER: '실버 치즈',
   BRONZE: '브론즈 치즈',
-  ROTTEN: '썩은 치즈',
+  ROTTEN: '트랩 치즈',
 };
 
 const DEFAULT_COUNT: Record<CheeseGradeKey, number> = {

@@ -203,9 +203,9 @@ function userScore(reviews: Review[]): number {
 | **🧀 골드 치즈** | score ≥ 80 | `#F1C40F` (golden) |
 | **🧀 실버 치즈** | 50 ≤ score < 80 | `#94A3B8` (silver) |
 | **🧀 브론즈 치즈** | score < 50 (기본) | `#CD7F32` (bronze) |
-| **🚨 썩은 치즈** | score < 50 AND 과락 조건 | `#FF3B30` (danger red) |
+| **🚨 트랩 치즈** | score < 50 AND 과락 조건 | `#FF3B30` (danger red) |
 
-### 썩은 치즈 과락 조건
+### 트랩 치즈 과락 조건
 
 **점수가 50 미만일 때만** 평가. 50점 이상이면 과락이 있어도 무조건 실버 이상.
 
@@ -217,7 +217,7 @@ function userScore(reviews: Review[]): number {
 | **과락 2** (식약처 평가) | 중점관리업소 평가 (위생 미흡으로 식약처가 직접 분류) |
 | **과락 3** (AI 분류 위생 위반) | `flags.hygieneViolation = true` — AI가 식약처 I2630 행정처분의 위반사유(VILTCN)를 분석해 "식품 위생 직결 위반"으로 분류한 경우. 자세한 카테고리·분류 결과는 `data/violations-classified.json` 참조. |
 
-**과락 1 OR 과락 2 OR 과락 3** 셋 중 하나만 달성해도 썩은 치즈.
+**과락 1 OR 과락 2 OR 과락 3** 셋 중 하나만 달성해도 트랩 치즈.
 
 #### 행정처분 종류만으로 판단하지 않는 이유
 
@@ -252,7 +252,7 @@ function deriveGrade(input: {
   if (score >= 80) return 'GOLDEN';
   if (score >= 50) return 'SILVER';
 
-  // score < 50 — 썩은 치즈 조건 평가
+  // score < 50 — 트랩 치즈 조건 평가
   const userFail = userReviewCount >= 10 && userScore <= 10;
   const evalFail = flags.evalGrade === '중점관리업소';
   const hygieneFail = !!flags.hygieneViolation;

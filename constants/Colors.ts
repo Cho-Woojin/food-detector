@@ -253,7 +253,7 @@ export const cheeseGrades = {
   },
   ROTTEN: {
     label: 'Rotten Cheese',
-    labelKr: '썩은 치즈',
+    labelKr: '트랩 치즈',
     description: '과락 항목 발견 — 주의가 필요한 식당',
     color: color.cheese.ROTTEN.fg,
     bgColor: color.cheese.ROTTEN.bg,

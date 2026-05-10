@@ -49,6 +49,9 @@ const ALIASES = {
   dot: 'ellipse',
   alert: 'alert-circle',
   warning: 'warning-outline',
+  // breakdown
+  check: 'checkmark-circle',
+  minus: 'remove-circle',
   // 로고용
   logo: 'shield-checkmark',
 } as const;
