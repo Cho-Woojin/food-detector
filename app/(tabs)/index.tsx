@@ -78,8 +78,10 @@ export default function HomeScreen() {
     ensureRecomputedIndex().then((rows) => {
       if (cancelled) return;
 
+      // GOLDEN은 사장님·사용자 활동 후에야 가능 (데이터 만점 50/100). MVP에서는 비어있음.
+      // 대신 "데이터 점수 우수" 식당 (45+) 을 노출 — 위생등급 보유한 식당.
       const golden = rows
-        .filter((r) => r.gr === 'GOLDEN')
+        .filter((r) => r.s >= 45)
         .sort((a, b) => b.s - a.s)
         .slice(0, 6)
         .map((r) => ({ id: r.i, name: r.n, score: r.s, district: r.g }));
@@ -166,10 +168,10 @@ export default function HomeScreen() {
           </>
         ) : null}
 
-        {/* 3. 골든 치즈 — 식탐정 90점+ 인증 식당 (전국 베스트) */}
+        {/* 3. 데이터 점수 우수 — 위생등급+모범 등 강한 시그널 보유 (사장님·사용자 활동 전이라도) */}
         <SectionHeader
-          title="골든 치즈 식당"
-          subtitle="식탐정이 90점 이상으로 인증한 식당"
+          title="데이터 검증 우수 식당"
+          subtitle="식약처 위생등급·모범음식점 등 인증 보유"
           trailing={{ label: '더보기', icon: 'forward' }}
           marginTop="xxl"
         />

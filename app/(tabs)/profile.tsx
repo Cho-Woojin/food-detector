@@ -22,30 +22,30 @@ type MenuItem = {
 };
 type MenuSection = { title: string; items: MenuItem[] };
 
-type GradeBreakdown = { GOLDEN: number; SILVER: number; BRONZE: number; OTHER: number };
+type GradeBreakdown = { GOLDEN: number; SILVER: number; BRONZE: number; ROTTEN: number };
 
 export default function ProfileScreen() {
   const likedIds = useLikedIds();
   const likedCount = likedIds.size;
   const kakaoUser = useKakaoUser();
   const reviewCount = useMyReviews().length;
-  const [breakdown, setBreakdown] = useState<GradeBreakdown>({ GOLDEN: 0, SILVER: 0, BRONZE: 0, OTHER: 0 });
+  const [breakdown, setBreakdown] = useState<GradeBreakdown>({ GOLDEN: 0, SILVER: 0, BRONZE: 0, ROTTEN: 0 });
   const [guideListOpen, setGuideListOpen] = useState(false);
 
   // 좋아요한 식당의 등급별 분포 계산 — 데이터 로드 후 1회
   useEffect(() => {
-    if (likedCount === 0) { setBreakdown({ GOLDEN: 0, SILVER: 0, BRONZE: 0, OTHER: 0 }); return; }
+    if (likedCount === 0) { setBreakdown({ GOLDEN: 0, SILVER: 0, BRONZE: 0, ROTTEN: 0 }); return; }
     let cancelled = false;
     ensureRecomputedById().then((map) => {
       if (cancelled) return;
-      const next: GradeBreakdown = { GOLDEN: 0, SILVER: 0, BRONZE: 0, OTHER: 0 };
+      const next: GradeBreakdown = { GOLDEN: 0, SILVER: 0, BRONZE: 0, ROTTEN: 0 };
       for (const id of likedIds) {
         const row = map.get(id);
         const gr = row?.gr;
         if (gr === 'GOLDEN') next.GOLDEN++;
         else if (gr === 'SILVER') next.SILVER++;
         else if (gr === 'BRONZE') next.BRONZE++;
-        else next.OTHER++;
+        else if (gr === 'ROTTEN') next.ROTTEN++;
       }
       setBreakdown(next);
     });
@@ -153,12 +153,12 @@ export default function ProfileScreen() {
 }
 
 function LikedBreakdownCard({ breakdown, total }: { breakdown: GradeBreakdown; total: number }) {
-  // 가로 비율 바 — 골드/실버/브론즈/기타
+  // 가로 비율 바 — 골드/실버/브론즈/썩은
   const data = [
-    { key: 'GOLDEN', count: breakdown.GOLDEN, label: '골든', fg: color.cheese.GOLDEN.fg },
+    { key: 'GOLDEN', count: breakdown.GOLDEN, label: '골드', fg: color.cheese.GOLDEN.fg },
     { key: 'SILVER', count: breakdown.SILVER, label: '실버', fg: color.cheese.SILVER.fg },
     { key: 'BRONZE', count: breakdown.BRONZE, label: '브론즈', fg: color.cheese.BRONZE.fg },
-    { key: 'OTHER', count: breakdown.OTHER, label: '기타', fg: color.text.tertiary },
+    { key: 'ROTTEN', count: breakdown.ROTTEN, label: '썩은', fg: color.cheese.ROTTEN.fg },
   ];
   return (
     <Card variant="elevated" padding="l" style={{ marginTop: spacing.l }}>

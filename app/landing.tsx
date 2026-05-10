@@ -157,20 +157,27 @@ function StepSearch({
         {q.length > 0 && hits.length === 0 && (
           <Text style={styles.searchEmpty}>매칭되는 식당이 없어요</Text>
         )}
-        {hits.map((r) => (
-          <View key={r.i} style={styles.searchItem}>
-            <Image
-              source={r.gr === 'GOLDEN' ? Cheese.gold : r.gr === 'SILVER' ? Cheese.silver : Cheese.bronze}
-              style={styles.searchCheese}
-              resizeMode="contain"
-            />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.searchName} numberOfLines={1}>{r.n}</Text>
-              <Text style={styles.searchMeta}>{r.c} · {r.g}</Text>
+        {hits.map((r) => {
+          const cheeseSrc =
+            r.gr === 'GOLDEN' ? Cheese.gold
+              : r.gr === 'SILVER' ? Cheese.silver
+              : r.gr === 'BRONZE' ? Cheese.bronze
+              : null;
+          return (
+            <View key={r.i} style={styles.searchItem}>
+              {cheeseSrc ? (
+                <Image source={cheeseSrc} style={styles.searchCheese} resizeMode="contain" />
+              ) : (
+                <View style={styles.searchCheese} />
+              )}
+              <View style={{ flex: 1 }}>
+                <Text style={styles.searchName} numberOfLines={1}>{r.n}</Text>
+                <Text style={styles.searchMeta}>{r.c} · {r.g}</Text>
+              </View>
+              <Text style={styles.searchScore}>{r.s}점</Text>
             </View>
-            <Text style={styles.searchScore}>{r.s}점</Text>
-          </View>
-        ))}
+          );
+        })}
       </View>
 
       <View style={styles.imageBelow}>

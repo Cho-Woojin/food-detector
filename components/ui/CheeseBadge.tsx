@@ -3,19 +3,17 @@ import { Cheese } from '@/constants/Assets';
 import { color, mascotSize, spacing, typography, type CheeseGradeKey } from '@/constants/tokens';
 
 const LABEL: Record<CheeseGradeKey, string> = {
-  GOLDEN: '골든 치즈',
+  GOLDEN: '골드 치즈',
   SILVER: '실버 치즈',
   BRONZE: '브론즈 치즈',
-  INVESTIGATING: '수사 중',
-  WARNING: '요주의',
+  ROTTEN: '썩은 치즈',
 };
 
 const DEFAULT_COUNT: Record<CheeseGradeKey, number> = {
   GOLDEN: 3,
   SILVER: 2,
   BRONZE: 1,
-  INVESTIGATING: 0,
-  WARNING: 0,
+  ROTTEN: 0,
 };
 
 type Size = 'xs' | 'sm' | 'md' | 'lg';

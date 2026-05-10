@@ -8,10 +8,11 @@ import type { Restaurant as RawRestaurant } from '@/constants/Restaurant';
 import { ensureRawById, ensureRecomputedIndex } from '@/utils/dataStore';
 import { toggleLike as toggleLikeStore, useLikedIds } from '@/utils/favorites';
 import { adjustedScoreAndGrade, useReviewImpactMap } from '@/utils/reviews';
+import { useOwnerScoreMap } from '@/utils/owner';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 
-type Grade = 'GOLDEN' | 'SILVER' | 'BRONZE';
+type Grade = 'GOLDEN' | 'SILVER' | 'BRONZE' | 'ROTTEN';
 type Favorite = {
   id: string;
   name: string;
@@ -22,15 +23,16 @@ type Favorite = {
   district: string;
 };
 
-const FILTERS = ['전체', 'GOLDEN', 'SILVER', 'BRONZE'] as const;
+const FILTERS = ['전체', 'GOLDEN', 'SILVER', 'BRONZE', 'ROTTEN'] as const;
 type Filter = (typeof FILTERS)[number];
 type SortKey = 'score' | 'recent' | 'name';
 
 const FILTER_LABEL: Record<Filter, string> = {
   전체: '전체',
-  GOLDEN: '골든',
+  GOLDEN: '골드',
   SILVER: '실버',
   BRONZE: '브론즈',
+  ROTTEN: '썩은',
 };
 
 const SORT_LABEL: Record<SortKey, string> = {
@@ -40,13 +42,17 @@ const SORT_LABEL: Record<SortKey, string> = {
 };
 
 const GRADE_LABEL: Record<Grade, string> = {
-  GOLDEN: '골든 치즈',
+  GOLDEN: '골드 치즈',
   SILVER: '실버 치즈',
   BRONZE: '브론즈 치즈',
+  ROTTEN: '썩은 치즈',
 };
 
 const CHEESE_BY_GRADE = (g: Grade) =>
-  g === 'GOLDEN' ? Cheese.gold : g === 'SILVER' ? Cheese.silver : Cheese.bronze;
+  g === 'GOLDEN' ? Cheese.gold
+    : g === 'SILVER' ? Cheese.silver
+    : g === 'BRONZE' ? Cheese.bronze
+    : null;
 
 export default function FavoritesScreen() {
   const [filter, setFilter] = useState<Filter>('전체');
@@ -55,6 +61,7 @@ export default function FavoritesScreen() {
   const [rawMap, setRawMap] = useState<Map<string, RawRestaurant> | null>(null);
   const likedIds = useLikedIds();
   const impactMap = useReviewImpactMap();
+  const ownerScoreMap = useOwnerScoreMap();
 
   // 좋아요한 ID들의 메타정보를 인덱스에서 조회 (G/S/B만 좋아요 카드로 표시)
   // raw 데이터도 같이 캐싱 → 상세 페이지와 동일한 5축 axes 산식 사용
@@ -64,12 +71,11 @@ export default function FavoritesScreen() {
       if (cancelled) return;
       const list: Favorite[] = rows
         .filter((r) => likedIds.has(r.i))
-        .filter((r) => r.gr === 'GOLDEN' || r.gr === 'SILVER' || r.gr === 'BRONZE')
         .map((r) => ({
           id: r.i,
           name: r.n,
           category: r.c,
-          grade: r.gr === 'GOLDEN' ? 'GOLDEN' : r.gr === 'SILVER' ? 'SILVER' : 'BRONZE',
+          grade: r.gr,
           score: r.s,
           distance: '—',
           district: r.g,
@@ -82,19 +88,23 @@ export default function FavoritesScreen() {
     };
   }, [likedIds]);
 
-  // 위생 리뷰 보정 — 상세 페이지와 동일한 5축 axes 산식 사용 (raw 데이터로 buildAxes)
-  // INVESTIGATING으로 떨어지면 BRONZE로 클램프 (좋아요 화면은 G/S/B만)
+  // 위생 리뷰 + 사장님 인증 보정 — 상세/지도와 동일한 종합 점수 산식 사용
   const adjusted = useMemo(() => {
-    if (impactMap.size === 0 || !rawMap) return favorites;
+    if (!rawMap) return favorites;
     return favorites.map((f) => {
-      const impact = impactMap.get(f.id);
       const raw = rawMap.get(f.id);
-      if (!impact || impact.reviewCount === 0 || !raw) return f;
-      const { score, grade } = adjustedScoreAndGrade(raw, impact);
-      const safeGrade: Grade = grade === 'INVESTIGATING' ? 'BRONZE' : grade;
-      return { ...f, score, grade: safeGrade };
+      if (!raw) return f;
+      const impact = impactMap.get(f.id);
+      const ownerScore = ownerScoreMap.get(f.id) ?? 0;
+      if ((!impact || impact.reviewCount === 0) && ownerScore === 0) return f;
+      const { score, grade } = adjustedScoreAndGrade(
+        raw,
+        impact ?? { userScore: 0, reviewCount: 0, rawAvg: 0, foreignReports: 0, foreignTotal: 0 },
+        ownerScore,
+      );
+      return { ...f, score, grade };
     });
-  }, [favorites, impactMap, rawMap]);
+  }, [favorites, impactMap, ownerScoreMap, rawMap]);
 
   const filtered = useMemo(() => {
     let list = filter === '전체' ? adjusted : adjusted.filter((f) => f.grade === filter);
@@ -217,11 +227,15 @@ function RestaurantRow({
       style={({ pressed }) => [styles.row, pressed && { backgroundColor: color.fill.quaternary }]}>
       {/* Thumbnail */}
       <View style={styles.thumb}>
-        <Image
-          source={CHEESE_BY_GRADE(item.grade)}
-          style={styles.thumbImg}
-          resizeMode="contain"
-        />
+        {CHEESE_BY_GRADE(item.grade) ? (
+          <Image
+            source={CHEESE_BY_GRADE(item.grade)!}
+            style={styles.thumbImg}
+            resizeMode="contain"
+          />
+        ) : (
+          <Icon name="warning" size={32} color={color.cheese.ROTTEN.fg} />
+        )}
       </View>
 
       {/* Info column */}

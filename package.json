@@ -11,6 +11,7 @@
     "build:preview": "expo export --platform web && npx serve dist"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.95.1",
     "@expo/vector-icons": "^15.0.3",
     "@gorhom/bottom-sheet": "^5.2.13",
     "@react-navigation/native": "^7.1.8",

@@ -79,11 +79,10 @@ export const color = {
 
   // ===== Cheese grades =====
   cheese: {
-    GOLDEN:        { fg: '#F1C40F', bg: '#FFF4CC' },
-    SILVER:        { fg: '#94A3B8', bg: '#E2E8F0' },
-    BRONZE:        { fg: '#CD7F32', bg: '#F5DEB3' },
-    INVESTIGATING: { fg: '#8E8E93', bg: '#F2F2F7' },
-    WARNING:       { fg: '#FF3B30', bg: 'rgba(255,59,48,0.12)' },
+    GOLDEN: { fg: '#F1C40F', bg: '#FFF4CC' },
+    SILVER: { fg: '#94A3B8', bg: '#E2E8F0' },
+    BRONZE: { fg: '#CD7F32', bg: '#F5DEB3' },
+    ROTTEN: { fg: '#FF3B30', bg: 'rgba(255,59,48,0.12)' },
   },
 
   // ===== Owner mode =====

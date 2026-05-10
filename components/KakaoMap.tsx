@@ -42,13 +42,13 @@ export type KakaoMapHandle = {
 // 말풍선 핀 마커 — 너비 36px (꼬리 포함 높이 ~43px). 색상은 안의 cheese/warning 아이콘에 적용.
 // minLevel=-1이면 viewport 자동 표시 X (검색 매칭 또는 좋아요 시에만 노출)
 const GRADE_STYLE: Record<string, { color: string; size: number; border: number; zIndex: number; minLevel: number }> = {
-  GOLDEN:        { color: '#FACC15', size: 36, border: 1, zIndex: 50, minLevel: 14 }, // 노랑 치즈
-  SILVER:        { color: '#A3B8C2', size: 36, border: 1, zIndex: 40, minLevel: 5  }, // 실버 치즈
-  BRONZE:        { color: '#CD7F32', size: 36, border: 1, zIndex: 30, minLevel: 4  }, // 브론즈 치즈
-  WARNING:       { color: '#EF4444', size: 36, border: 1, zIndex: 35, minLevel: 4  }, // 빨강 경고
-  NEEDS_DATA:    { color: '#D1D5DB', size: 28, border: 1, zIndex: 10, minLevel: -1 }, // 회색 — 검색/좋아요만
-  INVESTIGATING: { color: '#D1D5DB', size: 28, border: 1, zIndex: 10, minLevel: -1 },
+  GOLDEN: { color: '#FACC15', size: 36, border: 1, zIndex: 50, minLevel: 14 }, // 노랑 치즈
+  SILVER: { color: '#A3B8C2', size: 36, border: 1, zIndex: 40, minLevel: 5  }, // 실버 치즈
+  BRONZE: { color: '#CD7F32', size: 36, border: 1, zIndex: 30, minLevel: 4  }, // 브론즈 치즈
+  ROTTEN: { color: '#EF4444', size: 36, border: 1, zIndex: 35, minLevel: 4  }, // 빨강 — 썩은치즈
 };
+// 등급 미상 fallback (검색/좋아요 등)
+const FALLBACK_STYLE = { color: '#D1D5DB', size: 28, border: 1, zIndex: 10, minLevel: -1 };
 // 선택된 마커 강조 — 등급 색 그대로지만 크기 +50% + 두꺼운 흰 보더
 // 선택 시 크기 변화 X — 강조는 라벨/zIndex로만
 const SELECTED_BOOST = 1;
@@ -66,9 +66,7 @@ const GRADE_ICON: Record<string, IconKind> = {
   GOLDEN: 'cheese',
   SILVER: 'cheese',
   BRONZE: 'cheese',
-  WARNING: 'warning',
-  NEEDS_DATA: 'magnify',     // 수집중 = 돋보기
-  INVESTIGATING: 'magnify',
+  ROTTEN: 'warning',
 };
 
 /** 말풍선 핀 마커 — 흰색 둥근 사각 + 하단 꼬리 + 안에 등급 아이콘 */
@@ -281,7 +279,7 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
     for (const entry of markersByIdRef.current.values()) {
       const isLiked = likedIdsRef.current.has(entry.id);
       const isSelected = selected === entry;
-      const v = cache[entry.grade] ?? cache.NEEDS_DATA;
+      const v = cache[entry.grade] ?? cache.BRONZE;
       const img = isLiked
         ? (isSelected ? v.likedHighlight : v.liked)
         : (isSelected ? v.highlight : v.normal);
@@ -431,7 +429,7 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
         // 마커 1개 생성 + 클릭 핸들러 + 초기 이미지(좋아요/선택 상태 반영)
         const createEntry = (rest: Restaurant): MarkerEntry => {
           const cache = imageCacheRef.current!;
-          const variants = cache[rest.grade] ?? cache.NEEDS_DATA;
+          const variants = cache[rest.grade] ?? cache.BRONZE;
           const isLiked = likedIdsRef.current.has(rest.id);
           const isSelected = selectedIdRef.current === rest.id;
           const img = isLiked
@@ -490,7 +488,7 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
             const isGold = r.grade === 'GOLDEN';
             if (!isLiked && !isForced) {
               const minLv = GRADE_STYLE[r.grade]?.minLevel ?? 3;
-              if (minLv < 0) continue; // NEEDS_DATA 등 자동 표시 X
+              if (minLv < 0) continue; // 미상 등급은 자동 표시 X (검색·좋아요만 노출)
               if (level > minLv) continue;
               if (!isGold) {
                 if (r.lat < south || r.lat > north || r.lng < west || r.lng > east) continue;
@@ -525,14 +523,14 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
           const cache = imageCacheRef.current!;
           const prev = selectedMarkerRef.current;
           if (prev && prev !== entry) {
-            const v = cache[prev.grade] ?? cache.NEEDS_DATA;
+            const v = cache[prev.grade] ?? cache.BRONZE;
             const prevLiked = likedIdsRef.current.has(prev.id);
             prev.marker.setImage(prevLiked ? v.liked : v.normal);
             prev.marker.setZIndex(prevLiked ? 500 : GRADE_STYLE[prev.grade]?.zIndex ?? 10);
             // 이전 선택 마커가 좋아요 상태가 아니면 라벨 제거 (좋아요면 라벨 유지)
             if (!prevLiked) hideLabel(prev.id);
           }
-          const v = cache[entry.grade] ?? cache.NEEDS_DATA;
+          const v = cache[entry.grade] ?? cache.BRONZE;
           const isLiked = likedIdsRef.current.has(entry.id);
           entry.marker.setImage(isLiked ? v.likedHighlight : v.highlight);
           entry.marker.setZIndex(1000);
@@ -697,7 +695,7 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
     for (const entry of markersByIdRef.current.values()) {
       const isLiked = wantIds.has(entry.id);
       const isSelected = selected === entry;
-      const v = cache[entry.grade] ?? cache.NEEDS_DATA;
+      const v = cache[entry.grade] ?? cache.BRONZE;
       const img = isLiked
         ? (isSelected ? v.likedHighlight : v.liked)
         : (isSelected ? v.highlight : v.normal);
@@ -721,7 +719,7 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
     const cache = imageCacheRef.current;
     const prev = selectedMarkerRef.current;
     if (prev && prev.id !== selectedId) {
-      const v = cache[prev.grade] ?? cache.NEEDS_DATA;
+      const v = cache[prev.grade] ?? cache.BRONZE;
       const prevLiked = likedIdsRef.current.has(prev.id);
       prev.marker.setImage(prevLiked ? v.liked : v.normal);
       prev.marker.setZIndex(prevLiked ? 500 : GRADE_STYLE[prev.grade]?.zIndex ?? 10);
@@ -732,7 +730,7 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
     if (!selectedId) return;
     const target = markersByIdRef.current.get(selectedId);
     if (!target) return; // viewport 밖이면 createEntry에서 isSelected 반영됨
-    const v = cache[target.grade] ?? cache.NEEDS_DATA;
+    const v = cache[target.grade] ?? cache.BRONZE;
     const isLiked = likedIdsRef.current.has(target.id);
     target.marker.setImage(isLiked ? v.likedHighlight : v.highlight);
     target.marker.setZIndex(1000);
