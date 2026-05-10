@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/Icon';
 import { Cheese, Logos, Mascots } from '@/constants/Assets';
-import { riskLevels } from '@/constants/Colors';
+import { buildRiskMessage, riskLevels } from '@/constants/Colors';
 import { color, radius, spacing, typography, type RiskLevel } from '@/constants/tokens';
 import {
   Card,
@@ -15,23 +15,45 @@ import {
   SectionHeader,
 } from '@/components/ui';
 import { ensureRecomputedIndex } from '@/utils/dataStore';
+import { fetchEnvData, type EnvData } from '@/utils/api/env';
 import { getCachedLocation } from '@/utils/location';
+import {
+  calculateRiskLevel,
+  foodPoisonLabel,
+  foodPoisonTone,
+  humidityLabel,
+  humidityTone,
+  pm10Label,
+  pm10Tone,
+  tempLabel,
+  tempTone,
+  type Tone,
+} from '@/utils/riskCalculator';
 
-// 데모용 — 실제 환경 지수는 추후 기상·식약처·대기 데이터 연동
-const ENV = {
-  temp: { value: 28.6, label: '평년 +1°', tone: 'warning' as const },
-  humidity: { value: 65, label: '높음', tone: 'warning' as const },
-  airQuality: { value: 'PM10 45', label: '보통', tone: 'success' as const },
-  uv: { value: 'UV 7', label: '강함', tone: 'warning' as const },
-  foodPoison: { value: '주의', label: '비브리오 ↑', tone: 'warning' as const },
-};
+// 자외선만 더미 유지 — Vercel 환경변수에 키 등록되면 별도 API로 교체
+const UV_DUMMY = { value: 'UV 7', label: '강함', tone: 'warning' as const };
+
+// "2026-05-091700" → "17시" — RiskCard 갱신 시각 표시용
+function formatRegDatetime(s: string): string {
+  const m = s.match(/(\d{4})-(\d{2})-(\d{2})(\d{2})(\d{2})/);
+  if (!m) return s;
+  return `${m[4]}시`;
+}
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   // 위치 기반 자치구 — 허용했으면 그 구, 아니면 강남구 fallback
   const district = getCachedLocation()?.gu ?? '강남구';
-  const riskLevel: RiskLevel = 3; // 추후 실시간 데이터 연동
+
+  const [env, setEnv] = useState<EnvData | null>(null);
+  const riskLevel: RiskLevel = env ? calculateRiskLevel(env) : 3;
   const risk = riskLevels[riskLevel];
+  const riskMessage = env
+    ? buildRiskMessage(riskLevel, district, {
+        temp: env.weather.temperature,
+        humidity: env.weather.humidity,
+      })
+    : risk.message;
 
   const [goldenCheese, setGoldenCheese] = useState<
     { id: string; name: string; score: number; district: string }[]
@@ -39,6 +61,17 @@ export default function HomeScreen() {
   const [districtPicks, setDistrictPicks] = useState<
     { id: string; name: string; score: number; category: string; grade: 'GOLDEN' | 'SILVER' | 'BRONZE' }[]
   >([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchEnvData(district).then((data) => {
+      if (cancelled) return;
+      setEnv(data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [district]);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,11 +128,12 @@ export default function HomeScreen() {
           bgColor={risk.bgColor}
           labelKr={risk.labelKr}
           mascotKey={risk.mascot}
-          message={risk.message}
+          message={riskMessage}
+          updatedAt={env ? formatRegDatetime(env.foodPoison.regDatetime) : '갱신 중'}
         />
 
         {/* 환경 카드 — 5개 가로 스크롤 */}
-        <EnvCardsRow />
+        <EnvCardsRow env={env} />
 
         {/* 1. Today's menu guide — 위험 단계 기반 추천 (액션 가이드) */}
         <SectionHeader title="오늘 추천 메뉴" subtitle="위험 단계 기반" marginTop="xxl" />
@@ -194,14 +228,15 @@ function RiskCard(props: {
   labelKr: string;
   mascotKey: keyof typeof Mascots;
   message: string;
+  updatedAt: string;
 }) {
-  const { district, riskLevel, accent, bgColor, labelKr, mascotKey, message } = props;
+  const { district, riskLevel, accent, bgColor, labelKr, mascotKey, message, updatedAt } = props;
 
   return (
     <Card variant="tinted" bgColor={bgColor} padding="l" radius="xxl" style={{ borderRadius: radius.xxl }}>
       <View style={styles.locationRow}>
         <Icon name="location" size={13} color={color.text.secondary} />
-        <Text style={styles.locationText}>{district} · 12:00 기준</Text>
+        <Text style={styles.locationText}>{district} · {updatedAt} 기준</Text>
       </View>
       <Text style={styles.cardHeading}>오늘의 식중독 위험</Text>
 
@@ -236,14 +271,36 @@ function RiskCard(props: {
 
 // ===== 환경 카드 row — 5개 가로 스크롤 =====
 
-function EnvCardsRow() {
-  const items = [
-    { icon: '🌡️', value: `${ENV.temp.value}°C`, label: '기온', sub: ENV.temp.label, tone: ENV.temp.tone },
-    { icon: '💧', value: `${ENV.humidity.value}%`, label: '습도', sub: ENV.humidity.label, tone: ENV.humidity.tone },
-    { icon: '🦠', value: ENV.foodPoison.value, label: '식중독', sub: ENV.foodPoison.label, tone: ENV.foodPoison.tone },
-    { icon: '🌫️', value: ENV.airQuality.label, label: '대기질', sub: ENV.airQuality.value, tone: ENV.airQuality.tone },
-    { icon: '☀️', value: ENV.uv.label, label: '자외선', sub: ENV.uv.value, tone: ENV.uv.tone },
+type EnvCardItem = { icon: string; value: string; label: string; sub: string; tone: Tone };
+
+function buildEnvCardItems(env: EnvData | null): EnvCardItem[] {
+  if (!env) {
+    const dash = { value: '—', sub: '불러오는 중', tone: 'success' as Tone };
+    return [
+      { icon: '🌡️', label: '기온', ...dash },
+      { icon: '💧', label: '습도', ...dash },
+      { icon: '🦠', label: '식중독', ...dash },
+      { icon: '🌫️', label: '대기질', ...dash },
+      { icon: '☀️', value: UV_DUMMY.value, label: '자외선', sub: UV_DUMMY.label, tone: UV_DUMMY.tone },
+    ];
+  }
+  const { weather, foodPoison } = env;
+  return [
+    { icon: '🌡️', value: `${weather.temperature.toFixed(1)}°C`, label: '기온',
+      sub: tempLabel(weather.temperature), tone: tempTone(weather.temperature) },
+    { icon: '💧', value: `${weather.humidity}%`, label: '습도',
+      sub: humidityLabel(weather.humidity), tone: humidityTone(weather.humidity) },
+    { icon: '🦠', value: foodPoisonLabel(foodPoison.today), label: '식중독',
+      sub: `${Math.round(foodPoison.today)}점`, tone: foodPoisonTone(foodPoison.today) },
+    { icon: '🌫️', value: pm10Label(weather.pm10), label: '대기질',
+      sub: `PM10 ${weather.pm10}`, tone: pm10Tone(weather.pm10) },
+    { icon: '☀️', value: UV_DUMMY.value, label: '자외선',
+      sub: UV_DUMMY.label, tone: UV_DUMMY.tone },
   ];
+}
+
+function EnvCardsRow({ env }: { env: EnvData | null }) {
+  const items = buildEnvCardItems(env);
   return (
     <ScrollView
       horizontal
