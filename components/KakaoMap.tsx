@@ -356,6 +356,10 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
       text-align: center;
       white-space: normal;
       overflow-wrap: break-word;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
       pointer-events: none;
       text-shadow:
         0 0 4px #fff, 0 0 4px #fff, 0 0 4px #fff,
