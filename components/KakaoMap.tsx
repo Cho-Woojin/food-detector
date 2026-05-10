@@ -57,6 +57,43 @@ const SELECTED_BOOST = 1;
 // background-image 또는 캔버스로 렌더하는 경우 적용 안 될 수 있어서 신뢰도 떨어짐.
 const SHADOW_PAD = 6;
 
+// 같은 좌표(같은 건물·다층 입주)에 식당이 N개 있으면 모두 같은 픽셀에 쌓여
+// 최상위 1개만 보이는 문제. 가장 점수 높은 마커는 원래 좌표 유지, 나머지를
+// 작은 ring(반경 ~25m)으로 균등 분포해서 모두 보이도록.
+// 좌표는 5소수점(약 1m) 기준으로 그룹핑 — 거의 같은 건물 입주가 대상.
+const COLOCATED_JITTER_RADIUS_M = 25; // ring 반경(m)
+const ONE_DEG_LAT_M = 111_111;        // 1° 위도 ≈ 111,111m
+function jitterColocated(list: Restaurant[]): Restaurant[] {
+  const groups = new Map<string, Restaurant[]>();
+  for (const r of list) {
+    if (!r.lat || !r.lng) continue;
+    const key = `${r.lat.toFixed(5)}|${r.lng.toFixed(5)}`;
+    const arr = groups.get(key);
+    if (arr) arr.push(r);
+    else groups.set(key, [r]);
+  }
+  const offsetById = new Map<string, { dLat: number; dLng: number }>();
+  for (const [, group] of groups) {
+    if (group.length <= 1) continue;
+    // 입력이 score desc 정렬 상태 → 첫 항목(최고점)은 원좌표 유지, 1번부터 ring 분배
+    const others = group.length - 1;
+    for (let i = 1; i < group.length; i++) {
+      const angle = (2 * Math.PI * (i - 1)) / others;
+      const dLat = (COLOCATED_JITTER_RADIUS_M * Math.cos(angle)) / ONE_DEG_LAT_M;
+      const cosLat = Math.cos((group[i].lat * Math.PI) / 180);
+      const dLng =
+        (COLOCATED_JITTER_RADIUS_M * Math.sin(angle)) / (ONE_DEG_LAT_M * Math.max(cosLat, 0.1));
+      offsetById.set(group[i].id, { dLat, dLng });
+    }
+  }
+  if (offsetById.size === 0) return list;
+  return list.map((r) => {
+    const off = offsetById.get(r.id);
+    if (!off) return r;
+    return { ...r, lat: r.lat + off.dLat, lng: r.lng + off.dLng };
+  });
+}
+
 // 픽사 스타일 3D 치즈 PNG 에셋을 base64로 마커 SVG에 임베드. 한 번만 로드.
 type CheeseB64 = { gold: string; silver: string; bronze: string };
 
@@ -223,9 +260,14 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
   // 최신 cheeseB64 ref — init useEffect가 한 번만 실행되므로 클로저가 stale해지지 않게 ref로 읽음
   const cheeseB64Ref = useRef<CheeseB64 | null>(null);
 
-  // 점수 내림차순 정렬 — 가까운 위치에 겹친 마커 중 등급 높은 것 우선
+  // 점수 내림차순 정렬 — 가까운 위치에 겹친 마커 중 등급 높은 것 우선.
+  // 같은 좌표(같은 건물·다층 입주) 식당은 작은 ring으로 흩어 배치 → 모두 보이게.
+  // 가장 점수 높은 마커가 원래 좌표 유지, 나머지는 25m 반경에 균등 분포.
   const sortedRestaurants = useMemo(
-    () => [...restaurants].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)),
+    () => {
+      const sorted = [...restaurants].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+      return jitterColocated(sorted);
+    },
     [restaurants]
   );
 
@@ -310,13 +352,10 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
       font-size: 13px;
       font-weight: 700;
       line-height: 1.25;
-      max-width: 140px;
+      width: 160px;
       text-align: center;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-      word-break: keep-all;
+      white-space: normal;
+      overflow-wrap: break-word;
       pointer-events: none;
       text-shadow:
         0 0 4px #fff, 0 0 4px #fff, 0 0 4px #fff,
@@ -462,10 +501,27 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
           return entry;
         };
 
-        // ===== Viewport + 줌레벨 기반 가상화 =====
-        // - viewport 안에 있고 + 현재 level이 GRADE_STYLE.minLevel 이하인 식당만
-        //   실제 kakao.maps.Marker 객체를 만들어 setMap. 떠나면 destroy.
-        // - 12만 건을 사전 생성하지 않고 보이는 수백 개만 유지 → 메모리/CPU 절감
+        // ===== Viewport + 줌레벨 + 픽셀 그리드 dedup 기반 가상화 =====
+        // - viewport 안에 있고 + 현재 level이 GRADE_STYLE.minLevel 이하인 식당만 후보
+        // - 후보들 중 픽셀 좌표가 가까운(겹치는) 마커는 우선순위 낮은 쪽을 컬링
+        //   → 같은 자리에 마커가 빽빽이 쌓이는 현상 방지
+        // - 우선순위: must-show(좋아요/검색강제) > GOLDEN > score 내림차순
+        //   (높은 점수 식당이 같은 위치 경쟁에서 항상 이김)
+        // - cellSize는 줌 레벨별 progressive — 확대할수록 dedup이 풀리며 더 많은
+        //   마커가 자연스럽게 노출. 최대 줌인(level 1, 20m)에선 완전 off.
+        const NO_DEDUP_LEVEL = 1; // 이 레벨 이하면 모든 후보 그대로 통과
+        // 줌 레벨 → dedup 셀 크기(px). 마커 bubble 너비는 36px이라 셀이 36 이하이면
+        // 사실상 dedup 효과 없음. 줌 인할수록 셀을 줄여 progressive reveal을 보장.
+        // 같은 셀 내 마커 1개만 허용 (3x3 이웃 검사는 너무 sparse해서 "이 지역에서 검색"
+        // 결과가 듬성듬성해지는 문제가 있어 1x1로 완화).
+        const cellSizeForLevel = (lv: number): number => {
+          if (lv <= 1) return 0;     // off (NO_DEDUP_LEVEL)
+          if (lv <= 2) return 36;    // 30m — 거의 모든 마커 노출
+          if (lv <= 3) return 40;    // 50m
+          if (lv <= 4) return 44;    // 100m
+          if (lv <= 5) return 48;    // 250m
+          return 56;                 // 500m+
+        };
         const applyViewport = () => {
           if (!mapInstanceRef.current) return;
           const bounds = map.getBounds();
@@ -475,32 +531,72 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
           const north = ne.getLat(), east = ne.getLng();
           const level = map.getLevel();
 
-          // 1) 원하는 id 집합 계산
-          // - GOLDEN: 9개뿐이라 viewport 무시하고 항상 표시
-          // - 좋아요 / 강제 표시(검색): 줌 레벨·viewport 무시하고 항상 표시 (수집중 등급도 노출)
-          // - 그 외: viewport + minLevel 둘 다 통과해야 표시
+          // 1) 후보 식당 + 우선순위 점수 계산
+          // - GOLDEN: 9개뿐이라 viewport 무시하고 항상 후보
+          // - 좋아요 / 강제 표시(검색): 줌 레벨·viewport 무시하고 mustShow=true (dedup도 우회)
+          // - 최대 줌인(level ≤ NO_DEDUP_LEVEL): minLevel 제한 우회 — viewport 안의 모든 등급 마커 노출
+          // - 그 외: viewport + minLevel 둘 다 통과해야 후보
           const liked = likedIdsRef.current;
           const forced = forcedVisibleIdsRef.current;
-          const want = new Set<string>();
-          const newcomers: Restaurant[] = [];
+          const showAll = level <= NO_DEDUP_LEVEL;
+          type Cand = { r: Restaurant; mustShow: boolean; pri: number };
+          const candidates: Cand[] = [];
           for (const r of restaurantsRef.current) {
             if (!r.lat || !r.lng) continue;
             const isLiked = liked.has(r.id);
             const isForced = forced.has(r.id);
             const isGold = r.grade === 'GOLDEN';
-            if (!isLiked && !isForced) {
-              const minLv = GRADE_STYLE[r.grade]?.minLevel ?? 3;
-              if (minLv < 0) continue; // NEEDS_DATA 등 자동 표시 X
-              if (level > minLv) continue;
-              if (!isGold) {
-                if (r.lat < south || r.lat > north || r.lng < west || r.lng > east) continue;
+            const mustShow = isLiked || isForced;
+            if (!mustShow) {
+              if (showAll) {
+                // viewport만 검사. minLevel/등급 무시.
+                if (!isGold && (r.lat < south || r.lat > north || r.lng < west || r.lng > east)) continue;
+              } else {
+                const minLv = GRADE_STYLE[r.grade]?.minLevel ?? 3;
+                if (minLv < 0) continue;
+                if (level > minLv) continue;
+                if (!isGold) {
+                  if (r.lat < south || r.lat > north || r.lng < west || r.lng > east) continue;
+                }
               }
             }
+            // 우선순위: mustShow → GOLDEN → score
+            const pri = (mustShow ? 1e9 : 0) + (isGold ? 1e8 : 0) + (r.score ?? 0);
+            candidates.push({ r, mustShow, pri });
+          }
+          candidates.sort((a, b) => b.pri - a.pri);
+
+          // 2) 픽셀 그리드 dedup
+          // - 셀 크기는 줌 레벨에 따라 단계적으로 변화 (progressive reveal 보장)
+          // - 셀 크기 0 (level ≤ NO_DEDUP_LEVEL): 모든 후보 통과
+          // - proj가 없거나(초기 idle 전) 실패하면 dedup 없이 통과 (드물게 발생)
+          const cellSize = cellSizeForLevel(level);
+          const skipDedup = cellSize === 0;
+          const proj = (map as any).getProjection ? (map as any).getProjection() : null;
+          const occupied = new Set<string>();
+          const cellKey = (cx: number, cy: number) => `${cx}|${cy}`;
+          const want = new Set<string>();
+          const wantedList: Restaurant[] = [];
+          for (const { r, mustShow } of candidates) {
+            let cx = 0, cy = 0, hasPx = false;
+            if (!skipDedup && proj && typeof proj.containerPointFromCoords === 'function') {
+              try {
+                const pt = proj.containerPointFromCoords(new kakao.maps.LatLng(r.lat, r.lng));
+                cx = Math.floor(pt.x / cellSize);
+                cy = Math.floor(pt.y / cellSize);
+                hasPx = true;
+              } catch { /* fallback: dedup skip */ }
+            }
+            if (!skipDedup && !mustShow && hasPx) {
+              // 같은 셀에 이미 마커가 있으면 컬링 — 셀 경계에 걸친 미세 겹침은 허용
+              if (occupied.has(cellKey(cx, cy))) continue;
+            }
+            if (!skipDedup && hasPx) occupied.add(cellKey(cx, cy));
             want.add(r.id);
-            if (!markersByIdRef.current.has(r.id)) newcomers.push(r);
+            wantedList.push(r);
           }
 
-          // 2) 더 이상 필요 없는 마커 제거
+          // 3) 더 이상 필요 없는 마커 제거
           for (const [id, entry] of markersByIdRef.current) {
             if (!want.has(id)) {
               entry.marker.setMap(null);
@@ -510,8 +606,9 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
             }
           }
 
-          // 3) 신규 마커 생성 (이미 정렬돼 있어 점수 높은 것부터 = 상위 등급 우선)
-          for (const r of newcomers) {
+          // 4) 신규 마커 생성
+          for (const r of wantedList) {
+            if (markersByIdRef.current.has(r.id)) continue;
             const entry = createEntry(r);
             entry.marker.setMap(map);
             markersByIdRef.current.set(r.id, entry);
