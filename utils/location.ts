@@ -161,8 +161,12 @@ export function getCachedLocation(): UserLocation | null {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const data = JSON.parse(raw) as UserLocation;
-    // 구버전(displayLabel 없음) 캐시는 무효화 — 재요청 유도
+    // 런타임 가드 — 손상된/구버전 캐시 무효화. updatedAt이 NaN이면
+    // ageMs > TTL 비교가 항상 false라 캐시가 영구히 살아남는 버그 방지.
     if (typeof data.displayLabel !== 'string') return null;
+    if (typeof data.updatedAt !== 'number' || !Number.isFinite(data.updatedAt)) return null;
+    if (typeof data.lat !== 'number' || !Number.isFinite(data.lat)) return null;
+    if (typeof data.lng !== 'number' || !Number.isFinite(data.lng)) return null;
     const ageMs = Date.now() - data.updatedAt;
     if (ageMs > 24 * 60 * 60 * 1000) return null;
     return data;
@@ -200,7 +204,9 @@ export async function requestUserLocation(): Promise<UserLocation | null> {
     if (region2 && (SEOUL_GUS as readonly string[]).includes(region2)) {
       seoulGu = region2 as GuKey;
     }
-    displayLabel = buildDisplayLabel(region1, region2, region3, '강남구');
+    // fallback은 displayLabel 규격(시 + 구) 그대로 — 카카오 응답이 텅 빌 때
+    // displayLabel이 시 접두어 없는 "강남구" 같은 형태로 떨어지지 않도록.
+    displayLabel = buildDisplayLabel(region1, region2, region3, '서울시 강남구');
   } else {
     // Kakao 실패 — 서울 안이라고 가정하고 centroid로 한 번 더 시도
     const gu = nearestGu(coords.lat, coords.lng);

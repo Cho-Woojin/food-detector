@@ -166,8 +166,8 @@ export default function HomeScreen() {
           updatedAt={env ? formatRegDatetime(env.foodPoison.regDatetime) : '갱신 중'}
         />
 
-        {/* 환경 카드 — 5개 가로 스크롤 */}
-        <EnvCardsRow env={env} />
+        {/* 환경 카드 — 5개 가로 스크롤. 비서울이면 미지원 표시 */}
+        <EnvCardsRow env={env} seoulSupported={!!seoulGu} />
 
         {/* 1. Today's menu guide — 위험 단계 기반 추천 (액션 가이드) */}
         <SectionHeader title="오늘 추천 메뉴" subtitle="위험 단계 기반" marginTop="xxl" />
@@ -307,14 +307,17 @@ function RiskCard(props: {
 
 type EnvCardItem = { icon: string; value: string; label: string; sub: string; tone: Tone };
 
-function buildEnvCardItems(env: EnvData | null): EnvCardItem[] {
+function buildEnvCardItems(env: EnvData | null, seoulSupported: boolean): EnvCardItem[] {
   if (!env) {
-    const dash = { value: '—', sub: '불러오는 중', tone: 'success' as Tone };
+    // 비서울이면 영구히 "불러오는 중"으로 보이지 않도록 미지원 라벨로 대체.
+    const placeholder = seoulSupported
+      ? { value: '—', sub: '불러오는 중', tone: 'success' as Tone }
+      : { value: '—', sub: '서울만 지원', tone: 'warning' as Tone };
     return [
-      { icon: '🌡️', label: '기온', ...dash },
-      { icon: '💧', label: '습도', ...dash },
-      { icon: '🦠', label: '식중독', ...dash },
-      { icon: '🌫️', label: '대기질', ...dash },
+      { icon: '🌡️', label: '기온', ...placeholder },
+      { icon: '💧', label: '습도', ...placeholder },
+      { icon: '🦠', label: '식중독', ...placeholder },
+      { icon: '🌫️', label: '대기질', ...placeholder },
       { icon: '☀️', value: UV_DUMMY.value, label: '자외선', sub: UV_DUMMY.label, tone: UV_DUMMY.tone },
     ];
   }
@@ -333,8 +336,8 @@ function buildEnvCardItems(env: EnvData | null): EnvCardItem[] {
   ];
 }
 
-function EnvCardsRow({ env }: { env: EnvData | null }) {
-  const items = buildEnvCardItems(env);
+function EnvCardsRow({ env, seoulSupported }: { env: EnvData | null; seoulSupported: boolean }) {
+  const items = buildEnvCardItems(env, seoulSupported);
   return (
     <ScrollView
       horizontal
