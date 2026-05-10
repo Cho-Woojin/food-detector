@@ -43,15 +43,22 @@ function formatRegDatetime(s: string): string {
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  // 위치 기반 자치구 — 초기 paint는 캐시값으로 빠르게(강남구 flash 방지),
-  // 마운트마다 navigator.geolocation으로 새로 받아서 이동 시 즉시 반영.
-  const [district, setDistrict] = useState<GuKey>(() => getCachedLocation()?.gu ?? '강남구');
+  // 위치 — 초기 paint는 캐시값으로 빠르게, 마운트마다 fresh 요청 + Kakao 역지오코딩.
+  // locationLabel: UI 표시용 ("서울시 마포구" / "세종시 한솔동" 등 지역 무관)
+  // seoulGu: env API·동네 추천 식당용. 서울 밖이면 null → 해당 섹션 스킵.
+  const [locationLabel, setLocationLabel] = useState<string>(
+    () => getCachedLocation()?.displayLabel ?? '서울시 강남구',
+  );
+  const [seoulGu, setSeoulGu] = useState<GuKey | null>(
+    () => getCachedLocation()?.seoulGu ?? '강남구',
+  );
 
   useEffect(() => {
     let cancelled = false;
     requestUserLocation().then((loc) => {
       if (cancelled || !loc) return;
-      setDistrict((prev) => (prev === loc.gu ? prev : loc.gu));
+      setLocationLabel((prev) => (prev === loc.displayLabel ? prev : loc.displayLabel));
+      setSeoulGu((prev) => (prev === loc.seoulGu ? prev : loc.seoulGu));
     });
     return () => {
       cancelled = true;
@@ -62,7 +69,7 @@ export default function HomeScreen() {
   const riskLevel: RiskLevel = env ? calculateRiskLevel(env) : 3;
   const risk = riskLevels[riskLevel];
   const riskMessage = env
-    ? buildRiskMessage(riskLevel, district, {
+    ? buildRiskMessage(riskLevel, locationLabel, {
         temp: env.weather.temperature,
         humidity: env.weather.humidity,
       })
@@ -76,15 +83,20 @@ export default function HomeScreen() {
   >([]);
 
   useEffect(() => {
+    // env API(poisonmap)는 서울 25개 자치구 키만 지원. 비서울이면 호출 안 함.
+    if (!seoulGu) {
+      setEnv(null);
+      return;
+    }
     let cancelled = false;
-    fetchEnvData(district).then((data) => {
+    fetchEnvData(seoulGu).then((data) => {
       if (cancelled) return;
       setEnv(data);
     });
     return () => {
       cancelled = true;
     };
-  }, [district]);
+  }, [seoulGu]);
 
   useEffect(() => {
     let cancelled = false;
@@ -100,23 +112,26 @@ export default function HomeScreen() {
         .map((r) => ({ id: r.i, name: r.n, score: r.s, district: r.g }));
       setGoldenCheese(golden);
 
-      const picks = rows
-        .filter((r) => r.g === district && (r.gr === 'GOLDEN' || r.gr === 'SILVER' || r.gr === 'BRONZE'))
-        .sort((a, b) => b.s - a.s)
-        .slice(0, 3)
-        .map((r) => ({
-          id: r.i,
-          name: r.n,
-          score: r.s,
-          category: r.c,
-          grade: r.gr as 'GOLDEN' | 'SILVER' | 'BRONZE',
-        }));
+      // 동네 추천도 서울 자치구 한정. 비서울이면 빈 배열.
+      const picks = seoulGu
+        ? rows
+            .filter((r) => r.g === seoulGu && (r.gr === 'GOLDEN' || r.gr === 'SILVER' || r.gr === 'BRONZE'))
+            .sort((a, b) => b.s - a.s)
+            .slice(0, 3)
+            .map((r) => ({
+              id: r.i,
+              name: r.n,
+              score: r.s,
+              category: r.c,
+              grade: r.gr as 'GOLDEN' | 'SILVER' | 'BRONZE',
+            }))
+        : [];
       setDistrictPicks(picks);
     });
     return () => {
       cancelled = true;
     };
-  }, [district]);
+  }, [seoulGu]);
 
   return (
     <View style={styles.root}>
@@ -137,7 +152,7 @@ export default function HomeScreen() {
 
         {/* Risk hero card */}
         <RiskCard
-          district={district}
+          district={locationLabel}
           riskLevel={riskLevel}
           accent={risk.color}
           bgColor={risk.bgColor}
@@ -152,13 +167,13 @@ export default function HomeScreen() {
 
         {/* 1. Today's menu guide — 위험 단계 기반 추천 (액션 가이드) */}
         <SectionHeader title="오늘 추천 메뉴" subtitle="위험 단계 기반" marginTop="xxl" />
-        <TodayMenuCard riskLevel={riskLevel} district={district} />
+        <TodayMenuCard riskLevel={riskLevel} district={locationLabel} />
 
-        {/* 2. 내 동네 추천 — 사용자 자치구 안 인기 식당 */}
-        {districtPicks.length > 0 ? (
+        {/* 2. 내 동네 추천 — 사용자 자치구 안 인기 식당 (서울 한정) */}
+        {seoulGu && districtPicks.length > 0 ? (
           <>
             <SectionHeader
-              title={`${district} 인기 식당`}
+              title={`${seoulGu} 인기 식당`}
               subtitle="내 동네에서 평가 높은 식당"
               trailing={{ label: '전체보기', icon: 'forward' }}
               marginTop="xxl"
