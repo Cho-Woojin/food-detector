@@ -16,7 +16,7 @@ import {
 } from '@/components/ui';
 import { ensureRecomputedIndex } from '@/utils/dataStore';
 import { fetchEnvData, type EnvData } from '@/utils/api/env';
-import { ensureUserLocation, getCachedLocation } from '@/utils/location';
+import { getCachedLocation, requestUserLocation } from '@/utils/location';
 import type { GuKey } from '@/constants/Restaurant';
 import {
   calculateRiskLevel,
@@ -43,13 +43,13 @@ function formatRegDatetime(s: string): string {
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  // 위치 기반 자치구 — 캐시 있으면 즉시 사용, 없으면 강남구 fallback으로 시작.
-  // 마운트 후 ensureUserLocation()이 navigator.geolocation 결과(또는 24h 캐시)로 갱신.
+  // 위치 기반 자치구 — 초기 paint는 캐시값으로 빠르게(강남구 flash 방지),
+  // 마운트마다 navigator.geolocation으로 새로 받아서 이동 시 즉시 반영.
   const [district, setDistrict] = useState<GuKey>(() => getCachedLocation()?.gu ?? '강남구');
 
   useEffect(() => {
     let cancelled = false;
-    ensureUserLocation().then((loc) => {
+    requestUserLocation().then((loc) => {
       if (cancelled || !loc) return;
       setDistrict((prev) => (prev === loc.gu ? prev : loc.gu));
     });
