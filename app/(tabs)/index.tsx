@@ -16,7 +16,8 @@ import {
 } from '@/components/ui';
 import { ensureRecomputedIndex } from '@/utils/dataStore';
 import { fetchEnvData, type EnvData } from '@/utils/api/env';
-import { getCachedLocation } from '@/utils/location';
+import { ensureUserLocation, getCachedLocation } from '@/utils/location';
+import type { GuKey } from '@/constants/Restaurant';
 import {
   calculateRiskLevel,
   foodPoisonLabel,
@@ -42,8 +43,20 @@ function formatRegDatetime(s: string): string {
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  // 위치 기반 자치구 — 허용했으면 그 구, 아니면 강남구 fallback
-  const district = getCachedLocation()?.gu ?? '강남구';
+  // 위치 기반 자치구 — 캐시 있으면 즉시 사용, 없으면 강남구 fallback으로 시작.
+  // 마운트 후 ensureUserLocation()이 navigator.geolocation 결과(또는 24h 캐시)로 갱신.
+  const [district, setDistrict] = useState<GuKey>(() => getCachedLocation()?.gu ?? '강남구');
+
+  useEffect(() => {
+    let cancelled = false;
+    ensureUserLocation().then((loc) => {
+      if (cancelled || !loc) return;
+      setDistrict((prev) => (prev === loc.gu ? prev : loc.gu));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const [env, setEnv] = useState<EnvData | null>(null);
   const riskLevel: RiskLevel = env ? calculateRiskLevel(env) : 3;
