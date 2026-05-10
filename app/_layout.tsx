@@ -71,9 +71,13 @@ function RootLayoutNav() {
   const [splashGone, setSplashGone] = useState(false);
   const kakaoUser = useKakaoUser();
 
-  // 인덱스 + 자치구 식당 데이터 미리 로드 (홈/검색/지도가 즉시 동작하도록)
+  // 인덱스 + 자치구 식당 데이터 미리 로드 (홈/검색/지도가 즉시 동작하도록).
+  // 하드 타임아웃: 데이터 로드가 아무리 늦어도 4초 후엔 splash 강제 해제 — 흰 화면 방지.
   useEffect(() => {
     let cancelled = false;
+    const fallback = setTimeout(() => {
+      if (!cancelled) setDataReady(true);
+    }, 4000);
     ensureRecomputedIndex()
       .catch(() => null)
       .then(() => {
@@ -81,6 +85,7 @@ function RootLayoutNav() {
       });
     return () => {
       cancelled = true;
+      clearTimeout(fallback);
     };
   }, []);
 
