@@ -46,12 +46,16 @@ export default function HomeScreen() {
   // 위치 — 초기 paint는 캐시값으로 빠르게, 마운트마다 fresh 요청 + Kakao 역지오코딩.
   // locationLabel: UI 표시용 ("서울시 마포구" / "세종시 한솔동" 등 지역 무관)
   // seoulGu: env API·동네 추천 식당용. 서울 밖이면 null → 해당 섹션 스킵.
-  const [locationLabel, setLocationLabel] = useState<string>(
-    () => getCachedLocation()?.displayLabel ?? '서울시 강남구',
-  );
-  const [seoulGu, setSeoulGu] = useState<GuKey | null>(
-    () => getCachedLocation()?.seoulGu ?? '강남구',
-  );
+  // 캐시가 있으면 그대로(seoulGu null 인 비서울 사용자는 null 유지),
+  // 없으면 강남구 fallback. ??로 합치면 null이 강남구로 떨어지므로 명시적 분기.
+  const [locationLabel, setLocationLabel] = useState<string>(() => {
+    const c = getCachedLocation();
+    return c?.displayLabel ?? '서울시 강남구';
+  });
+  const [seoulGu, setSeoulGu] = useState<GuKey | null>(() => {
+    const c = getCachedLocation();
+    return c ? c.seoulGu : '강남구';
+  });
 
   useEffect(() => {
     let cancelled = false;
