@@ -10,6 +10,10 @@ import {
   Restaurant as UIRestaurant,
   Review,
 } from '@/constants/MockData';
+import { deriveGrade as deriveGradeCore } from '@/utils/scoring';
+
+// 등급 결정은 utils/scoring.ts가 단일 원본. 여기는 re-export로 사용성 유지.
+export { deriveGrade } from '@/utils/scoring';
 
 // ---------- 5축 ----------
 // 각 축은 단순 ratio가 아니라, 원시 신호의 의미를 따져 등급/tone을 결정한다.
@@ -276,8 +280,8 @@ function defaultHours(cat: CategoryKey): string {
   return '11:00 - 22:00';
 }
 
-// ---------- 점수 재계산 ----------
-// 시연 데이터의 D(리뷰 분석)/E(Gap 탐지)는 99% 이상이 측정 안 됨(0).
+// ---------- 점수 재계산 (5축 차트 시각화 전용) ----------
+// 5축 그래프(SpiderChart5)에 들어갈 정규화 점수를 다시 계산. 실제 종합 점수와 별개.
 // "데이터 부족" 축을 분모에서 제외해 실제로 측정된 항목만으로 정규화한다.
 // 이렇게 해야 hyg=1·pun=0 같은 평범한 식당도 BRONZE 이상으로 분류된다.
 export function recomputeScore(axes: AxisScore[]): number {
@@ -288,45 +292,58 @@ export function recomputeScore(axes: AxisScore[]): number {
   return Math.round((sum / max) * 100);
 }
 
-export function deriveGrade(score: number): Grade {
-  if (score >= 85) return 'GOLDEN';
-  if (score >= 70) return 'SILVER';
-  if (score >= 55) return 'BRONZE';
-  return 'INVESTIGATING';
-}
-
 function gradeLabelFromUI(g: Grade): string {
-  if (g === 'GOLDEN') return '골든 치즈';
+  if (g === 'GOLDEN') return '골드 치즈';
   if (g === 'SILVER') return '실버 치즈';
   if (g === 'BRONZE') return '브론즈 치즈';
-  return '수사 중';
+  return '썩은 치즈';
 }
 
-// 등급은 score에서 deriveGrade로 파생 — 단일 임계값(85/70/55)을 모든 화면이 공유.
-// 5축 객체 빌드 등의 비용 없이 ref만 반환하므로 빠름.
+// 등급은 utils/scoring.ts의 deriveGrade로 파생 — 종합 점수 + flags 기반.
+// 호출자가 이미 score/grade를 갖고 있는 케이스라 ref만 반환 (싸다).
 export function recomputeFromRaw(r: Restaurant): { score: number; grade: Grade } {
-  return { score: r.score, grade: deriveGrade(r.score) };
+  return {
+    score: r.score,
+    grade: deriveGradeCore({
+      score: r.score,
+      flags: { evalGrade: r.evalGrade, punishTypes: r.punishTypes },
+      userScore: r.userScore,
+      userReviewCount: r.userReviewCount,
+    }) as Grade,
+  };
 }
 
 // ---------- 메인 어댑터 (상세) ----------
 export function toUIRestaurant(r: Restaurant): UIRestaurant {
-  // 점수는 사전 계산 그대로, 등급은 deriveGrade로 파생 (지도·좋아요·검색·홈과 동일 산식)
+  // 점수는 사전 계산 그대로, 등급은 deriveGrade로 파생 (utils/scoring.ts 단일 산식).
   // 5축은 spider chart 시각화 용도로만 빌드 (점수에는 영향 X)
   const axes = buildAxes(r);
   const score = r.score;
-  const grade = deriveGrade(score);
+  const grade = deriveGradeCore({
+    score,
+    flags: { evalGrade: r.evalGrade, punishTypes: r.punishTypes },
+    userScore: r.userScore,
+    userReviewCount: r.userReviewCount,
+  }) as Grade;
   const labelKr = gradeLabelFromUI(grade);
 
   const scoreSummary =
     grade === 'GOLDEN'
-      ? `${score}점 ${labelKr} — 5축 모두 검증된 ${r.cat} 추천 식당`
+      ? `${score}점 ${labelKr} — 데이터·사장님·사용자 모두 우수한 ${r.cat} 추천 식당`
       : grade === 'SILVER'
-      ? `${score}점 ${labelKr} — 위생·신뢰가 우수한 ${r.cat} 식당`
+      ? `${score}점 ${labelKr} — 믿고 갈 수 있는 ${r.cat} 식당`
       : grade === 'BRONZE'
-      ? `${score}점 ${labelKr} — 일부 항목 개선이 필요한 ${r.cat} 식당`
+      ? `${score}점 ${labelKr} — 평범한 ${r.cat} 식당`
       : r.pun > 0
-      ? `${score}점 ${labelKr} — 행정처분 이력으로 식탐정이 모니터링`
-      : `${score}점 ${labelKr} — 추가 데이터 수집이 필요한 식당`;
+      ? `${score}점 ${labelKr} — 행정처분 이력 있음, 주의 필요`
+      : `${score}점 ${labelKr} — 사용자 평이 좋지 않음, 주의 필요`;
+
+  // mock 리뷰 selector — Grade 4단계에서 우선순위 매핑
+  const mockReviewKey = grade === 'GOLDEN' || grade === 'SILVER'
+    ? 'GOLDEN'
+    : grade === 'BRONZE'
+    ? 'BRONZE'
+    : 'ROTTEN';
 
   return {
     id: r.id,
@@ -348,7 +365,7 @@ export function toUIRestaurant(r: Restaurant): UIRestaurant {
     scoreSummary,
     menuGuide: buildMenuGuide(r.cat),
     adminActions: buildAdminActions(r),
-    reviews: buildReviews(grade === 'GOLDEN' || grade === 'SILVER' ? 'GOLDEN' : grade === 'BRONZE' ? 'BRONZE' : 'INVESTIGATING'),
+    reviews: buildReviews(mockReviewKey as any),
   };
 }
 

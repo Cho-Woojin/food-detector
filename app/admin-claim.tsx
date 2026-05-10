@@ -58,6 +58,14 @@ export default function AdminClaim() {
             <Text style={styles.nick}>{user.nickname}</Text> 님 (id: {user.id}){'\n'}
             이제 식당 상세 페이지에서{'\n'}사장님 지정 버튼을 사용할 수 있어요.
           </Text>
+          <View style={styles.testGuide}>
+            <Text style={styles.testGuideTitle}>사장님 UI 테스트 순서</Text>
+            <Text style={styles.testGuideBody}>
+              1) 식당 상세에서 가게명을 길게 눌러 사장님 지정{'\n'}
+              2) 지정한 계정으로 다시 로그인{'\n'}
+              3) 정보 수정/인증 게시글/리뷰 답글 UI 확인
+            </Text>
+          </View>
           <Button
             variant="primary"
             size="md"
@@ -95,4 +103,15 @@ const styles = StyleSheet.create({
     marginBottom: spacing.l,
   },
   nick: { color: color.text.primary, fontWeight: '700' },
+  testGuide: {
+    width: '100%',
+    paddingHorizontal: spacing.m,
+    paddingVertical: spacing.m,
+    borderRadius: radius.m,
+    backgroundColor: color.surface.subtle,
+    borderWidth: 1,
+    borderColor: color.border.default,
+  },
+  testGuideTitle: { ...typography.captionEmphasized, color: color.text.secondary, marginBottom: spacing.xs },
+  testGuideBody: { ...typography.caption, color: color.text.secondary, lineHeight: 18 },
 });

@@ -222,15 +222,16 @@ export function buildRiskMessage(
 }
 
 // ===== Cheese Grade System =====
+// 임계값 단일 소스: utils/scoring.ts. 여기는 표시용 메타.
 export const cheeseGrades = {
   GOLDEN: {
     label: 'Golden Cheese',
-    labelKr: '골든 치즈',
+    labelKr: '골드 치즈',
     description: '식탐정이 극찬한 식당',
     color: color.cheese.GOLDEN.fg,
     bgColor: color.cheese.GOLDEN.bg,
     image: 'gold' as const,
-    minScore: 90,
+    minScore: 80,
   },
   SILVER: {
     label: 'Silver Cheese',
@@ -239,7 +240,7 @@ export const cheeseGrades = {
     color: color.cheese.SILVER.fg,
     bgColor: color.cheese.SILVER.bg,
     image: 'silver' as const,
-    minScore: 80,
+    minScore: 60,
   },
   BRONZE: {
     label: 'Bronze Cheese',
@@ -248,23 +249,14 @@ export const cheeseGrades = {
     color: color.cheese.BRONZE.fg,
     bgColor: color.cheese.BRONZE.bg,
     image: 'bronze' as const,
-    minScore: 70,
+    minScore: 0,
   },
-  INVESTIGATING: {
-    label: 'Investigating',
-    labelKr: '수사 중',
-    description: '식탐정이 지켜보는 식당',
-    color: color.cheese.INVESTIGATING.fg,
-    bgColor: color.cheese.INVESTIGATING.bg,
-    image: null,
-    minScore: 60,
-  },
-  WARNING: {
-    label: 'Warning',
-    labelKr: '요주의',
-    description: '식탐정이 경고한 식당',
-    color: color.cheese.WARNING.fg,
-    bgColor: color.cheese.WARNING.bg,
+  ROTTEN: {
+    label: 'Rotten Cheese',
+    labelKr: '썩은 치즈',
+    description: '과락 항목 발견 — 주의가 필요한 식당',
+    color: color.cheese.ROTTEN.fg,
+    bgColor: color.cheese.ROTTEN.bg,
     image: null,
     minScore: 0,
   },
