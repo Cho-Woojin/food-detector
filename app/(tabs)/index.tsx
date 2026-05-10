@@ -59,7 +59,7 @@ export default function HomeScreen() {
   }, []);
 
   const [env, setEnv] = useState<EnvData | null>(null);
-  const riskLevel: RiskLevel = env ? calculateRiskLevel(env) : 3;
+  const riskLevel: RiskLevel = env ? calculateRiskLevel(env) : 2;
   const risk = riskLevels[riskLevel];
   const riskMessage = env
     ? buildRiskMessage(riskLevel, district, {
@@ -139,6 +139,7 @@ export default function HomeScreen() {
         <RiskCard
           district={district}
           riskLevel={riskLevel}
+          score={env ? Math.round(env.foodPoison.today) : null}
           accent={risk.color}
           bgColor={risk.bgColor}
           labelKr={risk.labelKr}
@@ -238,6 +239,7 @@ function Header() {
 function RiskCard(props: {
   district: string;
   riskLevel: RiskLevel;
+  score: number | null;
   accent: string;
   bgColor: string;
   labelKr: string;
@@ -245,7 +247,7 @@ function RiskCard(props: {
   message: string;
   updatedAt: string;
 }) {
-  const { district, riskLevel, accent, bgColor, labelKr, mascotKey, message, updatedAt } = props;
+  const { district, riskLevel, score, accent, bgColor, labelKr, mascotKey, message, updatedAt } = props;
 
   return (
     <Card variant="tinted" bgColor={bgColor} padding="l" radius="xxl" style={{ borderRadius: radius.xxl }}>
@@ -257,9 +259,9 @@ function RiskCard(props: {
 
       <View style={styles.stageRow}>
         <View style={styles.stageCol}>
-          {/* 위험 단계 시각 바 */}
+          {/* 위험 단계 시각 바 — 식약처 4단계 */}
           <View style={styles.levelDots}>
-            {[1, 2, 3, 4, 5].map((i) => (
+            {[1, 2, 3, 4].map((i) => (
               <View
                 key={i}
                 style={[
@@ -269,8 +271,13 @@ function RiskCard(props: {
               />
             ))}
           </View>
-          <Text style={[styles.bigStageLabel, { color: accent }]}>{labelKr}</Text>
-          <Text style={[styles.bigStageSub, { color: accent }]}>{riskLevel}단계 / 5단계</Text>
+          <View style={styles.bigStageLabelRow}>
+            <Text style={[styles.bigStageLabel, { color: accent }]}>{labelKr}</Text>
+            {score !== null ? (
+              <Text style={[styles.bigStageScore, { color: accent }]}>{score}점</Text>
+            ) : null}
+          </View>
+          <Text style={[styles.bigStageSub, { color: accent }]}>{riskLevel}단계 / 4단계</Text>
         </View>
         <Image source={Mascots[mascotKey]} style={styles.bigMascot} resizeMode="contain" />
       </View>
@@ -388,10 +395,9 @@ function RestaurantCard({
 
 const MENU_BY_LEVEL: Record<RiskLevel, { recommend: string[]; avoid: string[]; tip: string }> = {
   1: { recommend: ['회', '비빔국수', '냉채', '구이'], avoid: [], tip: '오늘은 마음 편히 골라봐요.' },
-  2: { recommend: ['비빔밥', '국수', '구이'], avoid: [], tip: '평소처럼 즐겨도 좋아요.' },
-  3: { recommend: ['칼국수', '국밥', '전골', '찜'], avoid: ['회', '육회'], tip: '따끈한 가열 메뉴를 추천해요.' },
-  4: { recommend: ['국밥', '전골', '찜', '구이'], avoid: ['사시미', '육회', '생굴'], tip: '충분히 가열한 메뉴가 안전해요.' },
-  5: { recommend: ['집밥', '전골'], avoid: ['회', '육회', '생굴', '뷔페'], tip: '오늘은 직접 조리하면 가장 안전해요.' },
+  2: { recommend: ['칼국수', '국밥', '전골', '찜'], avoid: ['회', '육회'], tip: '따끈한 가열 메뉴를 추천해요.' },
+  3: { recommend: ['국밥', '전골', '찜', '구이'], avoid: ['사시미', '육회', '생굴'], tip: '충분히 가열한 메뉴가 안전해요.' },
+  4: { recommend: ['집밥', '전골'], avoid: ['회', '육회', '생굴', '뷔페'], tip: '오늘은 직접 조리하면 가장 안전해요.' },
 };
 
 function TodayMenuCard({ riskLevel, district }: { riskLevel: RiskLevel; district: string }) {
@@ -469,7 +475,9 @@ const styles = StyleSheet.create({
   },
   stageCol: { flex: 1, justifyContent: 'center', gap: spacing.xs },
   bigMascot: { width: 110, height: 110 },
+  bigStageLabelRow: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.s },
   bigStageLabel: { fontSize: 28, fontWeight: '800', lineHeight: 32 },
+  bigStageScore: { fontSize: 18, fontWeight: '700', lineHeight: 22 },
   bigStageSub: { ...typography.captionEmphasized },
   time: { ...typography.caption, color: color.text.tertiary, marginTop: spacing.s },
 

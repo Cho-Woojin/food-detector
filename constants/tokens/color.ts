@@ -68,13 +68,13 @@ export const color = {
     neutralSoft:  'rgba(120,120,128,0.16)',
   },
 
-  // ===== Risk levels (5 stages) =====
+  // ===== Risk levels (4 stages) =====
+  // 식약처 식중독 예측지수 단계와 동기화 — 관심(<55)/주의(55~70)/경고(71~85)/위험(≥86)
   risk: {
-    1: { fg: '#34C759', bg: 'rgba(52,199,89,0.12)' },
-    2: { fg: '#34C759', bg: 'rgba(52,199,89,0.12)' },
-    3: { fg: '#FFCC00', bg: 'rgba(255,204,0,0.16)' },
-    4: { fg: '#FF9500', bg: 'rgba(255,149,0,0.12)' },
-    5: { fg: '#FF3B30', bg: 'rgba(255,59,48,0.12)' },
+    1: { fg: '#34C759', bg: 'rgba(52,199,89,0.12)' },   // 관심
+    2: { fg: '#FFCC00', bg: 'rgba(255,204,0,0.16)' },   // 주의
+    3: { fg: '#FF9500', bg: 'rgba(255,149,0,0.12)' },   // 경고
+    4: { fg: '#FF3B30', bg: 'rgba(255,59,48,0.12)' },   // 위험
   },
 
   // ===== Cheese grades =====
@@ -94,5 +94,5 @@ export const color = {
 } as const;
 
 export type Color = typeof color;
-export type RiskLevel = 1 | 2 | 3 | 4 | 5;
+export type RiskLevel = 1 | 2 | 3 | 4;
 export type CheeseGradeKey = keyof typeof color.cheese;

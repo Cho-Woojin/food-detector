@@ -57,8 +57,8 @@ export const palette = {
   // ===== Risk levels (mapped to HIG system colors) =====
   riskGreen:       color.status.success,
   riskGreenLight:  color.status.successSoft,
-  riskYellow:      color.risk[3].fg,
-  riskYellowLight: color.risk[3].bg,
+  riskYellow:      color.risk[2].fg,
+  riskYellowLight: color.risk[2].bg,
   riskOrange:      color.status.warning,
   riskOrangeLight: color.status.warningSoft,
   riskRed:         color.status.danger,
@@ -69,8 +69,8 @@ export const palette = {
   accentLight: '#D5F5E3',
   accentDark:  color.brand.primaryHover,
 
-  warn:        color.risk[3].fg,
-  warnLight:   color.risk[3].bg,
+  warn:        color.risk[2].fg,
+  warnLight:   color.risk[2].bg,
   ok:          color.brand.primary,
   okLight:     '#D5F5E3',
   danger:      color.status.danger,
@@ -87,11 +87,12 @@ export const palette = {
   mascotBorder: '#FFD662',
 } as const;
 
-// ===== Risk Level System (5 stages) =====
+// ===== Risk Level System (4 stages) =====
+// 식약처 식중독 예측지수 단계와 동기화 — 관심/주의/경고/위험.
 export const riskLevels = {
   1: {
-    label: 'Calm',
-    labelKr: '평온',
+    label: 'Concern',
+    labelKr: '관심',
     emoji: '🟢',
     color: color.risk[1].fg,
     bgColor: color.risk[1].bg,
@@ -104,25 +105,11 @@ export const riskLevels = {
     ],
   },
   2: {
-    label: 'Good',
-    labelKr: '양호',
-    emoji: '🟢',
-    color: color.risk[2].fg,
-    bgColor: color.risk[2].bg,
-    mascot: 'weather' as const,
-    message: '평소처럼 즐겨도 좋아요',
-    messages: [
-      '평소처럼 즐겨도 좋아요',
-      '대부분의 메뉴를 편하게 골라도 돼요',
-      '오늘은 무난한 컨디션이에요',
-    ],
-  },
-  3: {
     label: 'Caution',
     labelKr: '주의',
     emoji: '🟡',
-    color: color.risk[3].fg,
-    bgColor: color.risk[3].bg,
+    color: color.risk[2].fg,
+    bgColor: color.risk[2].bg,
     mascot: 'warning' as const,
     message: '익힌 메뉴 위주로 골라봐요',
     messages: [
@@ -132,12 +119,12 @@ export const riskLevels = {
       '날 음식은 다음 기회에 즐겨봐요',
     ],
   },
-  4: {
-    label: 'Alert',
-    labelKr: '경계',
+  3: {
+    label: 'Warning',
+    labelKr: '경고',
     emoji: '🟠',
-    color: color.risk[4].fg,
-    bgColor: color.risk[4].bg,
+    color: color.risk[3].fg,
+    bgColor: color.risk[3].bg,
     mascot: 'warning' as const,
     message: '익힌 음식으로 안전하게 드세요',
     messages: [
@@ -147,12 +134,12 @@ export const riskLevels = {
       '실온 보관 음식은 다음에 만나봐요',
     ],
   },
-  5: {
+  4: {
     label: 'Danger',
     labelKr: '위험',
     emoji: '🔴',
-    color: color.risk[5].fg,
-    bgColor: color.risk[5].bg,
+    color: color.risk[4].fg,
+    bgColor: color.risk[4].bg,
     mascot: 'empty' as const,
     message: '오늘은 직접 조리하면 더 안전해요',
     messages: [
@@ -163,7 +150,7 @@ export const riskLevels = {
   },
 } as const;
 
-export function pickRiskMessage(level: 1 | 2 | 3 | 4 | 5): string {
+export function pickRiskMessage(level: 1 | 2 | 3 | 4): string {
   const stage = riskLevels[level];
   const list = stage.messages as readonly string[];
   if (list.length === 0) return stage.message;
@@ -182,28 +169,24 @@ const envSummary = (e: EnvContext) => `기온 ${e.temp}°C·습도 ${e.humidity}
 
 type Builder = (district: string, env: EnvContext) => string;
 
-const RISK_TEMPLATES: Record<1 | 2 | 3 | 4 | 5, Builder[]> = {
+const RISK_TEMPLATES: Record<1 | 2 | 3 | 4, Builder[]> = {
   1: [
     (d) => `오늘 ${d}는 외식하기 좋은 컨디션이에요. 평소처럼 즐겨봐요.`,
     (d, e) => `${d} 환경은 ${envSummary(e)}로 안정적이에요. 회·해산물도 편하게 골라봐요.`,
     (d) => `${d} 오늘은 마음 편히 회식·모임 다녀와도 좋아요.`,
   ],
   2: [
-    (d) => `오늘 ${d}는 무난한 날이에요. 평소처럼 즐겨봐요.`,
-    (d, e) => `${d}는 ${envSummary(e)}로 무난해요. 대부분 메뉴 편하게 골라도 좋아요.`,
-  ],
-  3: [
     (d, e) => `${d}는 ${envSummary(e)}로 세균이 잘 번식해요. 칼국수·국밥처럼 따뜻한 가열 메뉴를 추천해요.`,
     (d) => `${d} 오늘은 가열한 메뉴가 안전해요. 비빔국수·냉채는 다음 기회에 만나봐요.`,
     (d, e) => `오늘 ${d}는 ${e.temp}°C로 무더워요. 따끈한 국물 메뉴가 잘 어울려요.`,
     (d) => `${d} 회식이라면 구이·전골을 추천해요.`,
   ],
-  4: [
+  3: [
     (d, e) => `${d}는 ${envSummary(e)}로 식중독 가능성이 커요. 충분히 가열한 국물 메뉴를 추천해요.`,
     (d) => `${d} 오늘은 잘 익힌 메뉴가 안전해요. 사시미·육회·생굴은 다음 기회에 만나봐요.`,
-    (d, e) => `${d}는 ${envSummary(e)}로 경계 단계예요. 단품 조리 메뉴가 더 안전해요.`,
+    (d, e) => `${d}는 ${envSummary(e)}로 경고 단계예요. 단품 조리 메뉴가 더 안전해요.`,
   ],
-  5: [
+  4: [
     (d) => `오늘 ${d}는 위험 단계예요. 즉석 조리한 가열 메뉴를 추천해요.`,
     (d) => `${d} 오늘은 집에서 직접 조리하면 가장 안전해요.`,
     (d, e) => `${d}는 ${envSummary(e)}로 위험 단계예요. 모임은 다음 기회에 즐겨봐요.`,
@@ -211,7 +194,7 @@ const RISK_TEMPLATES: Record<1 | 2 | 3 | 4 | 5, Builder[]> = {
 };
 
 export function buildRiskMessage(
-  level: 1 | 2 | 3 | 4 | 5,
+  level: 1 | 2 | 3 | 4,
   district: string,
   env: EnvContext
 ): string {

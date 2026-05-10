@@ -40,7 +40,7 @@ export const hig = {
   // System colors (HIG, light)
   systemRed:    color.status.danger,
   systemOrange: color.status.warning,
-  systemYellow: color.risk[3].fg,
+  systemYellow: '#FFCC00',
   systemGreen:  color.status.success,
   systemMint:   '#00C7BE',
   systemTeal:   '#30B0C7',

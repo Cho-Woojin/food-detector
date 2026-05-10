@@ -2,11 +2,10 @@ import { StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { color, radius, spacing, typography, type RiskLevel } from '@/constants/tokens';
 
 const LABEL: Record<RiskLevel, string> = {
-  1: '평온',
-  2: '양호',
-  3: '주의',
-  4: '경계',
-  5: '위험',
+  1: '관심',
+  2: '주의',
+  3: '경고',
+  4: '위험',
 };
 
 type Size = 'sm' | 'md' | 'lg';
