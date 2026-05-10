@@ -352,7 +352,7 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
       font-size: 13px;
       font-weight: 700;
       line-height: 1.25;
-      max-width: 140px;
+      max-width: 180px;
       text-align: center;
       white-space: normal;
       overflow-wrap: break-word;
