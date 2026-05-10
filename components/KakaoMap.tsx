@@ -354,11 +354,8 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
       line-height: 1.25;
       max-width: 140px;
       text-align: center;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-      word-break: keep-all;
+      white-space: normal;
+      overflow-wrap: break-word;
       pointer-events: none;
       text-shadow:
         0 0 4px #fff, 0 0 4px #fff, 0 0 4px #fff,
