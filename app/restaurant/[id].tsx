@@ -97,14 +97,13 @@ export default function RestaurantDetail() {
       deriveGrade({
         score: adjustedScore,
         flags: {
-          evalGrade: raw?.evalGrade,
           punishTypes: raw?.punishTypes,
           hygieneViolation: raw?.hygieneViolation,
         },
         userScore: reviewImpact.userScore,
         userReviewCount: reviewImpact.reviewCount,
       }),
-    [adjustedScore, raw?.evalGrade, raw?.punishTypes, raw?.hygieneViolation, reviewImpact.userScore, reviewImpact.reviewCount],
+    [adjustedScore, raw?.punishTypes, raw?.hygieneViolation, reviewImpact.userScore, reviewImpact.reviewCount],
   );
   const impactDelta = adjustedScore - dataScore;
 
@@ -351,7 +350,6 @@ function SummaryTab({
         flags={{
           hygieneDesignated: raw.hyg === 1,
           hasModel: raw.mod === 1,
-          evalGrade: raw.evalGrade,
           punishCount: raw.pun,
           punishTypes: raw.punishTypes,
         }}
@@ -382,7 +380,6 @@ function RottenReasons({
   reviewImpact: { reviewCount: number; userScore: number };
 }) {
   const reasons: string[] = [];
-  if (raw.evalGrade === '중점관리업소') reasons.push('중점관리업소');
   if (raw.hygieneViolation) reasons.push('위생 직결 위반');
   if (reviewImpact.reviewCount >= 10 && reviewImpact.userScore <= 10) {
     reasons.push('사용자 평점 낮음');
