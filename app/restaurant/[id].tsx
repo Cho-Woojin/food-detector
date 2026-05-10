@@ -4,23 +4,24 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/Icon';
-import { Cheese, Mascots, type MascotKey } from '@/constants/Assets';
+import { Cheese, Mascots } from '@/constants/Assets';
 import { Grade, Restaurant } from '@/constants/MockData';
 import type { Restaurant as RawRestaurant } from '@/constants/Restaurant';
 import { color, elevation, mascotSize, motion, radius, spacing, typography } from '@/constants/tokens';
 import { AnimatedHeart, Button, Card, CheeseBadge, Chip, IconButton, SkeletonCard } from '@/components/ui';
-import { DataBreakdownCard } from '@/components/score/DataBreakdownCard';
-import { OwnerScoreCard } from '@/components/score/OwnerScoreCard';
+import { BottomSheetSymbols } from '@/components/score/BottomSheetSymbols';
 import { UserScoreCard } from '@/components/score/UserScoreCard';
 import { findRestaurantById } from '@/utils/dataStore';
 import { deriveGrade, toUIRestaurant } from '@/utils/adapter';
 import { toggleLike, useIsLiked } from '@/utils/favorites';
 import { loginWithKakao, useKakaoUser } from '@/utils/kakaoAuth';
 import {
+  computeReviewImpact,
   removeReview,
   useImpactFor,
   useMyReviews,
   useMyReviewsFor,
+  useReviewsFor,
 } from '@/utils/reviews';
 import { totalScoreOf } from '@/utils/scoring';
 import { useIsAdmin } from '@/utils/admin';
@@ -41,20 +42,21 @@ import { OwnerGrantModal } from '@/components/OwnerGrantModal';
 import { OwnerPostCard } from '@/components/OwnerPostCard';
 import { OwnerPostComposeModal } from '@/components/OwnerPostComposeModal';
 
-const TABS = ['평가', '리뷰', '정보'] as const;
+const TABS = ['홈', '평가', '리뷰', '정보'] as const;
 type Tab = (typeof TABS)[number];
 
-const MASCOT_BY_GRADE: Record<Grade, MascotKey> = {
-  GOLDEN: 'ceremony',
-  SILVER: 'thanks',
-  BRONZE: 'thanks',
-  ROTTEN: 'warning',
+// Hero 카드에 노출되는 등급 한글 라벨 (단일 원본 — utils/scoring.ts와 별개로 표시 사이즈 다름)
+const GRADE_KR_LABEL: Record<Grade, string> = {
+  GOLDEN: '골드 치즈',
+  SILVER: '실버 치즈',
+  BRONZE: '브론즈 치즈',
+  ROTTEN: '트랩 치즈',
 };
 
 export default function RestaurantDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const [tab, setTab] = useState<Tab>('평가');
+  const [tab, setTab] = useState<Tab>('홈');
   const liked = useIsLiked(typeof id === 'string' ? id : null);
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [raw, setRaw] = useState<RawRestaurant | null>(null);
@@ -111,7 +113,12 @@ export default function RestaurantDetail() {
   if (loading) return <LoadingState />;
   if (!restaurant) return <NotFoundState />;
 
-  const mascot = MASCOT_BY_GRADE[adjustedGrade];
+  // hero 좌측 치즈 이미지 (1개) — ROTTEN은 이미지 없음, fallback ⚠️
+  const heroCheeseImg =
+    adjustedGrade === 'GOLDEN' ? Cheese.gold
+      : adjustedGrade === 'SILVER' ? Cheese.silver
+      : adjustedGrade === 'BRONZE' ? Cheese.bronze
+      : null;
 
   return (
     <View style={styles.root}>
@@ -140,40 +147,72 @@ export default function RestaurantDetail() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
 
-        {/* 1. 검사 결과 종합 카드 — 등급만 (점수는 내부 산정 수단, 사용자에게 미노출) */}
-        <Card variant="elevated" padding="m" radius="l" style={styles.summaryCard}>
-          <Image source={Mascots[mascot]} style={styles.summaryMascot} resizeMode="contain" />
-          <CheeseBadge grade={adjustedGrade} size="md" showLabel style={styles.summaryBadge} />
+        {/* Hero 카드 — 결과(이름·등급) + 식탐정 5가지 분석을 한 카드에. 바텀시트와 동일한 인상 */}
+        {/* 관리자는 가게명 long-press로 사장님 지정 모달 진입 (숨김 입구) */}
+        <Card variant="flat" padding="l" radius="l" style={styles.heroCard}>
+          <View style={styles.heroTopRow}>
+            <View style={styles.heroLeft}>
+              {heroCheeseImg ? (
+                <Image source={heroCheeseImg} style={styles.heroCheese} resizeMode="contain" />
+              ) : (
+                <View style={[styles.heroCheese, styles.heroCheeseRotten]}>
+                  <Icon name="warning" size={36} color={color.status.danger} />
+                </View>
+              )}
+              <Text style={[styles.heroGradeLabel, { color: color.cheese[adjustedGrade].fg }]}>
+                {GRADE_KR_LABEL[adjustedGrade]}
+              </Text>
+            </View>
+            <View style={styles.heroRight}>
+              <View style={styles.heroNameRow}>
+                <Pressable
+                  style={{ flex: 1 }}
+                  onLongPress={() => { if (isAdmin) setGrantOpen(true); }}
+                  delayLongPress={600}
+                  accessibilityRole={isAdmin ? 'button' : undefined}
+                  accessibilityLabel={isAdmin ? '관리자 — 길게 눌러 사장님 지정' : undefined}>
+                  <Text style={styles.heroName} numberOfLines={2}>{restaurant.name}</Text>
+                </Pressable>
+                <AnimatedHeart
+                  active={liked}
+                  size={20}
+                  hitSize={32}
+                  onPress={() => restaurant && toggleLike(restaurant.id)}
+                />
+              </View>
+              <Text style={styles.heroMeta} numberOfLines={1}>
+                {restaurant.category} · {restaurant.district}
+              </Text>
+            </View>
+          </View>
+
+          {/* divider + 5심볼 */}
+          {raw ? (
+            <>
+              <View style={styles.heroDivider} />
+              <BottomSheetSymbols
+                input={{
+                  hygieneDesignated: raw.hyg === 1,
+                  hygieneViolation: !!raw.hygieneViolation,
+                  punishCount: raw.pun ?? 0,
+                  punishTypes: raw.punishTypes,
+                  hasModel: raw.mod === 1,
+                  evalGrade: raw.evalGrade,
+                  ownerDelta: ownerImpact.delta,
+                  ownerPostCount: ownerImpact.postCount,
+                  reviewCount: reviewImpact.reviewCount,
+                  reviewAvg: reviewImpact.rawAvg,
+                  foreignTotal: reviewImpact.foreignTotal,
+                }}
+              />
+            </>
+          ) : null}
         </Card>
 
-        {/* 2. 음식점 명 + 카테고리 — 가운데 정렬, 좋아요는 이름 옆 */}
-        {/* 관리자는 가게명 long-press로 사장님 지정 모달 진입 (숨김 입구 — 일반 사용자에게 보이지 않음) */}
-        <View style={styles.nameBlock}>
-          <View style={styles.nameRow}>
-            <Pressable
-              onLongPress={() => { if (isAdmin) setGrantOpen(true); }}
-              delayLongPress={600}
-              accessibilityRole={isAdmin ? 'button' : undefined}
-              accessibilityLabel={isAdmin ? '관리자 — 길게 눌러 사장님 지정' : undefined}>
-              <Text style={styles.nameCenter} numberOfLines={2}>{restaurant.name}</Text>
-            </Pressable>
-            <AnimatedHeart
-              active={liked}
-              size={22}
-              hitSize={36}
-              onPress={() => restaurant && toggleLike(restaurant.id)}
-            />
-          </View>
-          <Text style={styles.categoryCenter}>{restaurant.category}</Text>
-        </View>
+        {/* AI 메뉴 가이드 — 탭 바 위 (모든 탭에서 공통 노출) */}
+        <AIMenuGuideCard guide={restaurant.menuGuide} />
 
-        {/* 3. 위치 정보 — 자치구만 표시 (영업주기 데이터 없음) */}
-        <View style={styles.locationBlock}>
-          <Icon name="location" size={14} color={color.text.secondary} />
-          <Text style={styles.locationText}>{restaurant.district}</Text>
-        </View>
-
-        {/* 4. 탭 */}
+        {/* 탭 */}
         <View style={styles.tabsBar}>
           {TABS.map((t) => {
             const active = tab === t;
@@ -193,6 +232,19 @@ export default function RestaurantDetail() {
         </View>
 
         {/* Tab content */}
+        {tab === '홈' && raw && (
+          <HomeTab
+            restaurant={restaurant}
+            raw={raw}
+            adjustedGrade={adjustedGrade}
+            reviewImpact={reviewImpact}
+            isOwner={isOwner}
+            onEditPress={() => setEditOpen(true)}
+            onComposePost={() => setPostComposeOpen(true)}
+            ownerUserId={kakaoUser?.id ?? null}
+            ownerName={kakaoUser?.nickname ?? '사장님'}
+          />
+        )}
         {tab === '평가' && raw && (
           <SummaryTab
             restaurant={restaurant}
@@ -325,6 +377,7 @@ function NotFoundState() {
   );
 }
 
+// 평가 탭 — 등급 산정 근거 디테일. 5심볼은 hero 카드에 통합되어 있음.
 function SummaryTab({
   restaurant,
   raw,
@@ -338,38 +391,56 @@ function SummaryTab({
 }) {
   return (
     <View>
-      <AIMenuGuideCard guide={restaurant.menuGuide} />
-
-      {/* ROTTEN(트랩 치즈) 사유 칩 — 50점 미만 + 과락일 때만 노출 */}
       {adjustedGrade === 'ROTTEN' ? (
         <RottenReasons raw={raw} reviewImpact={reviewImpact} />
       ) : null}
 
-      {/* 공공 데이터 시그널 — 위생등급/모범/평가/처분 항목별 체크 */}
-      <DataBreakdownCard
-        breakdown={raw.dataBreakdown}
-        flags={{
-          hygieneDesignated: raw.hyg === 1,
-          hasModel: raw.mod === 1,
-          evalGrade: raw.evalGrade,
-          punishCount: raw.pun,
-          punishTypes: raw.punishTypes,
-        }}
-      />
-
-      {/* 사장님 인증 + 사용자 리뷰 — 활동량/별점만 표기 */}
-      <OwnerScoreCard restaurantId={raw.id} />
-      <UserScoreCard restaurantId={raw.id} />
+      {/* 평가 — 헤더 + 4개 항목 row 모두 한 박스에 */}
+      <EvaluationCard raw={raw} />
 
       {restaurant.adminActions.length > 0 ? (
         <AdminActionsCard actions={restaurant.adminActions} />
-      ) : (
-        <View style={styles.adminEmpty}>
-          <Icon name="sparkles" size={14} color={color.brand.primary} />
-          <Text style={styles.adminEmptyText}>최근 1년간 깨끗한 운영을 이어왔어요</Text>
-        </View>
-      )}
+      ) : null}
+    </View>
+  );
+}
 
+// 홈 탭 — 메뉴 가이드 + 평가 + 사용자 리뷰 + 사장님·가게 정보 카드를 한 화면에 펼침.
+// 각 카드의 제목으로 영역이 자연스럽게 구분되므로 별도 섹션 헤더는 두지 않음.
+function HomeTab(props: {
+  restaurant: Restaurant;
+  raw: RawRestaurant;
+  adjustedGrade: Grade;
+  reviewImpact: { reviewCount: number; userScore: number };
+  isOwner: boolean;
+  onEditPress: () => void;
+  onComposePost: () => void;
+  ownerUserId: number | null;
+  ownerName: string;
+}) {
+  const { restaurant, raw, adjustedGrade, reviewImpact, isOwner, onEditPress, onComposePost, ownerUserId, ownerName } = props;
+  return (
+    <View>
+      {/* 1. 평가 — 트랩 사유 + 평가 디테일 + 행정처분 번역 */}
+      <SummaryTab
+        restaurant={restaurant}
+        raw={raw}
+        adjustedGrade={adjustedGrade}
+        reviewImpact={reviewImpact}
+      />
+
+      {/* 2. 사용자 리뷰 (요약) — AI 메뉴 가이드는 탭 바 위 공통 영역에 있음 */}
+      <UserScoreCard restaurantId={raw.id} />
+
+      {/* 3. 사장님·가게 정보 */}
+      <InfoTab
+        restaurant={restaurant}
+        isOwner={isOwner}
+        onEditPress={onEditPress}
+        onComposePost={onComposePost}
+        ownerUserId={ownerUserId}
+        ownerName={ownerName}
+      />
     </View>
   );
 }
@@ -411,10 +482,127 @@ function RottenReasons({
   );
 }
 
+// 평가 카드 — 헤더 + 4개 row(위생등급/모범/평가/처분)를 한 박스에
+type EvalTone = 'good' | 'caution' | 'warn' | 'none';
+
+function evalTone(g?: string): EvalTone {
+  if (g === '자율관리업소') return 'good';
+  if (g === '일반관리업소') return 'caution';
+  if (g === '중점관리업소' || g === '평가불능업소') return 'warn';
+  return 'none';
+}
+
+const EVAL_TONE_FG: Record<EvalTone, string> = {
+  good: color.status.success,
+  caution: color.status.warning,
+  warn: color.status.danger,
+  none: color.text.tertiary,
+};
+
+function EvaluationCard({ raw }: { raw: RawRestaurant }) {
+  const punishList = (raw.punishTypes ?? '').split('|').filter(Boolean);
+  const punishReasons = (raw.punishReasons ?? '').split('|').filter(Boolean);
+  return (
+    <Card variant="flat" padding="l" radius="l" style={{ marginBottom: spacing.l }}>
+      <Text style={styles.cardSectionTitle}>평가</Text>
+      <Text style={styles.cardSectionSubtitle}>식약처·행안부 공공 데이터에서 받은 인증·이력</Text>
+
+      <View style={styles.evalRowList}>
+        <EvalRow
+          label="위생등급"
+          state={raw.hyg === 1 ? '지정업소' : '미지정'}
+          tone={raw.hyg === 1 ? 'good' : 'none'}
+          source="식약처 위생등급 지정 (C004)"
+          note={raw.hyg === 1 ? '세부 등급(매우우수/우수/좋음)·지정일자는 데이터 보강 필요' : undefined}
+        />
+        <EvalRow
+          label="모범음식점"
+          state={raw.mod === 1 ? '지정' : '미지정'}
+          tone={raw.mod === 1 ? 'good' : 'none'}
+          source="전국모범음식점 표준데이터 (행안부)"
+        />
+        <EvalRow
+          label="위생관리 평가"
+          state={raw.evalGrade && raw.evalGrade.length > 0 ? raw.evalGrade : '미평가'}
+          tone={evalTone(raw.evalGrade)}
+          source="식약처 위생관리 평가 (I1540)"
+        />
+        <EvalRow
+          label="행정처분"
+          state={raw.pun === 0 ? '이력 없음' : `${raw.pun}건`}
+          tone={raw.pun === 0 ? 'good' : raw.hygieneViolation ? 'warn' : 'caution'}
+          source="식약처 I2630 + AI 분류 (claude-opus-4-7)"
+          punishList={punishList}
+          punishReasons={punishReasons}
+          hygieneViolation={!!raw.hygieneViolation}
+          isLast
+        />
+      </View>
+    </Card>
+  );
+}
+
+function EvalRow({
+  label,
+  state,
+  tone,
+  source,
+  note,
+  punishList,
+  punishReasons,
+  hygieneViolation,
+  isLast,
+}: {
+  label: string;
+  state: string;
+  tone: EvalTone;
+  source: string;
+  note?: string;
+  punishList?: string[];
+  punishReasons?: string[];
+  hygieneViolation?: boolean;
+  isLast?: boolean;
+}) {
+  return (
+    <View style={[styles.evalRow, !isLast && styles.evalRowDivider]}>
+      <View style={styles.evalRowHeader}>
+        <Text style={styles.evalRowLabel}>{label}</Text>
+        <Text style={[styles.evalRowState, { color: EVAL_TONE_FG[tone] }]}>{state}</Text>
+      </View>
+      <Text style={styles.evalRowSource}>{source}</Text>
+      {note ? <Text style={styles.evalRowNote}>{note}</Text> : null}
+
+      {punishList && punishList.length > 0 ? (
+        <View style={styles.evalPunishList}>
+          {punishList.map((t, i) => (
+            <View key={i} style={styles.evalPunishRow}>
+              <Icon name="minus" size={12} color={color.status.danger} />
+              <Text style={styles.evalPunishType}>{t}</Text>
+              {punishReasons && punishReasons[i] ? (
+                <Text style={styles.evalPunishReason} numberOfLines={2}>
+                  · {punishReasons[i]}
+                </Text>
+              ) : null}
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      {hygieneViolation ? (
+        <View style={styles.evalHygieneFlag}>
+          <Icon name="warning" size={12} color={color.status.danger} />
+          <Text style={styles.evalHygieneFlagText}>AI 분류: 식품 위생 직결 위반</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 function AIMenuGuideCard({ guide }: { guide: import('@/constants/MockData').MenuGuide }) {
   return (
-    <View style={{ marginBottom: spacing.l }}>
-      <Card variant="elevated" padding="l" radius="l">
+    // 메뉴 가이드는 그림자 있는 떠보이는 카드 — 다른 정보 카드와 톤 차별화로 시선 집중.
+    // 하단 여백 0 — 바로 아래 탭 바와 가깝게 붙여 그룹핑.
+    <Card variant="elevated" padding="l" radius="l">
         <View style={styles.aiHeader}>
           <View style={styles.aiBadge}>
             <Icon name="sparkles" size={11} color={color.text.onBrand} />
@@ -442,17 +630,13 @@ function AIMenuGuideCard({ guide }: { guide: import('@/constants/MockData').Menu
             ))}
           </View>
         </View>
-
-        <Text style={styles.aiGuidelineText}>{guide.guideline}</Text>
-      </Card>
-    </View>
+    </Card>
   );
 }
 
 function AdminActionsCard({ actions }: { actions: import('@/constants/MockData').AdminAction[] }) {
   return (
-    <View style={{ marginTop: spacing.l }}>
-      <Card variant="elevated" padding="l" radius="l">
+    <Card variant="flat" padding="l" radius="l" style={{ marginBottom: spacing.l }}>
         <View style={styles.aiHeader}>
           <View style={styles.aiBadge}>
             <Icon name="sparkles" size={11} color={color.text.onBrand} />
@@ -480,48 +664,6 @@ function AdminActionsCard({ actions }: { actions: import('@/constants/MockData')
             </View>
           </View>
         ))}
-      </Card>
-    </View>
-  );
-}
-
-function ReviewComposeCTA({ restaurantId }: { restaurantId: string }) {
-  const kakaoUser = useKakaoUser();
-  const loggedIn = !!kakaoUser;
-  return (
-    <Card variant="elevated" padding="l" radius="l" style={{ marginBottom: spacing.l }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.m }}>
-        <View style={styles.ctaIconWrap}>
-          <Icon name="pencil" size={22} color={color.brand.primary} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.composeTitle}>위생 리뷰 남기기</Text>
-          <Text style={styles.composeHint}>
-            {loggedIn
-              ? '다녀온 곳의 주방·식기·재료 상태를 알려주세요'
-              : '리뷰는 책임을 위해 로그인이 필요해요'}
-          </Text>
-        </View>
-      </View>
-      <View style={{ marginTop: spacing.m }}>
-        <Button
-          variant={loggedIn ? 'primary' : 'kakao'}
-          size="md"
-          fullWidth
-          leftIcon={loggedIn ? 'pencil' : 'chat'}
-          onPress={() => {
-            if (loggedIn) {
-              router.push(`/review/${restaurantId}`);
-            } else {
-              if (typeof sessionStorage !== 'undefined') {
-                sessionStorage.setItem('food-detector:pending-review', restaurantId);
-              }
-              loginWithKakao();
-            }
-          }}>
-          {loggedIn ? '리뷰 작성하기' : '카카오로 로그인'}
-        </Button>
-      </View>
     </Card>
   );
 }
@@ -538,8 +680,6 @@ function ReviewTab({
   const kakaoUser = useKakaoUser();
   const myReviews = useMyReviewsFor(restaurant.id);
   const allMyReviews = useMyReviews();
-  const totalCount = restaurant.reviewCount + myReviews.length;
-  const hygieneCount = restaurant.hygieneReviewCount + myReviews.length;
   const myNickname = kakaoUser?.nickname ?? '나';
 
   const handleDelete = (id: string) => {
@@ -549,31 +689,10 @@ function ReviewTab({
     removeReview(id);
   };
 
-  // mock author별 리뷰 수 (이 식당 내에서)
-  const mockAuthorCount = new Map<string, number>();
-  for (const rv of restaurant.reviews) {
-    mockAuthorCount.set(rv.author, (mockAuthorCount.get(rv.author) ?? 0) + 1);
-  }
-
   return (
     <View>
-      {isOwner ? (
-        <Card variant="tinted" padding="m" radius="l" style={{ marginBottom: spacing.l }}>
-          <View style={styles.ownerNoticeRow}>
-            <Icon name="logo" size={14} color={color.brand.primary} />
-            <Text style={styles.ownerNoticeText}>
-              내 가게에는 리뷰를 작성할 수 없어요. 답글로 고객 피드백에 응대해 주세요.
-            </Text>
-          </View>
-        </Card>
-      ) : (
-        <ReviewComposeCTA restaurantId={restaurant.id} />
-      )}
-
-      <View style={styles.reviewSummary}>
-        <Text style={styles.reviewCount}>총 {totalCount}건</Text>
-        <Text style={styles.reviewHygiene}>위생 리뷰 {hygieneCount}건</Text>
-      </View>
+      {/* 사용자 리뷰 통합 카드 — 별점·리뷰 수 + 작성 CTA(또는 카카오 로그인/사장님 안내) */}
+      <UserReviewCard restaurantId={restaurant.id} isOwner={isOwner} />
 
       {myReviews.map((rv) => (
         <ReviewCardWithReply
@@ -595,17 +714,96 @@ function ReviewTab({
           )}
         </ReviewCardWithReply>
       ))}
-
-      {restaurant.reviews.map((rv) => (
-        <MockReviewCard
-          key={rv.id}
-          rv={rv}
-          authorCount={mockAuthorCount.get(rv.author) ?? 1}
-          isOwner={isOwner}
-          ownerUserId={ownerUserId}
-        />
-      ))}
     </View>
+  );
+}
+
+// 사용자 리뷰 헤더 + 메타 + 작성 CTA를 하나의 카드로 통합.
+// 리뷰 개수는 useReviewsFor 단일 원본 → 홈 탭의 UserScoreCard와 항상 일치.
+function UserReviewCard({
+  restaurantId,
+  isOwner,
+}: {
+  restaurantId: string;
+  isOwner: boolean;
+}) {
+  const reviews = useReviewsFor(restaurantId);
+  const impact = useMemo(() => computeReviewImpact(reviews), [reviews]);
+  const kakaoUser = useKakaoUser();
+  const loggedIn = !!kakaoUser;
+  const has = impact.reviewCount > 0;
+
+  return (
+    <Card variant="flat" padding="l" radius="l" style={{ marginBottom: spacing.l }}>
+      <View style={styles.reviewCardHeader}>
+        <Text style={styles.reviewCardTitle}>사용자 리뷰</Text>
+        {has ? (
+          <View style={styles.starPill}>
+            <Icon name="star" size={12} color={color.cheese.GOLDEN.fg} />
+            <Text style={styles.starPillText}>{impact.rawAvg.toFixed(1)}</Text>
+          </View>
+        ) : null}
+      </View>
+      <Text style={styles.reviewCardSubtitle}>
+        리뷰 {impact.reviewCount}건
+        {impact.foreignTotal > 0 ? ` · 이물질 신고 ${impact.foreignTotal}건` : ''}
+      </Text>
+
+      {impact.foreignTotal > 0 ? (
+        <View style={styles.foreignBanner}>
+          <Icon name="warning" size={14} color={color.status.danger} />
+          <Text style={styles.foreignBannerText}>
+            이물질 신고 {impact.foreignTotal}건 — 등급에는 영향 없음
+          </Text>
+        </View>
+      ) : null}
+
+      <View style={styles.reviewCardDivider} />
+
+      {isOwner ? (
+        <View style={styles.ownerNoticeRow}>
+          <Icon name="logo" size={14} color={color.brand.primary} />
+          <Text style={styles.ownerNoticeText}>
+            내 가게에는 리뷰를 작성할 수 없어요. 답글로 고객 피드백에 응대해 주세요.
+          </Text>
+        </View>
+      ) : (
+        <>
+          <View style={styles.composeRow}>
+            <View style={styles.ctaIconWrap}>
+              <Icon name="pencil" size={20} color={color.brand.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.composeTitle}>위생 리뷰 남기기</Text>
+              <Text style={styles.composeHint}>
+                {loggedIn
+                  ? '다녀온 곳의 주방·식기·재료 상태를 알려주세요'
+                  : '리뷰는 책임을 위해 로그인이 필요해요'}
+              </Text>
+            </View>
+          </View>
+          <View style={{ marginTop: spacing.m }}>
+            <Button
+              variant={loggedIn ? 'primary' : 'kakao'}
+              size="md"
+              fullWidth
+              leftIcon={loggedIn ? 'pencil' : 'chat'}
+              onPress={() => {
+                if (loggedIn) {
+                  router.push(`/review/${restaurantId}`);
+                } else {
+                  if (typeof sessionStorage !== 'undefined') {
+                    sessionStorage.setItem('food-detector:pending-review', restaurantId);
+                  }
+                  loginWithKakao();
+                }
+              }}>
+              {loggedIn ? '리뷰 작성하기' : '카카오로 로그인'}
+            </Button>
+          </View>
+        </>
+      )}
+    </Card>
   );
 }
 
@@ -784,10 +982,101 @@ function InfoTab({
   const intro = ownerEdit?.intro || '';
   const isEdited = !!ownerEdit && (ownerEdit.address || ownerEdit.phone || ownerEdit.hours || ownerEdit.closedDay || ownerEdit.intro);
 
+  const ownerImpact = useOwnerImpactFor(restaurant.id);
+  const ownerActive = ownerImpact.postCount > 0;
+
   return (
     <View>
-      {/* 가게 정보 카드 */}
-      <Card variant="outlined" padding="l" radius="l">
+      {/* 사장님 인증 통합 카드 — 가게 정보보다 위. 활동량이 가게 신뢰의 동적 시그널 */}
+      <Card variant="flat" padding="l" radius="l" style={{ marginBottom: spacing.l }}>
+        {/* 헤더 — 다른 카드(평가/사용자 리뷰)와 통일: 좌측 제목 / 우측 상태 pill */}
+        <View style={styles.ownerHeader}>
+          <Text style={styles.ownerCardTitle}>사장님 인증</Text>
+          <View
+            style={[
+              styles.ownerStatusPill,
+              ownerActive ? styles.ownerStatusActive : styles.ownerStatusInactive,
+            ]}>
+            <Icon
+              name={ownerActive ? 'check' : 'dot'}
+              size={12}
+              color={ownerActive ? color.status.success : color.text.tertiary}
+            />
+            <Text
+              style={[
+                styles.ownerStatusText,
+                { color: ownerActive ? color.status.success : color.text.tertiary },
+              ]}>
+              {ownerActive ? '활성' : '대기중'}
+            </Text>
+          </View>
+        </View>
+
+        <Text style={styles.ownerSubtitle}>
+          {ownerActive
+            ? `최근 30일 청소 인증 ${ownerImpact.postCount}건${
+                ownerImpact.totalPostCount > ownerImpact.postCount
+                  ? ` · 누적 ${ownerImpact.totalPostCount}건`
+                  : ''
+              }`
+            : '사장님이 직접 올리는 위생·운영 인증 게시글이에요. 게시글이 늘면 등급이 올라가요.'}
+        </Text>
+
+        {posts.length === 0 ? (
+          <View style={styles.ownerEmpty}>
+            <Icon name="chat" size={20} color={color.text.tertiary} />
+            <Text style={styles.ownerEmptyText}>
+              {isOwner ? '첫 게시글을 올려 가게의 노력을 알려주세요' : '아직 사장님 게시글이 없어요'}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.ownerPostsBlock}>
+            {posts.map((p, i) => (
+              <View key={p.id} style={i > 0 ? styles.ownerPostSep : null}>
+                <OwnerPostCard
+                  post={p}
+                  authorName={ownerUserId === p.userId ? ownerName : '사장님'}
+                  onDelete={
+                    ownerUserId === p.userId
+                      ? () => {
+                          if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+                            if (!window.confirm('이 게시글을 삭제할까요?')) return;
+                          }
+                          removeOwnerPost(p.id);
+                        }
+                      : undefined
+                  }
+                />
+              </View>
+            ))}
+          </View>
+        )}
+
+        {isOwner ? (
+          <View style={{ marginTop: spacing.m }}>
+            <Button variant="primary" size="md" leftIcon="pencil" fullWidth onPress={onComposePost}>
+              사장님 게시글 작성
+            </Button>
+          </View>
+        ) : (
+          <Pressable
+            onPress={() =>
+              router.push({
+                pathname: '/owner/apply',
+                params: { id: restaurant.id, name: restaurant.name },
+              } as any)
+            }
+            accessibilityRole="button"
+            accessibilityLabel="사장님 인증 신청 안내 보기"
+            style={({ pressed }) => [styles.applyLink, pressed && { opacity: 0.7 }]}>
+            <Icon name="forward" size={12} color={color.brand.primary} />
+            <Text style={styles.applyLinkText}>이 가게 사장님이신가요? 인증 신청 안내</Text>
+          </Pressable>
+        )}
+      </Card>
+
+      {/* 가게 정보 카드 — 정적 기본 정보 (주소·전화·영업·휴무·소개) */}
+      <Card variant="flat" padding="l" radius="l" style={{ marginBottom: spacing.l }}>
         <View style={styles.infoHeader}>
           <Text style={styles.cardTitle}>가게 정보</Text>
           {isEdited ? (
@@ -817,76 +1106,6 @@ function InfoTab({
           </View>
         ) : null}
       </Card>
-
-      {/* 사장님 인증 게시글 섹션 */}
-      <View style={styles.ownerSection}>
-        <View style={styles.ownerSectionHeader}>
-          <View style={styles.ownerSectionTitleRow}>
-            <View style={styles.ownerSectionBadge}>
-              <Icon name="logo" size={11} color={color.text.onBrand} />
-              <Text style={styles.ownerSectionBadgeText}>사장님</Text>
-            </View>
-            <Text style={styles.ownerSectionTitle}>가게가 들려주는 이야기</Text>
-          </View>
-          <Text style={styles.ownerSectionSubtitle}>
-            사장님이 직접 올리는 위생·운영 인증 게시글이에요. 게시글이 늘면 등급이 올라가요.
-          </Text>
-        </View>
-
-        {posts.length === 0 ? (
-          <View style={styles.ownerEmpty}>
-            <Icon name="chat" size={20} color={color.text.tertiary} />
-            <Text style={styles.ownerEmptyText}>
-              {isOwner
-                ? '첫 게시글을 올려 가게의 노력을 알려주세요'
-                : '아직 사장님 게시글이 없어요'}
-            </Text>
-          </View>
-        ) : (
-          <Card variant="outlined" padding="none" radius="l">
-            {posts.map((p, i) => (
-              <View key={p.id} style={i === 0 ? styles.ownerPostFirst : null}>
-                <OwnerPostCard
-                  post={p}
-                  authorName={ownerUserId === p.userId ? ownerName : '사장님'}
-                  onDelete={
-                    ownerUserId === p.userId
-                      ? () => {
-                          if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
-                            if (!window.confirm('이 게시글을 삭제할까요?')) return;
-                          }
-                          removeOwnerPost(p.id);
-                        }
-                      : undefined
-                  }
-                />
-              </View>
-            ))}
-          </Card>
-        )}
-
-        {isOwner ? (
-          <View style={{ marginTop: spacing.m }}>
-            <Button variant="primary" size="md" leftIcon="pencil" fullWidth onPress={onComposePost}>
-              사장님 게시글 작성
-            </Button>
-          </View>
-        ) : (
-          <Pressable
-            onPress={() =>
-              router.push({
-                pathname: '/owner/apply',
-                params: { id: restaurant.id, name: restaurant.name },
-              } as any)
-            }
-            accessibilityRole="button"
-            accessibilityLabel="사장님 인증 신청 안내 보기"
-            style={({ pressed }) => [styles.applyLink, pressed && { opacity: 0.7 }]}>
-            <Icon name="forward" size={12} color={color.brand.primary} />
-            <Text style={styles.applyLinkText}>이 가게 사장님이신가요? 인증 신청 안내</Text>
-          </Pressable>
-        )}
-      </View>
     </View>
   );
 }
@@ -933,12 +1152,155 @@ const styles = StyleSheet.create({
   notFoundTitle: { ...typography.bodyEmphasized, color: color.text.primary, marginBottom: spacing.xs },
   notFoundBody: { ...typography.caption, color: color.text.tertiary },
 
-  scrollContent: { paddingHorizontal: spacing.l, paddingTop: spacing.s },
+  // 토스 스타일 — 페이지 회색 배경 + 카드 사이 marginBottom으로 자연 spacer.
+  // 좌우 최소 마진(16)으로 카드가 가장자리에 붙지 않게.
+  scrollContent: {
+    paddingHorizontal: spacing.m,
+    paddingTop: spacing.s,
+  },
 
-  // 1. Summary card — 등급만 (점수는 내부 산정 수단)
-  summaryCard: { alignItems: 'center', gap: spacing.s },
-  summaryMascot: { width: mascotSize.inline, height: mascotSize.inline },
-  summaryBadge: { marginTop: 0 },
+  // Hero 카드 — 상단 좌우 분할(등급/이름) + 하단 5심볼 그리드. AI 메뉴 가이드와 회색 spacer로 분리.
+  heroCard: {
+    marginBottom: spacing.l,
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.l,
+  },
+  heroLeft: {
+    alignItems: 'center',
+    gap: spacing.xs,
+    width: 88,
+  },
+  heroDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: color.border.default,
+    marginVertical: spacing.m,
+  },
+  heroCheese: {
+    width: 80,
+    height: 80,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroCheeseRotten: {
+    backgroundColor: color.status.dangerSoft,
+    borderRadius: radius.l,
+  },
+  heroGradeLabel: {
+    ...typography.captionEmphasized,
+    textAlign: 'center',
+  },
+  heroRight: {
+    flex: 1,
+    gap: spacing.xxs,
+  },
+  heroNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.s,
+  },
+  heroName: {
+    ...typography.title,
+    fontSize: 20,
+    lineHeight: 26,
+    color: color.text.primary,
+  },
+  heroMeta: {
+    ...typography.caption,
+    color: color.text.secondary,
+  },
+
+  // 식탐정 5가지 분석 — 등급 심볼 그리드 헤더
+  fiveAxisTitle: { ...typography.headline, color: color.text.primary },
+  fiveAxisSubtitle: {
+    ...typography.caption,
+    color: color.text.secondary,
+    marginTop: 2,
+  },
+
+  // 카드 안 섹션 제목 (카드 헤더)
+  cardSectionTitle: {
+    ...typography.title,
+    fontSize: 18,
+    lineHeight: 24,
+    color: color.text.primary,
+  },
+  cardSectionSubtitle: {
+    ...typography.caption,
+    color: color.text.secondary,
+    marginTop: 2,
+  },
+
+  // 평가 카드 안 4개 row (위생등급/모범/평가/처분)
+  evalRowList: {
+    marginTop: spacing.m,
+  },
+  evalRow: {
+    paddingVertical: spacing.m,
+  },
+  evalRowDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: color.border.default,
+  },
+  evalRowHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  evalRowLabel: {
+    ...typography.subheadlineEmphasized,
+    color: color.text.primary,
+  },
+  evalRowState: {
+    ...typography.subheadlineEmphasized,
+  },
+  evalRowSource: {
+    ...typography.footnote,
+    color: color.text.tertiary,
+    marginTop: 2,
+  },
+  evalRowNote: {
+    ...typography.footnote,
+    color: color.text.secondary,
+    marginTop: spacing.xs,
+    fontStyle: 'italic',
+  },
+  evalPunishList: {
+    marginTop: spacing.s,
+    gap: spacing.xs,
+  },
+  evalPunishRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  evalPunishType: {
+    ...typography.caption,
+    color: color.text.primary,
+    fontWeight: '600',
+  },
+  evalPunishReason: {
+    ...typography.caption,
+    color: color.text.secondary,
+    flex: 1,
+  },
+  evalHygieneFlag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: spacing.s,
+    paddingHorizontal: spacing.s,
+    paddingVertical: 6,
+    backgroundColor: color.status.dangerSoft,
+    borderRadius: 8,
+  },
+  evalHygieneFlagText: {
+    ...typography.caption,
+    color: color.status.danger,
+    fontWeight: '600',
+  },
 
   // ROTTEN(트랩 치즈) 사유 카드
   rottenHeader: {
@@ -957,45 +1319,15 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
 
-  // 2. Name block — 화면 세로 중앙보다 살짝 위에 위치하도록 marginTop 축소
-  nameBlock: { alignItems: 'center', marginTop: spacing.m, gap: spacing.xxs },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.s,
-  },
-  nameCenter: {
-    ...typography.title,
-    fontSize: 22,
-    lineHeight: 28,
-    color: color.text.primary,
-    textAlign: 'center',
-  },
-  categoryCenter: {
-    ...typography.subheadline,
-    color: color.text.secondary,
-    textAlign: 'center',
-  },
 
-  // 3. Location block
-  locationBlock: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.s,
-  },
-  locationText: { ...typography.caption, color: color.text.secondary },
-  locationDot: { ...typography.caption, color: color.text.tertiary },
-  locationStatus: { ...typography.captionEmphasized, color: color.brand.primary },
 
   // Tabs
   tabsBar: {
     flexDirection: 'row',
     borderBottomWidth: 1,
     borderBottomColor: color.border.default,
-    marginTop: spacing.xl,
+    // 배경 없음 — 페이지 회색 배경이 그대로 보임 (탭이 메뉴 가이드 카드와 분리)
+    marginTop: 0,
     marginBottom: spacing.l,
   },
   tabBtn: {
@@ -1023,7 +1355,7 @@ const styles = StyleSheet.create({
   // Info tab
   infoRow: { flexDirection: 'row', paddingVertical: spacing.s },
   infoLabel: { ...typography.caption, color: color.text.tertiary, width: 60 },
-  infoValue: { flex: 1, ...typography.subheadline, color: color.text.primary },
+  infoValue: { flex: 1, ...typography.caption, color: color.text.secondary },
 
   // AI guide / admin cards
   aiHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.s, marginBottom: spacing.xs },
@@ -1079,6 +1411,42 @@ const styles = StyleSheet.create({
     padding: spacing.s + 2,
   },
   adminTranslatedText: { flex: 1, ...typography.subheadline, color: color.text.primary, fontWeight: '500' },
+
+  // 사용자 리뷰 통합 카드
+  reviewCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  reviewCardTitle: { ...typography.headline, color: color.text.primary },
+  reviewCardSubtitle: {
+    ...typography.caption,
+    color: color.text.secondary,
+    marginTop: 2,
+  },
+  starPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.s,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    backgroundColor: color.cheese.GOLDEN.bg,
+  },
+  starPillText: {
+    ...typography.captionEmphasized,
+    color: color.text.primary,
+  },
+  reviewCardDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: color.border.default,
+    marginVertical: spacing.m,
+  },
+  composeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.m,
+  },
 
   // Review compose CTA
   composeTitle: { ...typography.bodyEmphasized, color: color.text.primary, marginBottom: spacing.xxs },
@@ -1191,33 +1559,49 @@ const styles = StyleSheet.create({
   ownerNoticeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.s },
   ownerNoticeText: { flex: 1, ...typography.caption, color: color.text.secondary },
 
-  ownerSection: { marginTop: spacing.xl },
-  ownerSectionHeader: { marginBottom: spacing.m },
-  ownerSectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.s, marginBottom: spacing.xxs },
-  ownerSectionBadge: {
+  // 사장님 인증 통합 카드 — 헤더 + 활성 상태 + 게시글
+  ownerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: spacing.s,
-    paddingVertical: 2,
-    borderRadius: radius.pill,
-    backgroundColor: color.brand.primary,
+    justifyContent: 'space-between',
   },
-  ownerSectionBadgeText: { ...typography.footnote, fontWeight: '700', color: color.text.onBrand, letterSpacing: 0.3 },
-  ownerSectionTitle: { ...typography.headline, color: color.text.primary },
-  ownerSectionSubtitle: { ...typography.caption, color: color.text.secondary },
-
+  ownerCardTitle: { ...typography.headline, color: color.text.primary },
+  ownerStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.s,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+  },
+  ownerStatusActive: { backgroundColor: color.status.successSoft },
+  ownerStatusInactive: { backgroundColor: color.fill.quaternary },
+  ownerStatusText: { ...typography.captionEmphasized },
+  ownerSubtitle: {
+    ...typography.caption,
+    color: color.text.secondary,
+    marginTop: 2,
+    marginBottom: spacing.m,
+  },
+  ownerPostsBlock: {
+    borderRadius: radius.m,
+    overflow: 'hidden',
+    backgroundColor: color.fill.quaternary,
+  },
+  ownerPostSep: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: color.border.default,
+  },
   ownerEmpty: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.s,
     paddingVertical: spacing.l,
     paddingHorizontal: spacing.l,
-    borderRadius: radius.l,
+    borderRadius: radius.m,
     backgroundColor: color.fill.tertiary,
   },
   ownerEmptyText: { flex: 1, ...typography.caption, color: color.text.secondary },
-  ownerPostFirst: { borderTopWidth: 0 },
 
   applyLink: {
     flexDirection: 'row',
