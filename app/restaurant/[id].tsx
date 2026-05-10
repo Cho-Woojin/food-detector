@@ -81,7 +81,11 @@ export default function RestaurantDetail() {
   const adjustedGrade = useMemo<Grade>(
     () => deriveGrade({
       score: adjustedScore,
-      flags: { evalGrade: rawRestaurant?.evalGrade, punishTypes: rawRestaurant?.punishTypes },
+      flags: {
+        evalGrade: rawRestaurant?.evalGrade,
+        punishTypes: rawRestaurant?.punishTypes,
+        hygieneViolation: rawRestaurant?.hygieneViolation,
+      },
       userScore,
       userReviewCount: reviewImpact.reviewCount,
     }) as Grade,

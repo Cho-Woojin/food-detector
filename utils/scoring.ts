@@ -27,13 +27,22 @@ export const GRADE_THRESHOLDS = {
 } as const;
 
 // ===== 썩은치즈 과락 조건 =====
+// (참고) 옛 룰은 punishTypes의 영업정지/영업소폐쇄/과태료/과징금을 트리거로 썼지만,
+// 식약처 I2630 행정처분 텍스트를 AI(claude-opus-4-7)로 309건 분류한 결과:
+// - 영업소폐쇄(241) + 영업허가·등록취소(24) ≈ 거의 다 폐업·시설철거 행정정리 (위생 무관)
+// - 영업정지(44) 중 위생 직결은 단 3건 (이물·유통기한·무등록 식품). 나머지 41건은
+//   청소년 주류·유흥접객·성매매 등 사회·도덕 위반 — 식중독 위험과 무관.
+// → 처분 종류만으로 ROTTEN 판단하면 식탐정의 본질(위생·식중독)과 어긋남.
+//   대신 by-gu의 flags.hygieneViolation (AI 분류 위생 직결 위반 bool) 사용.
+//   자세한 분석은 data/violations-classified.json + data/SCORING_AND_SCHEMA.md.
 export const ROTTEN_TRIGGER = {
   // 과락 1: 사용자 리뷰 ≥ N개 AND 사용자 점수 ≤ M/25
   USER_MIN_REVIEWS: 10,
   USER_MAX_SCORE: 10,
-  // 과락 2: 다음 평가/처분 중 하나라도
+  // 과락 2: 식약처 평가에서 중점관리업소로 분류된 경우 (위생 미흡 직접 시그널)
   EVAL_FAIL: '중점관리업소' as const,
-  PUNISH_FAILS: ['영업정지', '영업소폐쇄', '과태료', '과징금'] as const,
+  // 과락 3: AI 분류로 hygieneViolation=true (이물·유통기한·무등록 식품 등)
+  // → flags.hygieneViolation 직접 체크
 } as const;
 
 // ===== 사장님 점수 =====
@@ -65,7 +74,11 @@ export function totalScoreOf(dataScore: number, ownerScore: number, userScore: n
 // ===== 등급 결정 =====
 export type DeriveGradeInput = {
   score: number;            // 종합 점수 0~100
-  flags?: { evalGrade?: string; punishTypes?: string };
+  flags?: {
+    evalGrade?: string;        // 자율/일반/중점/평가불능/'' — 중점관리는 ROTTEN 트리거
+    punishTypes?: string;      // 보존 (UI 표시·통계용). ROTTEN 트리거에는 사용 안 함.
+    hygieneViolation?: boolean; // AI 분류 결과 위생 직결 위반 — ROTTEN 트리거
+  };
   userScore?: number;       // 0~25, default 0
   userReviewCount?: number; // default 0
 };
@@ -76,8 +89,8 @@ export function deriveGrade(input: DeriveGradeInput | number): GradeKey {
 
   const { score, flags = {}, userScore = 0, userReviewCount = 0 } = input;
 
-  if (score >= GRADE_THRESHOLDS.GOLDEN) return 'GOLDEN';
-  if (score >= GRADE_THRESHOLDS.SILVER) return 'SILVER';
+  if (score >= GRADE_THRESHOLDS.GOLDEN) return 'GOLDEN';   // 80+
+  if (score >= GRADE_THRESHOLDS.SILVER) return 'SILVER';   // 50+
 
   // score < SILVER 임계값 — 썩은치즈 조건 평가
   const userFail =
@@ -86,12 +99,9 @@ export function deriveGrade(input: DeriveGradeInput | number): GradeKey {
 
   const evalFail = flags.evalGrade === ROTTEN_TRIGGER.EVAL_FAIL;
 
-  const punishTypes = (flags.punishTypes || '').split('|').filter(Boolean);
-  const punishFail = punishTypes.some((t) =>
-    (ROTTEN_TRIGGER.PUNISH_FAILS as readonly string[]).includes(t),
-  );
+  const hygieneFail = !!flags.hygieneViolation;
 
-  return userFail || evalFail || punishFail ? 'ROTTEN' : 'BRONZE';
+  return userFail || evalFail || hygieneFail ? 'ROTTEN' : 'BRONZE';
 }
 
 // ===== 사람이 읽는 라벨 =====

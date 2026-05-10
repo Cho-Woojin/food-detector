@@ -215,7 +215,11 @@ export function adjustedScoreAndGrade(
   const score = totalScoreOf(dataScore, ownerScore, impact.userScore);
   const grade = deriveGrade({
     score,
-    flags: { evalGrade: raw.evalGrade, punishTypes: raw.punishTypes },
+    flags: {
+      evalGrade: raw.evalGrade,
+      punishTypes: raw.punishTypes,
+      hygieneViolation: raw.hygieneViolation,
+    },
     userScore: impact.userScore,
     userReviewCount: impact.reviewCount,
   });

@@ -119,14 +119,16 @@ data_score = max(0, min(50, data_score))  # 0~50 클램프
 | 중점관리 + 과태료 | 25 - 15 - 8 | 2점 |
 | 영업정지 | 25 - 20 | 5점 |
 
-### 영업소폐쇄 처리 (자기검토 노트)
+### 영업소폐쇄 처리 (자기검토 노트, AI 분석 후 갱신)
 
-- LOCALDATA 원본 수집 단계에서 "영업·정상" 상태만 필터링하므로, **영업소폐쇄 식당은 사실상 인덱스에 없음**.
-- 그럼에도 **-50 가중치를 유지하는 이유**:
-  1. **데이터 시차 안전망** — 행정처분 적용일과 LOCALDATA 영업상태 갱신 사이 며칠~몇 주 갭이 발생할 수 있음. 그 윈도우에 잡혀도 -50으로 0점 클램프.
-  2. **썩은치즈 트리거 조건**으로 영업소폐쇄가 OR 조건에 들어감. 점수 가중치는 사실상 의미 없지만 시그널 컬럼(`flags.punishTypes`)은 살려두어야 치즈 등급 분기 가능.
-  3. **룰 일관성** — 다른 처분과 동일한 형태로 정의해 미래 데이터 변경에도 코드 수정 불필요.
+- 식약처 I2630 행정처분 데이터를 AI(claude-opus-4-7)로 309건 분류한 결과:
+  - **영업소폐쇄 241건의 100%, 영업허가·등록취소 24건의 100%가 "폐업 행정정리"** (시설 철거·폐업신고 미이행·사업자등록 말소). 위생 위험 시그널 아님.
+  - 따라서 ROTTEN 트리거에서 punishTypes 기반 룰은 제거됐고, AI가 분류한 `flags.hygieneViolation` bool만 사용한다.
+- 데이터 점수 가중치(영업소폐쇄 -50)는 그대로 유지:
+  1. **데이터 시차 안전망** — 행정처분 적용일과 LOCALDATA 영업상태 갱신 사이 며칠~몇 주 갭. 그 윈도우에 잡혀도 -50으로 0점 클램프.
+  2. **점수 산식 일관성** — 다른 처분과 동일한 형태로 정의해 미래 데이터 변경에도 코드 수정 불필요.
 - 실질적으로 점수에 영향을 주는 처분은 **영업정지(-20), 과태료/과징금(-8), 품목제조정지(-15), 시정명령(-3)** 등 "현재 영업 중이지만 처분 받은" 케이스다.
+- ROTTEN 분기는 처분 종류와 무관하게 **AI 분류 위생 위반(`hygieneViolation=true`) + 중점관리업소 + 사용자 과락**으로만 결정.
 
 ---
 
@@ -212,9 +214,24 @@ function userScore(reviews: Review[]): number {
 | 과락 | 조건 |
 |---|---|
 | **과락 1** (사용자) | 사용자 리뷰 ≥ 10개 **AND** 사용자 점수 ≤ 10/25 (별점 평균 ≤ 2.0) |
-| **과락 2** (행정/평가) | 다음 중 **하나라도** 해당:<br>· 중점관리업소 평가<br>· 영업정지<br>· 영업소폐쇄<br>· 과태료 / 과징금 |
+| **과락 2** (식약처 평가) | 중점관리업소 평가 (위생 미흡으로 식약처가 직접 분류) |
+| **과락 3** (AI 분류 위생 위반) | `flags.hygieneViolation = true` — AI가 식약처 I2630 행정처분의 위반사유(VILTCN)를 분석해 "식품 위생 직결 위반"으로 분류한 경우. 자세한 카테고리·분류 결과는 `data/violations-classified.json` 참조. |
 
-**과락 1 OR 과락 2** 둘 중 하나만 달성해도 썩은 치즈.
+**과락 1 OR 과락 2 OR 과락 3** 셋 중 하나만 달성해도 썩은 치즈.
+
+#### 행정처분 종류만으로 판단하지 않는 이유
+
+옛 룰은 처분 종류(영업정지·영업소폐쇄·과태료·과징금)를 ROTTEN 트리거로 썼지만, AI(claude-opus-4-7)로 309건 분류한 결과 처분 종류와 위생 위험은 약하게 연관됨:
+
+| 처분 | 건수 | AI가 위생 직결 분류한 건수 | 비율 |
+|---|---|---|---|
+| 영업소폐쇄 | 241 | 0 | 0% (시설철거·폐업 행정정리) |
+| 영업허가·등록취소 | 24 | 0 | 0% (사업자등록 말소·행정정리) |
+| 영업정지 | 44 | **3** | 6.8% (이물·유통기한·무등록 식품) |
+
+→ 영업정지의 위반사유는 거의 다 청소년 주류·유흥접객·성매매 등 사회·도덕 위반(식중독 위험과 무관). 처분 종류로만 판단하면 식탐정의 본질(위생·식중독)과 어긋나므로, AI가 분류한 `hygieneViolation` bool을 직접 사용한다.
+
+`punishTypes`/`punishReasons`는 통계·UI 표시용으로 보존되며 ROTTEN 트리거에는 사용 안 함.
 
 ### 등급 결정 로직
 
@@ -222,8 +239,9 @@ function userScore(reviews: Review[]): number {
 function deriveGrade(input: {
   score: number;            // 0~100 종합 점수
   flags: {
-    evalGrade: string;      // '자율관리업소' | '일반관리업소' | '중점관리업소' | '평가불능업소' | ''
-    punishTypes: string;    // pipe-separated, 예: "영업정지|과태료"
+    evalGrade: string;          // '자율관리업소' | '일반관리업소' | '중점관리업소' | '평가불능업소' | ''
+    punishTypes: string;        // pipe-separated (예: "영업정지|과태료"). UI/통계용, ROTTEN 트리거 X.
+    hygieneViolation: boolean;  // AI(claude-opus-4-7) 분류 결과 — 위생 직결 위반 여부
   };
   userScore?: number;       // 0~25, default 0
   userReviewCount?: number; // default 0
@@ -235,14 +253,11 @@ function deriveGrade(input: {
   if (score >= 50) return 'SILVER';
 
   // score < 50 — 썩은 치즈 조건 평가
-  const punishTypes = (flags.punishTypes || '').split('|').filter(Boolean);
   const userFail = userReviewCount >= 10 && userScore <= 10;
   const evalFail = flags.evalGrade === '중점관리업소';
-  const punishFail = punishTypes.some(t =>
-    ['영업정지', '영업소폐쇄', '과태료', '과징금'].includes(t)
-  );
+  const hygieneFail = !!flags.hygieneViolation;
 
-  return (userFail || evalFail || punishFail) ? 'ROTTEN' : 'BRONZE';
+  return (userFail || evalFail || hygieneFail) ? 'ROTTEN' : 'BRONZE';
 }
 ```
 
@@ -408,7 +423,9 @@ LOCALDATA·카카오의 raw 카테고리 → 식탐정 통합 카테고리로 �
     "hasModel": true,
     "punishCount": 0,
     "punishTypes": "",               // pipe-separated, 예: "영업정지|과태료"
-    "evalGrade": ""                  // 자율/일반/중점/평가불능/''
+    "evalGrade": "",                 // 자율/일반/중점/평가불능/''
+    "punishReasons": "",             // AI 분류한 위반사유 요약 pipe-separated (예: "이물혼입(바퀴벌레)")
+    "hygieneViolation": false        // AI 분류 결과 위생 직결 위반 여부 (claude-opus-4-7)
   },
 
   "riskTags": [],                    // 위험 태그 (raw_fish 등)

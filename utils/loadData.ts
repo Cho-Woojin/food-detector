@@ -46,7 +46,15 @@ interface RawRestaurant {
   // 새 스키마: score = 데이터 점수(0~50). 종합 점수는 클라이언트에서 계산.
   score: number;
   breakdown: { data: number; hygiene: number; evalDelta: number; punish: number; model: number };
-  flags: { hygieneDesignated: boolean; hasModel: boolean; punishCount: number; punishTypes: string; evalGrade: string };
+  flags: {
+    hygieneDesignated: boolean;
+    hasModel: boolean;
+    punishCount: number;
+    punishTypes: string;
+    evalGrade: string;
+    hygieneViolation?: boolean;
+    punishReasons?: string;
+  };
   riskTags: RiskTag[];
   menuHints: string[];
   geoFallback?: boolean;
@@ -63,7 +71,11 @@ function adapt(r: RawRestaurant): Restaurant {
   const score = totalScoreOf(dataScore, ownerScore, userScore);
   const grade = deriveGrade({
     score,
-    flags: { evalGrade: r.flags.evalGrade, punishTypes: r.flags.punishTypes },
+    flags: {
+      evalGrade: r.flags.evalGrade,
+      punishTypes: r.flags.punishTypes,
+      hygieneViolation: r.flags.hygieneViolation,
+    },
     userScore,
     userReviewCount: 0,
   });
@@ -105,6 +117,8 @@ function adapt(r: RawRestaurant): Restaurant {
     },
     evalGrade: r.flags.evalGrade,
     punishTypes: r.flags.punishTypes,
+    hygieneViolation: r.flags.hygieneViolation ?? false,
+    punishReasons: r.flags.punishReasons ?? '',
   };
 }
 

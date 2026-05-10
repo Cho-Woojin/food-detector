@@ -186,5 +186,11 @@
     "raw_meat": 673,
     "fugu": 91,
     "egg_raw": 2
+  },
+  "violations": {
+    "source": "I2630 + AI 분류 (claude-opus-4-7)",
+    "classifiedAt": "2026-05-10",
+    "matchedRestaurants": 38,
+    "hygieneViolators": 3
   }
 }

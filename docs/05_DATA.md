@@ -31,7 +31,7 @@ data/
 | 신원 | `id`, `name`, `category`, `categoryRaw` | 검색·카드·필터 |
 | 위치 | `gu`, `addr`, `roadAddr`, `lat`, `lng`, `phone` | 지도 마커·상세 |
 | 데이터 점수 | `score` (0~50), `breakdown.{data, hygiene, evalDelta, punish, model}` | 종합 점수 계산용 base |
-| 인증/제재 | `flags.{hygieneDesignated, hasModel, punishCount, punishTypes, evalGrade}` | 뱃지·경고·치즈 등급 분기 |
+| 인증/제재 | `flags.{hygieneDesignated, hasModel, punishCount, punishTypes, evalGrade, punishReasons, hygieneViolation}` | 뱃지·경고·치즈 등급 분기 |
 | 위험 가이드 | `riskTags`, `menuHints` | 메뉴 카테고리 경고·시즌 가이드 |
 
 > JSON의 `score`는 **데이터 점수(0~50)** — 사장님·사용자 점수가 0인 초기값. 앱이 매 렌더 시 `score + ownerScore + userScore = 종합점수(0~100)`를 계산. 종합 점수와 등급은 JSON에 저장 X.
@@ -59,10 +59,13 @@ data/
 
 **썩은 치즈 과락 조건** (50 미만일 때만 평가):
 - 과락 1: 사용자 리뷰 ≥ 10개 AND 사용자 점수 ≤ 10/25
-- 과락 2: 중점관리업소 OR 영업정지 OR 영업소폐쇄 OR 과태료/과징금
-- 둘 중 하나라도 → ROTTEN, 그 외엔 BRONZE
+- 과락 2: 중점관리업소 평가 (식약처 위생 미흡 분류)
+- 과락 3: `flags.hygieneViolation = true` (AI가 행정처분 위반사유를 위생 직결로 분류)
+- 셋 중 하나라도 → ROTTEN, 그 외엔 BRONZE
 
 > 50점 이상이면 과락이 있어도 SILVER 이상으로 클램프. 데이터 만점(50)이면 자동 SILVER 진입.
+
+> ROTTEN 트리거에서 처분 종류(영업정지·영업소폐쇄·과태료/과징금)는 **사용하지 않음**. 자세한 근거는 [data/SCORING_AND_SCHEMA.md](../data/SCORING_AND_SCHEMA.md) §"행정처분 종류만으로 판단하지 않는 이유" — 식약처 I2630의 위반사유를 AI(claude-opus-4-7)로 309건 분류한 결과 처분 종류와 위생 위험은 약한 상관(영업정지 44건 중 위생 직결은 3건뿐)이라 처분 텍스트 의미 기반 분류로 대체됨.
 
 ---
 
