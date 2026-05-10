@@ -226,41 +226,7 @@ export function adjustedScoreAndGrade(
   return { score, grade };
 }
 
-// Legacy helpers kept for compatibility with existing owner-mode screens.
-export function applyReviewImpact(baseScore: number, impact: ReviewScoreImpact): number {
-  return Math.max(0, Math.min(100, Math.round(baseScore + impact.userScore)));
-}
-
 export const EMPTY_REVIEW_IMPACT: ReviewScoreImpact = EMPTY_IMPACT;
-
-// =====================================================================
-// 5축 'D축(리뷰 분석)' 시각화 — 5축 레이더 차트의 D 슬롯에 표시
-// =====================================================================
-
-const D_AXIS_MAX = 30;
-type AxisTone = 'green' | 'yellow' | 'red';
-
-export function reviewAxisFromImpact(
-  impact: ReviewScoreImpact,
-  baseScoreRatio: number, // 0..1 — 다른 축들의 평균 (raw baseScore/100)
-): { score: number; rating: string; tone: AxisTone } {
-  if (impact.reviewCount === 0) {
-    return { score: 0, rating: '데이터 부족', tone: 'yellow' };
-  }
-  // 별점 평균을 D축(0~30)에 선형 매핑 + 이물질 페널티 (시각용)
-  const linear = ((impact.rawAvg - 1) / 4) * D_AXIS_MAX;
-  const foreignPenalty = impact.foreignTotal * 4;
-  const score = Math.max(0, Math.min(D_AXIS_MAX, Math.round(linear - foreignPenalty)));
-
-  let rating: string;
-  let tone: AxisTone;
-  if (impact.foreignTotal > 0 && score < 16) { rating = '주의'; tone = 'red'; }
-  else if (score >= 24) { rating = '우수'; tone = 'green'; }
-  else if (score >= 16) { rating = '양호'; tone = 'green'; }
-  else if (score >= 8)  { rating = '보통'; tone = 'yellow'; }
-  else                  { rating = '주의'; tone = 'red'; }
-  return { score, rating, tone };
-}
 
 // =====================================================================
 // React hooks

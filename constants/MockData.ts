@@ -54,7 +54,8 @@ export type Restaurant = {
   highlight?: string;
   reviewCount: number;
   hygieneReviewCount: number;
-  axes: AxisScore[];
+  /** @deprecated 5축 시각화 폐기. mock data 호환 위해 optional로만 유지 */
+  axes?: AxisScore[];
   detectiveNote: string;
   scoreSummary: string;
   menuGuide: MenuGuide;
@@ -406,7 +407,7 @@ export const RESTAURANTS: Restaurant[] = [
     hygieneReviewCount: 3,
     axes: investigatingAxes(),
     detectiveNote: '최근 행정처분 이력이 있어 식탐정이 지켜보고 있습니다.',
-    scoreSummary: '64점 썩은 치즈 — 최근 행정처분 이력으로 식탐정이 모니터링',
+    scoreSummary: '64점 트랩 치즈 — 최근 행정처분 이력으로 식탐정이 모니터링',
     menuGuide: menuGuideGukbap(),
     adminActions: [
       {

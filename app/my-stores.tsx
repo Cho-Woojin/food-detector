@@ -130,7 +130,12 @@ function StoreRowCard({ row }: { row: StoreRow }) {
         </View>
 
         <View style={styles.metaRow}>
-          <Text style={[styles.score, { color: cheeseFg }]}>{row.s}점</Text>
+          <Text style={[styles.score, { color: cheeseFg }]}>
+            {row.gr === 'GOLDEN' ? '골든 치즈'
+              : row.gr === 'SILVER' ? '실버 치즈'
+              : row.gr === 'BRONZE' ? '브론즈 치즈'
+              : '트랩 치즈'}
+          </Text>
           <Text style={styles.dot}>·</Text>
           <Text style={styles.category}>{row.c}</Text>
           <Text style={styles.dot}>·</Text>

@@ -4,7 +4,6 @@
 import { CategoryKey, GradeKey, Restaurant } from '@/constants/Restaurant';
 import {
   AdminAction,
-  AxisScore,
   Grade,
   MenuGuide,
   Restaurant as UIRestaurant,
@@ -14,80 +13,6 @@ import { deriveGrade as deriveGradeCore } from '@/utils/scoring';
 
 // 등급 결정은 utils/scoring.ts가 단일 원본. 여기는 re-export로 사용성 유지.
 export { deriveGrade } from '@/utils/scoring';
-
-// ---------- 5축 ----------
-// 각 축은 단순 ratio가 아니라, 원시 신호의 의미를 따져 등급/tone을 결정한다.
-// 예: B축 0/30 = "행정처분 이력 없음" = 양호(green), 음수 = 처분 있음(severity별)
-// 예: A축 0/30 = hyg=1이면 "보유"(green), hyg=0이면 "미인증"(yellow, 회색 의미).
-
-const AXIS_MAX = { a: 30, b: 30, c: 25, d: 30, e: 15 } as const;
-
-type Tone = 'green' | 'yellow' | 'red';
-type Rated = { score: number; rating: string; tone: Tone };
-
-// A축 — 위생등급 (식약처)
-function rateHygiene(r: Restaurant): Rated {
-  if (r.hyg === 1) return { score: 28, rating: '보유', tone: 'green' };
-  return { score: 0, rating: '미인증', tone: 'yellow' };
-}
-
-// B축 — 행정처분 (서울시·자치구). 0 = 이력 없음 = 양호
-function rateAdmin(r: Restaurant): Rated {
-  if (r.pun === 0) return { score: 30, rating: '이력 없음', tone: 'green' };
-  // 처분 종류별 심각도
-  if (r.puT === '영업소폐쇄') return { score: 0, rating: '중대', tone: 'red' };
-  if (r.puT === '영업정지') return { score: 5, rating: '주의', tone: 'red' };
-  if (r.puT === '시정명령') return { score: 18, rating: '경미', tone: 'yellow' };
-  if (r.puT === '과태료') return { score: 22, rating: '경미', tone: 'yellow' };
-  // 그 외 처분
-  const remaining = Math.max(0, 30 - r.pun * 10);
-  return {
-    score: remaining,
-    rating: remaining >= 18 ? '경미' : remaining >= 10 ? '주의' : '중대',
-    tone: remaining >= 18 ? 'yellow' : 'red',
-  };
-}
-
-// C축 — 신뢰 인증 (공공+사장님)
-function rateTrust(r: Restaurant): Rated {
-  if (r.mod === 1 && r.own === 1) return { score: 23, rating: '매우 우수', tone: 'green' };
-  if (r.mod === 1) return { score: 17, rating: '우수', tone: 'green' };
-  if (r.own === 1) return { score: 12, rating: '양호', tone: 'green' };
-  return { score: 0, rating: '미인증', tone: 'yellow' };
-}
-
-// D축 — 리뷰 분석. 시연용은 대부분 0 → 데이터 부족
-function rateReview(r: Restaurant): Rated {
-  if (r.d <= 0) return { score: 0, rating: '데이터 부족', tone: 'yellow' };
-  const ratio = r.d / AXIS_MAX.d;
-  if (ratio >= 0.7) return { score: r.d, rating: '우수', tone: 'green' };
-  if (ratio >= 0.4) return { score: r.d, rating: '양호', tone: 'green' };
-  return { score: r.d, rating: '보통', tone: 'yellow' };
-}
-
-// E축 — Gap 탐지 (정적 vs 동적). 시연용은 대부분 0 → 데이터 부족
-function rateGap(r: Restaurant): Rated {
-  if (r.e <= 0) return { score: 0, rating: '데이터 부족', tone: 'yellow' };
-  const ratio = r.e / AXIS_MAX.e;
-  if (ratio >= 0.7) return { score: r.e, rating: '양호', tone: 'green' };
-  if (ratio >= 0.4) return { score: r.e, rating: '보통', tone: 'yellow' };
-  return { score: r.e, rating: '주의', tone: 'red' };
-}
-
-export function buildAxes(r: Restaurant): AxisScore[] {
-  const a = rateHygiene(r);
-  const b = rateAdmin(r);
-  const c = rateTrust(r);
-  const d = rateReview(r);
-  const e = rateGap(r);
-  return [
-    { key: 'hygiene', label: '위생등급', source: '식약처', max: AXIS_MAX.a, ...a },
-    { key: 'admin', label: '행정처분', source: '서울시·자치구', max: AXIS_MAX.b, ...b },
-    { key: 'trust', label: '신뢰 인증', source: '공공+사장님', max: AXIS_MAX.c, ...c },
-    { key: 'review', label: '리뷰 분석', source: '자체+구글', max: AXIS_MAX.d, ...d },
-    { key: 'gap', label: 'Gap 탐지', source: '정적 vs 동적', max: AXIS_MAX.e, ...e },
-  ];
-}
 
 // ---------- AI 메뉴 가이드 ----------
 const baseContext = '오늘 28.6°C · 습도 65% · 식중독 주의 단계';
@@ -280,23 +205,11 @@ function defaultHours(cat: CategoryKey): string {
   return '11:00 - 22:00';
 }
 
-// ---------- 점수 재계산 (5축 차트 시각화 전용) ----------
-// 5축 그래프(SpiderChart5)에 들어갈 정규화 점수를 다시 계산. 실제 종합 점수와 별개.
-// "데이터 부족" 축을 분모에서 제외해 실제로 측정된 항목만으로 정규화한다.
-// 이렇게 해야 hyg=1·pun=0 같은 평범한 식당도 BRONZE 이상으로 분류된다.
-export function recomputeScore(axes: AxisScore[]): number {
-  const measured = axes.filter((a) => a.rating !== '데이터 부족');
-  if (measured.length === 0) return 0;
-  const sum = measured.reduce((acc, a) => acc + a.score, 0);
-  const max = measured.reduce((acc, a) => acc + a.max, 0);
-  return Math.round((sum / max) * 100);
-}
-
 function gradeLabelFromUI(g: Grade): string {
   if (g === 'GOLDEN') return '골드 치즈';
   if (g === 'SILVER') return '실버 치즈';
   if (g === 'BRONZE') return '브론즈 치즈';
-  return '썩은 치즈';
+  return '트랩 치즈';
 }
 
 // 등급은 utils/scoring.ts의 deriveGrade로 파생 — 종합 점수 + flags 기반.
@@ -316,8 +229,6 @@ export function recomputeFromRaw(r: Restaurant): { score: number; grade: Grade }
 // ---------- 메인 어댑터 (상세) ----------
 export function toUIRestaurant(r: Restaurant): UIRestaurant {
   // 점수는 사전 계산 그대로, 등급은 deriveGrade로 파생 (utils/scoring.ts 단일 산식).
-  // 5축은 spider chart 시각화 용도로만 빌드 (점수에는 영향 X)
-  const axes = buildAxes(r);
   const score = r.score;
   const grade = deriveGradeCore({
     score,
@@ -360,7 +271,6 @@ export function toUIRestaurant(r: Restaurant): UIRestaurant {
     highlight: r.hyg ? '식약처 위생등급 보유' : undefined,
     reviewCount: 0,
     hygieneReviewCount: 0,
-    axes,
     detectiveNote: scoreSummary,
     scoreSummary,
     menuGuide: buildMenuGuide(r.cat),

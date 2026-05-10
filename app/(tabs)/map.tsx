@@ -227,6 +227,7 @@ export default function MapScreen() {
     g === 'GOLDEN' ? '골든 치즈'
       : g === 'SILVER' ? '실버 치즈'
       : g === 'BRONZE' ? '브론즈 치즈'
+      : g === 'ROTTEN' ? '트랩 치즈'
       : '데이터 수집중';
 
   const cheeseFg = (g: string) =>
@@ -304,7 +305,7 @@ export default function MapScreen() {
                     </Text>
                   </View>
                   <Text style={[styles.searchResultScore, { color: cheeseFg(r.grade) }]}>
-                    {r.score}점
+                    {gradeLabel(r.grade)}
                   </Text>
                 </Pressable>
               ))}

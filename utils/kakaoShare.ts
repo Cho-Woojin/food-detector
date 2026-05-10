@@ -52,7 +52,7 @@ const GRADE_LABEL: Record<ShareRestaurant['grade'], string> = {
   GOLDEN: '골드 치즈',
   SILVER: '실버 치즈',
   BRONZE: '브론즈 치즈',
-  ROTTEN: '썩은 치즈',
+  ROTTEN: '트랩 치즈',
 };
 
 const GRADE_IMG: Record<ShareRestaurant['grade'], string> = {
@@ -76,7 +76,7 @@ export async function shareRestaurantToKakao(r: ShareRestaurant): Promise<boolea
     objectType: 'feed',
     content: {
       title: r.name,
-      description: `식탐정 ${r.score}점 · ${GRADE_LABEL[r.grade]} · ${r.cat} · ${r.gu}`,
+      description: `식탐정 ${GRADE_LABEL[r.grade]} · ${r.cat} · ${r.gu}`,
       imageUrl,
       link: {
         mobileWebUrl: restaurantUrl,
