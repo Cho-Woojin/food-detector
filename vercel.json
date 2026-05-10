@@ -25,7 +25,7 @@
       "destination": "/restaurant/[id]"
     },
     {
-      "source": "/((?!_expo/|assets/|favicon\\.ico|.*\\.html|.*\\.js|.*\\.css|.*\\.png|.*\\.svg|.*\\.json).*)",
+      "source": "/((?!_expo/|api/|assets/|favicon\\.ico|.*\\.html|.*\\.js|.*\\.css|.*\\.png|.*\\.svg|.*\\.json).*)",
       "destination": "/index.html"
     }
   ]
