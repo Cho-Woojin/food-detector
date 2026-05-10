@@ -46,54 +46,51 @@ proj4.defs(
 );
 const toWGS84 = (x, y) => proj4('EPSG:5174', 'WGS84', [x, y]);
 
-// ---- Data score (0~50) ----
-// 기본 25점 + 외부 시그널 가감. 자세한 룰은 data/SCORING_AND_SCHEMA.md
+// ---- Data score (0~70) ----
+// Rule (2026-05-10): 70+15+15 점수 체계 + 위생등급 3단계 차등 + 모범 보조 가산. 자세한 룰은 data/SCORING_AND_SCHEMA.md.
 //
 // 종합 점수(0~100)는 클라이언트에서 dataScore + ownerScore + userScore로 계산.
 // 등급(GOLDEN/SILVER/BRONZE/ROTTEN)도 클라이언트에서 deriveGrade()로 결정.
 // 따라서 split 결과 JSON에는 grade/color를 박지 않는다.
+//
+// I2630에 실제로 존재하는 처분 종류만 정의 (시정명령/과태료/경고/품목제조정지는 데이터 없음, 제거됨).
 const PUNISH_DELTAS = {
-  '영업소폐쇄': -50, '영업정지': -20, '품목제조정지': -15,
-  '과태료': -8, '과징금': -8, '시정명령': -3, '경고': -2,
+  '영업소폐쇄': -50,
+  '영업정지': -25,
+  '영업허가·등록취소': -50,
+  '과징금부과': -10,
 };
 
+const BONUS_CAP = 15;
+
 function computeDataScore(flags) {
-  // flags: { hygieneDesignated, hasModel, evalGrade, punishTypes }
-  let data = 25;  // base
-  let hygiene = 0, evalDelta = 0, punish = 0, model = 0;
+  // 점수 체계 (2026-05-10 개정): 각 인증 독립 배점, 위생등급 없을 때만 보조 합 cap 35.
+  // 자세한 룰은 data/SCORING_AND_SCHEMA.md.
+  let data = 25;
+  const hasHy = !!flags.hygieneDesignated;
+  const hasMod = !!flags.hasModel;
+  const hasSafe = !!flags.safeRestaurant;
+  const hasGood = !!flags.goodPrice;
 
-  // 위생 / 평가 — mutually exclusive (위생등급이 우선)
-  if (flags.hygieneDesignated) {
-    hygiene = 20;
-    data += hygiene;
-  } else if (flags.evalGrade === '자율관리업소') {
-    evalDelta = 10; data += evalDelta;
-  } else if (flags.evalGrade === '일반관리업소') {
-    evalDelta = 3; data += evalDelta;
-  } else if (flags.evalGrade === '중점관리업소') {
-    evalDelta = -15; data += evalDelta;
-  } else if (flags.evalGrade === '평가불능업소') {
-    evalDelta = -5; data += evalDelta;
-  }
+  const hygiene = hasHy ? 35 : 0;
+  const model = hasMod ? 25 : 0;
+  const safe = hasSafe ? 15 : 0;
+  const good = hasGood ? 15 : 0;
 
-  // 모범음식점 (독립적으로 가산)
-  if (flags.hasModel) {
-    model = 5;
-    data += model;
-  }
+  let bonus = model + safe + good;
+  if (!hasHy) bonus = Math.min(35, bonus);
 
-  // 행정처분 (cumulative)
+  data += hygiene + bonus;
+
+  let punish = 0;
   const types = (flags.punishTypes || '').split('|').filter(Boolean);
   for (const t of types) {
-    const delta = PUNISH_DELTAS[t] ?? -3;
-    punish += delta;
+    punish += PUNISH_DELTAS[t] ?? -3;
   }
   data += punish;
 
-  // 0~50 클램프
-  data = Math.max(0, Math.min(50, data));
-
-  return { data, hygiene, evalDelta, punish, model };
+  data = Math.max(0, Math.min(70, data));
+  return { data, hygiene, model, safe, good, bonus, punish };
 }
 
 // ---- Seoul 25 districts allowlist ----
@@ -376,7 +373,16 @@ for (const r of rows) {
     hasModel: bool(r.has_model),
     punishCount: num(r.punish_count) ?? 0,
     punishTypes: r.punish_types || '',
-    evalGrade: r.eval_grade || '',
+    // 위생관리평가(I1540)는 제거됨 (2026-05-10) — 식품제조·가공업체 평가라 음식점에 부적절.
+    // hygieneGrade(매우우수/우수/좋음)는 split 단계에서 채우지 않음.
+    // CSV 파이프라인 통합 후, scripts/apply-hygiene-grades.js를 별도로 실행해
+    // MFDS 위생등급 지정현황 Excel에서 부착한다. 자세한 건 docs/05_DATA.md.
+    //
+    // safeRestaurant / safeRestaurantSince도 split 단계에서 채우지 않음.
+    // scripts/apply-safe-restaurants.js를 실행해 MAFRA 안심식당 데이터에서 부착.
+    //
+    // goodPrice / goodPriceMenus도 split 단계에서 채우지 않음.
+    // scripts/apply-good-price.js를 실행해 행안부 착한가격업소 데이터에서 부착.
   };
   const breakdown = computeDataScore(flags);
   const score = breakdown.data;  // 데이터 점수(0~50). 종합 점수는 클라이언트에서 +ownerScore+userScore.

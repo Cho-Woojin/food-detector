@@ -52,9 +52,8 @@ export interface Restaurant {
   // 트랩 치즈 과락 평가용 (런타임)
   userReviewCount?: number;
   // 데이터 점수 세부 (UI breakdown 표시용)
-  dataBreakdown?: { hygiene: number; evalDelta: number; punish: number; model: number };
+  dataBreakdown?: { hygiene: number; model: number; bonus: number; punish: number };
   // 행정처분/평가 플래그 (deriveGrade에서 사용)
-  evalGrade?: string;
   punishTypes?: string;
   hygieneViolation?: boolean;   // AI 분류 위생 직결 위반 — ROTTEN 트리거
   punishReasons?: string;       // AI 분류 위반사유 요약 pipe-separated (UI 표시용)

@@ -216,7 +216,6 @@ export function adjustedScoreAndGrade(
   const grade = deriveGrade({
     score,
     flags: {
-      evalGrade: raw.evalGrade,
       punishTypes: raw.punishTypes,
       hygieneViolation: raw.hygieneViolation,
     },

@@ -43,15 +43,19 @@ interface RawRestaurant {
   phone: string;
   lat: number;
   lng: number;
-  // 새 스키마: score = 데이터 점수(0~50). 종합 점수는 클라이언트에서 계산.
+  // 새 스키마: score = 데이터 점수(0~70). 종합 점수는 클라이언트에서 계산.
   score: number;
-  breakdown: { data: number; hygiene: number; evalDelta: number; punish: number; model: number };
+  breakdown: { data: number; hygiene: number; model: number; bonus: number; punish: number };
   flags: {
     hygieneDesignated: boolean;
+    hygieneGrade?: string;          // '매우우수' | '우수' | '좋음' | undefined (미상)
     hasModel: boolean;
+    safeRestaurant?: boolean;
+    safeRestaurantSince?: string;
+    goodPrice?: boolean;
+    goodPriceMenus?: { name: string; price: number | string }[];
     punishCount: number;
     punishTypes: string;
-    evalGrade: string;
     hygieneViolation?: boolean;
     punishReasons?: string;
   };
@@ -72,7 +76,6 @@ function adapt(r: RawRestaurant): Restaurant {
   const grade = deriveGrade({
     score,
     flags: {
-      evalGrade: r.flags.evalGrade,
       punishTypes: r.flags.punishTypes,
       hygieneViolation: r.flags.hygieneViolation,
     },
@@ -111,11 +114,10 @@ function adapt(r: RawRestaurant): Restaurant {
 
     dataBreakdown: {
       hygiene: r.breakdown.hygiene,
-      evalDelta: r.breakdown.evalDelta,
-      punish: r.breakdown.punish,
       model: r.breakdown.model,
+      bonus: r.breakdown.bonus ?? 0,
+      punish: r.breakdown.punish,
     },
-    evalGrade: r.flags.evalGrade,
     punishTypes: r.flags.punishTypes,
     hygieneViolation: r.flags.hygieneViolation ?? false,
     punishReasons: r.flags.punishReasons ?? '',

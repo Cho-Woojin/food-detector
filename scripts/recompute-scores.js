@@ -1,11 +1,9 @@
 #!/usr/bin/env node
-// 기존 data/by-gu/*.json의 flags를 입력으로, 새 데이터 점수(0~50)와 breakdown을 재계산.
+// 기존 data/by-gu/*.json의 flags를 입력으로, 새 데이터 점수(0~70)와 breakdown을 재계산.
 // CSV 없이 점수 룰만 바뀐 케이스에 사용 (예: 영업소폐쇄 가중치 조정, 신호 재구성 등).
 //
-// 변경:
-// - score: 옛 0~100 → 새 0~50 (데이터 점수만)
-// - breakdown: { base, hygiene, evalDelta, punish, model } → { data, hygiene, evalDelta, punish, model }
-// - grade, color: 제거 (클라이언트에서 deriveGrade()로 계산)
+// Rule (2026-05-10): 70+15+15 점수 체계 + 위생등급 3단계 차등 + 모범 보조 가산.
+// 자세한 룰은 data/SCORING_AND_SCHEMA.md.
 //
 // 출력: data/by-gu/*.json 덮어쓰기 + data/restaurants-index.json + data/by-gu/_index.json 갱신.
 //
@@ -17,43 +15,57 @@ const path = require('path');
 const BY_GU_DIR = path.join(__dirname, '..', 'data', 'by-gu');
 const INDEX_OUT = path.join(__dirname, '..', 'data', 'restaurants-index.json');
 
+// I2630에 실제로 존재하는 처분 종류만 (시정명령/과태료/경고/품목제조정지는 데이터 없음, 제거됨)
 const PUNISH_DELTAS = {
-  '영업소폐쇄': -50, '영업정지': -20, '품목제조정지': -15,
-  '과태료': -8, '과징금': -8, '시정명령': -3, '경고': -2,
+  '영업소폐쇄': -50,
+  '영업정지': -25,
+  '영업허가·등록취소': -50,
+  '과징금부과': -10,
 };
 
+const BONUS_CAP = 15;
+
 function computeDataScore(flags) {
+  // 점수 체계 (2026-05-10 개정): 각 인증 독립 배점, 위생등급 없을 때만 보조 합 cap 35.
+  //   위생등급:   +35 (단독 60 → SILVER)
+  //   모범음식점: +25 (단독 50 → SILVER)
+  //   안심식당:   +15
+  //   착한가격:   +15
+  //   위생등급 X 시 (모범+안심+착한) 합 cap 35 → 25+35=60 → SILVER에 머무름.
+  //   위생등급 O 시 cap 없이 합산 (만점 70까지 가능).
+  // → BRONZE: 시그널 없음 / 안심 단독 / 착한 단독 / 안심+착한
+  //   SILVER: 위생 단독 / 모범 단독 / 모범+가산
+  //   GOLD: 위생 + 다른 인증 1개+
   let data = 25;
-  let hygiene = 0, evalDelta = 0, punish = 0, model = 0;
+  const hasHy = !!flags.hygieneDesignated;
+  const hasMod = !!flags.hasModel;
+  const hasSafe = !!flags.safeRestaurant;
+  const hasGood = !!flags.goodPrice;
 
-  if (flags.hygieneDesignated) {
-    hygiene = 20; data += hygiene;
-  } else if (flags.evalGrade === '자율관리업소') {
-    evalDelta = 10; data += evalDelta;
-  } else if (flags.evalGrade === '일반관리업소') {
-    evalDelta = 3; data += evalDelta;
-  } else if (flags.evalGrade === '중점관리업소') {
-    evalDelta = -15; data += evalDelta;
-  } else if (flags.evalGrade === '평가불능업소') {
-    evalDelta = -5; data += evalDelta;
-  }
+  const hygiene = hasHy ? 35 : 0;
+  const model = hasMod ? 25 : 0;
+  const safe = hasSafe ? 15 : 0;
+  const good = hasGood ? 15 : 0;
 
-  if (flags.hasModel) {
-    model = 5; data += model;
-  }
+  let bonus = model + safe + good;
+  if (!hasHy) bonus = Math.min(35, bonus);  // 위생등급 없을 때만 cap
 
-  const types = (flags.punishTypes || '').split('|').filter(Boolean);
-  for (const t of types) {
+  data += hygiene + bonus;
+
+  let punish = 0;
+  for (const t of (flags.punishTypes || '').split('|').filter(Boolean)) {
     punish += PUNISH_DELTAS[t] ?? -3;
   }
   data += punish;
 
-  data = Math.max(0, Math.min(50, data));
-  return { data, hygiene, evalDelta, punish, model };
+  data = Math.max(0, Math.min(70, data));
+  return { data, hygiene, model, safe, good, bonus, punish };
 }
 
 function bucketDataScore(score) {
-  if (score >= 50) return '50';
+  if (score >= 70) return '70';
+  if (score >= 60) return '60-69';
+  if (score >= 50) return '50-59';
   if (score >= 40) return '40-49';
   if (score >= 30) return '30-39';
   if (score >= 20) return '20-29';
@@ -75,6 +87,10 @@ for (const file of files) {
   if (!Array.isArray(arr) || arr.length === 0) continue;
 
   for (const r of arr) {
+    // 별도 매칭 스크립트 산출물은 보존 — computeDataScore와 무관, 점수 룰 변경/재계산 사이에도 유지돼야 함:
+    //   hygieneGrade                  ← apply-hygiene-grades.js (MFDS 위생등급 Excel)
+    //   safeRestaurant(+Since)        ← apply-safe-restaurants.js (MAFRA 안심식당)
+    //   goodPrice(+Menus)             ← apply-good-price.js (행안부 착한가격업소)
     const breakdown = computeDataScore(r.flags || {});
     r.score = breakdown.data;
     r.breakdown = breakdown;
