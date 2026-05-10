@@ -22,11 +22,11 @@
 - `silver`: `#94A3B8` / `silverLight`: `#E2E8F0`
 - `bronze`: `#CD7F32` / `bronzeLight`: `#F5DEB3`
 
-### Risk Levels
-- `riskGreen`: `#22C55E` (평온/양호)
-- `riskYellow`: `#FBBF24` (주의)
-- `riskOrange`: `#F97316` (경계)
-- `riskRed`: `#EF4444` (위험)
+### Risk Levels (식약처 식중독 예측지수 4단계)
+- `riskGreen`:  `#34C759` — 1단계 관심 (점수 < 55)
+- `riskYellow`: `#FFCC00` — 2단계 주의 (55 ≤ 점수 < 71)
+- `riskOrange`: `#FF9500` — 3단계 경고 (71 ≤ 점수 < 86)
+- `riskRed`:    `#FF3B30` — 4단계 위험 (점수 ≥ 86)
 
 ### Special
 - `mascotBg`: `#FFF8F0` — 마스코트 카드 배경

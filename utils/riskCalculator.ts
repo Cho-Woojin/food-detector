@@ -1,28 +1,30 @@
-// 식약처 식중독지수 + 기온·습도 가중치 → 앱 위험단계(1~5) 산출.
+// 식약처 식중독 예측지수 → 앱 위험단계(1~4) 산출.
+// 정부 단계 체계와 동기화: 관심(<55)/주의(55~70)/경고(71~85)/위험(≥86).
 
 import type { RiskLevel } from '@/constants/tokens';
 import type { EnvData } from './api/env';
 
 /**
- * 위험단계 산출.
- * - 식약처 todayRisk2 (0~100) 를 20점 단위로 5단계 매핑
- * - 폭염(30°C+) 또는 고온다습(25°C+ ∧ 70%+) 이면 한 단계 가중
- * - 1~5 범위로 clamp
+ * 위험단계 산출 — 식약처 todayRisk2 (0~100) 점수를 정부 4단계로 매핑.
+ *
+ * 식약처 임계치:
+ * - 1단계 관심: 55 미만
+ * - 2단계 주의: 55 이상 ~ 71 미만
+ * - 3단계 경고: 71 이상 ~ 86 미만
+ * - 4단계 위험: 86 이상
+ *
+ * 기상 정보(기온·습도)는 식약처 점수 산출에 이미 반영되어 있어
+ * 추가 가중하지 않음 — 그래야 정부 사이트의 단계 표시와 일치.
  */
 export function calculateRiskLevel(env: EnvData): RiskLevel {
-  const score = env.foodPoison.today;
-  const { temperature: t, humidity: h } = env.weather;
+  return scoreToRiskLevel(env.foodPoison.today);
+}
 
-  let level = Math.ceil(score / 20);
-
-  if (t >= 30 || (t >= 25 && h >= 70)) {
-    level += 1;
-  }
-
-  if (level < 1) level = 1;
-  if (level > 5) level = 5;
-
-  return level as RiskLevel;
+export function scoreToRiskLevel(score: number): RiskLevel {
+  if (score >= 86) return 4;
+  if (score >= 71) return 3;
+  if (score >= 55) return 2;
+  return 1;
 }
 
 /**
@@ -43,9 +45,9 @@ export function humidityTone(h: number): Tone {
 }
 
 export function foodPoisonTone(score: number): Tone {
-  if (score >= 71) return 'danger';
-  if (score >= 41) return 'warning';
-  return 'success';
+  if (score >= 71) return 'danger';   // 경고·위험
+  if (score >= 55) return 'warning';  // 주의
+  return 'success';                   // 관심
 }
 
 export function pm10Tone(pm10: number): Tone {
@@ -55,14 +57,13 @@ export function pm10Tone(pm10: number): Tone {
 }
 
 /**
- * 식약처 식중독지수 점수 → 한국어 라벨.
+ * 식약처 식중독지수 점수 → 한국어 라벨 (정부 4단계).
  */
 export function foodPoisonLabel(score: number): string {
   if (score >= 86) return '위험';
   if (score >= 71) return '경고';
-  if (score >= 51) return '주의';
-  if (score >= 31) return '관심';
-  return '낮음';
+  if (score >= 55) return '주의';
+  return '관심';
 }
 
 /**
