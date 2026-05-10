@@ -49,7 +49,8 @@ export type Restaurant = {
   phone: string;
   hours: string;
   closedDay: string;
-  status: '영업중' | '영업종료' | '브레이크타임';
+  // 영업주기 실시간 데이터 부재 — UI에서 더 이상 노출하지 않음 (optional 처리)
+  status?: '영업중' | '영업종료' | '브레이크타임';
   highlight?: string;
   reviewCount: number;
   hygieneReviewCount: number;

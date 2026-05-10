@@ -137,13 +137,11 @@ export const RestaurantBottomSheet = forwardRef<RestaurantBottomSheetHandle, Pro
             />
           </View>
 
-          {/* 메타 */}
+          {/* 메타 — 영업중 여부는 실시간 데이터 부재로 표기하지 않음 */}
           <View style={styles.metaRow}>
             <Text style={styles.subtitle} numberOfLines={1}>
               {restaurant.cat} · {ui.district}
             </Text>
-            <View style={styles.openDot} />
-            <Text style={styles.openText}>{ui.status}</Text>
           </View>
 
           {/* 점수 + 치즈 (이름보다 아래·작게) */}

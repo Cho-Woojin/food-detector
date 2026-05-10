@@ -10,8 +10,8 @@ import type { Grade } from '@/constants/MockData';
 import { loadRestaurantsByGu } from '@/utils/loadData';
 import { useLikedIds } from '@/utils/favorites';
 import { getCachedLocation } from '@/utils/location';
-import { adjustedScoreAndGrade, useReviewImpactMap } from '@/utils/reviews';
-import { useOwnerScoreMap } from '@/utils/owner';
+import { adjustedScoreAndGrade, EMPTY_REVIEW_IMPACT, useReviewImpactMap } from '@/utils/reviews';
+import { useOwnerImpactMap } from '@/utils/owner';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -110,24 +110,22 @@ export default function MapScreen() {
   }, []);
 
   const impactMap = useReviewImpactMap();
-  const ownerScoreMap = useOwnerScoreMap();
+  const ownerImpactMap = useOwnerImpactMap();
 
-  // 위생 리뷰 + 사장님 인증 보정 — 점수/등급 동기화 (마커 색상·검색 점수 일치)
-  // owner/user 변경 시 영향 받은 식당만 재계산되도록 dep 분리
+  // 위생 리뷰 + 사장님 게시글 보정 — 점수/등급을 동기화해서 마커 색상·검색 결과 점수가 일치
+  // 둘 중 하나라도 영향이 있으면 재계산. r 객체는 변경된 식당만 새로 만들어 메모 효율 유지.
   const adjustedRestaurants = useMemo(() => {
-    if (impactMap.size === 0 && ownerScoreMap.size === 0) return restaurants;
+    if (impactMap.size === 0 && ownerImpactMap.size === 0) return restaurants;
     return restaurants.map((r) => {
       const impact = impactMap.get(r.id);
-      const ownerScore = ownerScoreMap.get(r.id) ?? 0;
-      if (!impact && ownerScore === 0) return r;
-      const { score, grade } = adjustedScoreAndGrade(
-        r,
-        impact ?? { userScore: 0, reviewCount: 0, rawAvg: 0, foreignReports: 0, foreignTotal: 0 },
-        ownerScore,
-      );
-      return { ...r, score, grade, ownerScore, userScore: impact?.userScore ?? 0, userReviewCount: impact?.reviewCount ?? 0 } as Restaurant;
+      const owner = ownerImpactMap.get(r.id);
+      if (!impact && !owner) return r;
+      const reviewImp = impact ?? EMPTY_REVIEW_IMPACT;
+      const ownerDelta = owner?.delta ?? 0;
+      const { score, grade } = adjustedScoreAndGrade(r, reviewImp, ownerDelta);
+      return { ...r, score, grade } as Restaurant;
     });
-  }, [restaurants, impactMap, ownerScoreMap]);
+  }, [restaurants, impactMap, ownerImpactMap]);
 
   // 카테고리 필터 적용된 결과
   const visible = useMemo(() => {
@@ -224,23 +222,18 @@ export default function MapScreen() {
   };
 
   const cheeseFor = (g: string) =>
-    g === 'GOLDEN' ? Cheese.gold
-      : g === 'SILVER' ? Cheese.silver
-      : g === 'BRONZE' ? Cheese.bronze
-      : null; // ROTTEN — 치즈 이미지 X
+    g === 'GOLDEN' ? Cheese.gold : g === 'SILVER' ? Cheese.silver : Cheese.bronze;
 
   const gradeLabel = (g: string) =>
-    g === 'GOLDEN' ? '골드 치즈'
+    g === 'GOLDEN' ? '골든 치즈'
       : g === 'SILVER' ? '실버 치즈'
       : g === 'BRONZE' ? '브론즈 치즈'
-      : g === 'ROTTEN' ? '썩은 치즈'
       : '데이터 수집중';
 
   const cheeseFg = (g: string) =>
     g === 'GOLDEN' ? color.cheese.GOLDEN.fg
       : g === 'SILVER' ? color.cheese.SILVER.fg
       : g === 'BRONZE' ? color.cheese.BRONZE.fg
-      : g === 'ROTTEN' ? color.cheese.ROTTEN.fg
       : '#8E8E93';
 
   return (
@@ -305,13 +298,7 @@ export default function MapScreen() {
                     i < searchHits.length - 1 && styles.searchResultDivider,
                     pressed && { backgroundColor: color.fill.tertiary },
                   ]}>
-                  {cheeseFor(r.grade) ? (
-                    <Image source={cheeseFor(r.grade)!} style={styles.searchResultCheese} resizeMode="contain" />
-                  ) : (
-                    <View style={[styles.searchResultCheese, { alignItems: 'center', justifyContent: 'center' }]}>
-                      <Icon name="warning" size={20} color={cheeseFg(r.grade)} />
-                    </View>
-                  )}
+                  <Image source={cheeseFor(r.grade)} style={styles.searchResultCheese} resizeMode="contain" />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.searchResultName} numberOfLines={1}>{r.name}</Text>
                     <Text style={styles.searchResultMeta} numberOfLines={1}>

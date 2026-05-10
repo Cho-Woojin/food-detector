@@ -10,6 +10,7 @@ import { useLikedIds } from '@/utils/favorites';
 import { ensureRecomputedById } from '@/utils/dataStore';
 import { loginWithKakao, logoutFromKakao, useKakaoUser } from '@/utils/kakaoAuth';
 import { useMyReviews } from '@/utils/reviews';
+import { useMyOwnedRestaurantIds } from '@/utils/owner';
 
 
 type MenuItem = {
@@ -22,55 +23,76 @@ type MenuItem = {
 };
 type MenuSection = { title: string; items: MenuItem[] };
 
-type GradeBreakdown = { GOLDEN: number; SILVER: number; BRONZE: number; ROTTEN: number };
-
 export default function ProfileScreen() {
   const likedIds = useLikedIds();
   const likedCount = likedIds.size;
   const kakaoUser = useKakaoUser();
   const reviewCount = useMyReviews().length;
-  const [breakdown, setBreakdown] = useState<GradeBreakdown>({ GOLDEN: 0, SILVER: 0, BRONZE: 0, ROTTEN: 0 });
+  const ownedIds = useMyOwnedRestaurantIds(kakaoUser?.id ?? null);
+  const [singleOwnedName, setSingleOwnedName] = useState<string | null>(null);
   const [guideListOpen, setGuideListOpen] = useState(false);
 
-  // 좋아요한 식당의 등급별 분포 계산 — 데이터 로드 후 1회
+  // 가게 1곳만 등록된 경우 — 메뉴에 가게명 미리보기 노출용
   useEffect(() => {
-    if (likedCount === 0) { setBreakdown({ GOLDEN: 0, SILVER: 0, BRONZE: 0, ROTTEN: 0 }); return; }
+    if (ownedIds.length !== 1) { setSingleOwnedName(null); return; }
     let cancelled = false;
     ensureRecomputedById().then((map) => {
       if (cancelled) return;
-      const next: GradeBreakdown = { GOLDEN: 0, SILVER: 0, BRONZE: 0, ROTTEN: 0 };
-      for (const id of likedIds) {
-        const row = map.get(id);
-        const gr = row?.gr;
-        if (gr === 'GOLDEN') next.GOLDEN++;
-        else if (gr === 'SILVER') next.SILVER++;
-        else if (gr === 'BRONZE') next.BRONZE++;
-        else if (gr === 'ROTTEN') next.ROTTEN++;
-      }
-      setBreakdown(next);
+      setSingleOwnedName(map.get(ownedIds[0])?.n ?? null);
     });
     return () => { cancelled = true; };
-  }, [likedIds]);
+  }, [ownedIds]);
+
+  // 사장님 메뉴 항목 — 가게 0개: 입증, 1개: 해당 가게 상세, 2개+: 리스트
+  const ownerMenuItem: MenuItem = (() => {
+    if (ownedIds.length === 0) {
+      return {
+        icon: 'logo',
+        label: '내 가게 입증하기',
+        value: '신청',
+        onPress: () => router.push('/owner/apply' as any),
+      };
+    }
+    if (ownedIds.length === 1) {
+      return {
+        icon: 'logo',
+        label: '내 가게 관리',
+        value: singleOwnedName ?? '1곳',
+        onPress: () => router.push(`/restaurant/${ownedIds[0]}` as any),
+      };
+    }
+    return {
+      icon: 'logo',
+      label: '내 가게 관리',
+      value: `${ownedIds.length}곳`,
+      onPress: () => router.push('/my-stores' as any),
+    };
+  })();
+
+  const isOwner = ownedIds.length > 0;
+  const ownerSection: MenuSection = { title: '사장님', items: [ownerMenuItem] };
+  const activitySection: MenuSection = {
+    title: '활동',
+    items: [
+      {
+        icon: 'heart',
+        label: '좋아요한 식당',
+        value: String(likedCount),
+        onPress: () => router.push('/(tabs)/favorites' as any),
+      },
+      {
+        icon: 'pencil',
+        label: '내 위생 리뷰',
+        value: String(reviewCount),
+        onPress: () => router.push('/my-reviews' as any),
+      },
+      { icon: 'camera', label: '업로드한 사진', comingSoon: true, disabled: true },
+    ],
+  };
 
   const sections: MenuSection[] = [
-    {
-      title: '활동',
-      items: [
-        {
-          icon: 'heart',
-          label: '좋아요한 식당',
-          value: String(likedCount),
-          onPress: () => router.push('/(tabs)/favorites' as any),
-        },
-        {
-          icon: 'pencil',
-          label: '내 위생 리뷰',
-          value: String(reviewCount),
-          onPress: () => router.push('/my-reviews' as any),
-        },
-        { icon: 'camera', label: '업로드한 사진', comingSoon: true, disabled: true },
-      ],
-    },
+    // 사장님 권한 보유 시 가게 관리가 가장 위 — 활동보다 우선
+    ...(isOwner ? [ownerSection, activitySection] : [activitySection, ownerSection]),
     {
       title: '안전 가이드',
       items: [
@@ -114,7 +136,7 @@ export default function ProfileScreen() {
         <LoggedInCard
           nickname={kakaoUser.nickname}
           profileImage={kakaoUser.profileImage}
-          onLogout={() => logoutFromKakao()}
+          ownedCount={ownedIds.length}
         />
       ) : (
         <GuestCard
@@ -122,12 +144,6 @@ export default function ProfileScreen() {
           onLogin={async () => { await loginWithKakao(); }}
         />
       )}
-
-      {/* 좋아요 등급별 분포 — 데이터 있을 때만 */}
-      {likedCount > 0 && <LikedBreakdownCard breakdown={breakdown} total={likedCount} />}
-
-      {/* Owner-mode banner */}
-      <OwnerBanner />
 
       {/* Menu sections */}
       {sections.map((section, sIdx) => (
@@ -147,41 +163,20 @@ export default function ProfileScreen() {
 
       <Text style={styles.version}>식탐정 v1.0.0 · 식약처 LOCALDATA 기반</Text>
 
+      {/* 로그아웃 — 페이지 가장 아래 눈에 띄지 않는 텍스트 링크 */}
+      {kakaoUser ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="로그아웃"
+          onPress={() => logoutFromKakao()}
+          hitSlop={8}
+          style={({ pressed }) => [styles.logoutLink, pressed && { opacity: 0.5 }]}>
+          <Text style={styles.logoutLinkText}>로그아웃</Text>
+        </Pressable>
+      ) : null}
+
       <HygieneGuideListModal visible={guideListOpen} onClose={() => setGuideListOpen(false)} />
     </Screen>
-  );
-}
-
-function LikedBreakdownCard({ breakdown, total }: { breakdown: GradeBreakdown; total: number }) {
-  // 가로 비율 바 — 골드/실버/브론즈/썩은
-  const data = [
-    { key: 'GOLDEN', count: breakdown.GOLDEN, label: '골드', fg: color.cheese.GOLDEN.fg },
-    { key: 'SILVER', count: breakdown.SILVER, label: '실버', fg: color.cheese.SILVER.fg },
-    { key: 'BRONZE', count: breakdown.BRONZE, label: '브론즈', fg: color.cheese.BRONZE.fg },
-    { key: 'ROTTEN', count: breakdown.ROTTEN, label: '썩은', fg: color.cheese.ROTTEN.fg },
-  ];
-  return (
-    <Card variant="elevated" padding="l" style={{ marginTop: spacing.l }}>
-      <View style={styles.statHeader}>
-        <Text style={styles.statTitle}>나의 좋아요 분포</Text>
-        <Text style={styles.statTotal}>총 {total}곳</Text>
-      </View>
-      <View style={styles.statBar}>
-        {data.map((d) =>
-          d.count > 0 ? (
-            <View key={d.key} style={[styles.statBarSeg, { flex: d.count, backgroundColor: d.fg }]} />
-          ) : null
-        )}
-      </View>
-      <View style={styles.statLegend}>
-        {data.map((d) => (
-          <View key={d.key} style={styles.statChip}>
-            <View style={[styles.statDot, { backgroundColor: d.fg }]} />
-            <Text style={styles.statChipText}>{d.label} {d.count}</Text>
-          </View>
-        ))}
-      </View>
-    </Card>
   );
 }
 
@@ -208,10 +203,13 @@ function GuestCard({ likedCount, onLogin }: { likedCount: number; onLogin: () =>
 }
 
 function LoggedInCard({
-  nickname, profileImage, onLogout,
-}: { nickname: string; profileImage?: string; onLogout: () => void }) {
-  const likedCount = useLikedIds().size;
-  const reviewCount = useMyReviews().length;
+  nickname, profileImage, ownedCount,
+}: {
+  nickname: string;
+  profileImage?: string;
+  ownedCount: number;
+}) {
+  const isOwner = ownedCount > 0;
   return (
     <Card variant="elevated" padding="l" style={{ marginTop: spacing.l }}>
       <View style={styles.guestRow}>
@@ -223,56 +221,20 @@ function LoggedInCard({
           </View>
         )}
         <View style={{ flex: 1 }}>
-          <Text style={styles.guestName}>{nickname}</Text>
-          <Text style={styles.emailText}>카카오 계정 연결됨</Text>
-        </View>
-        <Button variant="ghost" size="sm" onPress={onLogout}>
-          로그아웃
-        </Button>
-      </View>
-
-      <View style={styles.statsRow}>
-        <Stat value={String(likedCount)} label="좋아요" />
-        <View style={styles.statDivider} />
-        <Stat value={String(reviewCount)} label="리뷰" />
-        <View style={styles.statDivider} />
-        <Stat value="—" label="사진" />
-      </View>
-    </Card>
-  );
-}
-
-function OwnerBanner() {
-  return (
-    <Card
-      variant="elevated"
-      padding="l"
-      bgColor={color.surface.ownerBg}
-      style={{ marginTop: spacing.l }}>
-      <View style={styles.ownerRow}>
-        <Image source={Mascots.badge} style={styles.ownerMascot} resizeMode="contain" />
-        <View style={{ flex: 1 }}>
-          <View style={styles.ownerTitleRow}>
-            <Text style={styles.ownerTitle}>내 가게 입증하기</Text>
-            <View style={styles.soonBadge}>
-              <Text style={styles.soonBadgeText}>준비 중</Text>
-            </View>
+          <View style={styles.profileNameRow}>
+            <Text style={styles.guestName} numberOfLines={1}>{nickname}</Text>
+            {isOwner ? (
+              <View style={styles.profileOwnerBadge} accessibilityLabel="사장님 인증 계정">
+                <Icon name="logo" size={11} color={color.text.onBrand} />
+                <Text style={styles.profileOwnerBadgeText}>
+                  사장님{ownedCount > 1 ? ` ${ownedCount}곳` : ''}
+                </Text>
+              </View>
+            ) : null}
           </View>
-          <Text style={styles.ownerBody}>
-            사장님이 식탐정에서 가게 위생을 직접 인증해보세요
-          </Text>
         </View>
       </View>
     </Card>
-  );
-}
-
-function Stat({ value, label }: { value: string; label: string }) {
-  return (
-    <View style={styles.statBox}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
   );
 }
 
@@ -330,6 +292,29 @@ const styles = StyleSheet.create({
   guestBody: { ...typography.caption, color: color.text.secondary },
   emailText: { ...typography.caption, color: color.text.secondary },
 
+  // 프로필 카드 — 닉네임 옆 사장님 뱃지
+  profileNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.xxs,
+  },
+  profileOwnerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: spacing.s,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    backgroundColor: color.brand.primary,
+  },
+  profileOwnerBadgeText: {
+    ...typography.footnote,
+    fontWeight: '700',
+    color: color.text.onBrand,
+    letterSpacing: 0.3,
+  },
+
   avatar: {
     width: mascotSize.inline,
     height: mascotSize.inline,
@@ -352,11 +337,6 @@ const styles = StyleSheet.create({
   statDivider: { width: 1, backgroundColor: color.border.default },
 
   // Owner banner
-  ownerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.m },
-  ownerMascot: { width: mascotSize.inline, height: mascotSize.inline },
-  ownerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.xxs },
-  ownerTitle: { ...typography.bodyEmphasized, color: color.text.primary },
-  ownerBody: { ...typography.caption, color: color.text.secondary },
 
   // 좋아요 분포 카드
   statHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.s },
@@ -408,7 +388,20 @@ const styles = StyleSheet.create({
     color: color.text.tertiary,
     textAlign: 'center',
     marginTop: spacing.xxl,
-    marginBottom: spacing.xxl,
+    marginBottom: spacing.m,
+  },
+
+  // 로그아웃 — 페이지 가장 아래 텍스트 링크 (작고 흐릿)
+  logoutLink: {
+    alignSelf: 'center',
+    paddingVertical: spacing.s,
+    paddingHorizontal: spacing.m,
+    marginBottom: spacing.xl,
+  },
+  logoutLinkText: {
+    ...typography.footnote,
+    color: color.text.tertiary,
+    textDecorationLine: 'underline',
   },
 
   // 내 위생 리뷰 row

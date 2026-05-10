@@ -1,4 +1,4 @@
-import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useEffect, useMemo, useState } from 'react';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,20 +10,34 @@ import { AxisScore, Grade, Restaurant } from '@/constants/MockData';
 import { color, elevation, mascotSize, motion, radius, spacing, typography } from '@/constants/tokens';
 import { AnimatedHeart, Button, Card, CheeseBadge, Chip, IconButton, SkeletonCard } from '@/components/ui';
 import { findRestaurantById } from '@/utils/dataStore';
-import { toUIRestaurant } from '@/utils/adapter';
+import { deriveGrade, toUIRestaurant } from '@/utils/adapter';
 import { toggleLike, useIsLiked } from '@/utils/favorites';
 import { loginWithKakao, useKakaoUser } from '@/utils/kakaoAuth';
 import {
+  applyReviewImpact,
   removeReview,
   reviewAxisFromImpact,
   useImpactFor,
   useMyReviews,
   useMyReviewsFor,
 } from '@/utils/reviews';
-import { useOwnerScoreFor } from '@/utils/owner';
-import { deriveGrade, totalScoreOf } from '@/utils/scoring';
+import { useIsAdmin } from '@/utils/admin';
+import {
+  removeOwnerPost,
+  removeReviewReply,
+  setReviewReply,
+  useIsOwnerOf,
+  useOwnerEditFor,
+  useOwnerImpactFor,
+  useOwnerPostsFor,
+  useReviewReply,
+} from '@/utils/owner';
 import { ShareSheet } from '@/components/ShareSheet';
 import { HygieneReviewCard } from '@/components/HygieneReviewCard';
+import { OwnerEditModal } from '@/components/OwnerEditModal';
+import { OwnerGrantModal } from '@/components/OwnerGrantModal';
+import { OwnerPostCard } from '@/components/OwnerPostCard';
+import { OwnerPostComposeModal } from '@/components/OwnerPostComposeModal';
 
 const TABS = ['평가', '리뷰', '정보'] as const;
 type Tab = (typeof TABS)[number];
@@ -32,7 +46,7 @@ const MASCOT_BY_GRADE: Record<Grade, MascotKey> = {
   GOLDEN: 'ceremony',
   SILVER: 'thanks',
   BRONZE: 'thanks',
-  ROTTEN: 'warning',
+  INVESTIGATING: 'search',
 };
 
 export default function RestaurantDetail() {
@@ -41,16 +55,25 @@ export default function RestaurantDetail() {
   const [tab, setTab] = useState<Tab>('평가');
   const liked = useIsLiked(typeof id === 'string' ? id : null);
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
-  const [rawRestaurant, setRawRestaurant] = useState<import('@/constants/Restaurant').Restaurant | null>(null);
   const [loading, setLoading] = useState(true);
   const [shareOpen, setShareOpen] = useState(false);
+
+  // 사장님 모드 — 권한·게시글·정보 수정·점수 반영을 한 컴포넌트에서 통합
+  const kakaoUser = useKakaoUser();
+  const isAdmin = useIsAdmin();
+  const ridStr = typeof id === 'string' ? id : '';
+  const isOwner = useIsOwnerOf(ridStr || null, kakaoUser?.id ?? null);
+  const ownerImpact = useOwnerImpactFor(ridStr || null);
+  const ownerEdit = useOwnerEditFor(ridStr || null);
+  const [grantOpen, setGrantOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [postComposeOpen, setPostComposeOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     findRestaurantById(String(id ?? '')).then((r) => {
       if (cancelled) return;
-      setRawRestaurant(r);
       setRestaurant(r ? toUIRestaurant(r) : null);
       setLoading(false);
     });
@@ -59,39 +82,36 @@ export default function RestaurantDetail() {
     };
   }, [id]);
 
-  // 점수 보정 — 사용자 리뷰 + 사장님 인증 (백엔드 집계 시뮬). 표시는 본인 리뷰만 분리.
+  // 점수 보정은 모든 사용자 리뷰 (백엔드 집계 시뮬), 표시는 본인 리뷰만 분리
   const reviewImpact = useImpactFor(typeof id === 'string' ? id : null);
-  const owner = useOwnerScoreFor(typeof id === 'string' ? id : null);
 
-  // D축('리뷰 분석')에 사용자 위생 리뷰 반영 → 5축 그래프와 종합 점수 일관 유지
+  // D축('리뷰 분석')에 사용자 위생 리뷰 반영 + C축('신뢰 인증')에 사장님 게시글 반영
+  // 5축 그래프와 합산 점수 일관 유지
   const adjustedAxes = useMemo(() => {
     if (!restaurant) return [];
-    if (reviewImpact.reviewCount === 0) return restaurant.axes;
-    const reviewAxis = reviewAxisFromImpact(reviewImpact, restaurant.score / 100);
-    return restaurant.axes.map((a) =>
-      a.key === 'review' ? { ...a, ...reviewAxis } : a,
-    );
-  }, [restaurant, reviewImpact]);
+    let axes = restaurant.axes;
+    if (reviewImpact.reviewCount > 0) {
+      const reviewAxis = reviewAxisFromImpact(reviewImpact, restaurant.score / 100);
+      axes = axes.map((a) => (a.key === 'review' ? { ...a, ...reviewAxis } : a));
+    }
+    if (ownerImpact.postCount > 0) {
+      // C축에 사장님 인증 효과 시각화 — score는 25 max 안에서 비례 가산
+      axes = axes.map((a) => {
+        if (a.key !== 'trust') return a;
+        const boost = Math.min(25 - a.score, ownerImpact.delta);
+        const newScore = Math.min(a.max, a.score + boost);
+        return { ...a, score: newScore, rating: '사장님 인증', tone: 'green' as const };
+      });
+    }
+    return axes;
+  }, [restaurant, reviewImpact, ownerImpact]);
 
-  // 종합 점수 = data + owner + user. 등급은 종합 점수 + 과락 조건.
-  const dataScore = rawRestaurant?.dataScore ?? restaurant?.score ?? 0;
-  const ownerScore = owner.score;
-  const userScore = reviewImpact.userScore;
-  const adjustedScore = totalScoreOf(dataScore, ownerScore, userScore);
-  const adjustedGrade = useMemo<Grade>(
-    () => deriveGrade({
-      score: adjustedScore,
-      flags: {
-        evalGrade: rawRestaurant?.evalGrade,
-        punishTypes: rawRestaurant?.punishTypes,
-        hygieneViolation: rawRestaurant?.hygieneViolation,
-      },
-      userScore,
-      userReviewCount: reviewImpact.reviewCount,
-    }) as Grade,
-    [adjustedScore, rawRestaurant, userScore, reviewImpact.reviewCount],
-  );
-  const impactDelta = adjustedScore - dataScore;
+  // 점수는 raw 사전 계산 + 리뷰 delta + 사장님 delta. 지도·좋아요와 동일 산식.
+  const adjustedScore = restaurant
+    ? Math.max(0, Math.min(100, applyReviewImpact(restaurant.score, reviewImpact) + ownerImpact.delta))
+    : 0;
+  const adjustedGrade = useMemo(() => deriveGrade(adjustedScore), [adjustedScore]);
+  const impactDelta = restaurant ? adjustedScore - restaurant.score : 0;
 
   if (loading) return <LoadingState />;
   if (!restaurant) return <NotFoundState />;
@@ -107,6 +127,12 @@ export default function RestaurantDetail() {
       <View style={[styles.topBar, { paddingTop: insets.top + spacing.xs }]}>
         <IconButton icon="back" size="md" accessibilityLabel="뒤로 가기" onPress={() => router.back()} />
         <View style={{ flex: 1 }} />
+        {isOwner ? (
+          <View style={styles.ownerBadge} accessibilityLabel="사장님 모드">
+            <Icon name="logo" size={11} color={color.text.onBrand} />
+            <Text style={styles.ownerBadgeText}>사장님</Text>
+          </View>
+        ) : null}
         <IconButton
           icon="share"
           size="md"
@@ -128,33 +154,49 @@ export default function RestaurantDetail() {
             <Text style={[styles.summaryScore, { color: cheeseFg }]}>{adjustedScore}</Text>
             <Text style={styles.summaryScoreUnit}>/ 100점</Text>
           </View>
-          {/* 점수 구성: 데이터 + 사장님 + 사용자 */}
-          <View style={styles.summaryDeltaWrap}>
-            <Text style={styles.summaryDelta}>
-              데이터 {dataScore} + 사장님 {Math.round(ownerScore)} + 사용자 {Math.round(userScore)}
-            </Text>
-            {(reviewImpact.reviewCount > 0 || owner.count30d > 0) && (
+          {(reviewImpact.reviewCount > 0 || ownerImpact.postCount > 0) && (
+            <View style={styles.summaryDeltaWrap}>
+              <Text
+                style={[
+                  styles.summaryDelta,
+                  { color: impactDelta > 0
+                      ? color.status.success
+                      : impactDelta < 0
+                        ? color.status.danger
+                        : color.text.secondary },
+                ]}>
+                {impactDelta > 0 ? '+' : ''}{impactDelta}점 — {
+                  reviewImpact.reviewCount > 0 && ownerImpact.postCount > 0
+                    ? `위생 리뷰 ${reviewImpact.reviewCount}건·사장님 ${ownerImpact.postCount}건 반영`
+                    : reviewImpact.reviewCount > 0
+                      ? `위생 리뷰 ${reviewImpact.reviewCount}건 반영`
+                      : `사장님 인증 ${ownerImpact.postCount}건 반영`
+                }
+              </Text>
               <Text style={styles.summaryDeltaSub}>
                 {reviewImpact.reviewCount > 0
-                  ? `리뷰 ${reviewImpact.reviewCount}건 (★${reviewImpact.rawAvg.toFixed(1)})`
-                  : '리뷰 없음'}
-                {' · '}
-                {owner.count30d > 0
-                  ? `최근 30일 인증 ${owner.count30d}건`
-                  : '인증 없음'}
-                {reviewImpact.foreignReports > 0
-                  ? ` · 이물질 ${reviewImpact.foreignTotal}건`
+                  ? `별점 ${reviewImpact.rawAvg.toFixed(1)}${reviewImpact.foreignReports > 0 ? ` · 이물질 ${reviewImpact.foreignTotal}건` : ''}`
                   : ''}
+                {reviewImpact.reviewCount > 0 && ownerImpact.postCount > 0 ? ' · ' : ''}
+                {ownerImpact.postCount > 0 ? `사장님 ${ownerImpact.postCount}건 (+${ownerImpact.delta})` : ''}
+                {' · 기본 '}{restaurant.score}점
               </Text>
-            )}
-          </View>
+            </View>
+          )}
           <CheeseBadge grade={adjustedGrade} size="md" showLabel style={styles.summaryBadge} />
         </Card>
 
         {/* 2. 음식점 명 + 카테고리 — 가운데 정렬, 좋아요는 이름 옆 */}
+        {/* 관리자는 가게명 long-press로 사장님 지정 모달 진입 (숨김 입구 — 일반 사용자에게 보이지 않음) */}
         <View style={styles.nameBlock}>
           <View style={styles.nameRow}>
-            <Text style={styles.nameCenter} numberOfLines={2}>{restaurant.name}</Text>
+            <Pressable
+              onLongPress={() => { if (isAdmin) setGrantOpen(true); }}
+              delayLongPress={600}
+              accessibilityRole={isAdmin ? 'button' : undefined}
+              accessibilityLabel={isAdmin ? '관리자 — 길게 눌러 사장님 지정' : undefined}>
+              <Text style={styles.nameCenter} numberOfLines={2}>{restaurant.name}</Text>
+            </Pressable>
             <AnimatedHeart
               active={liked}
               size={22}
@@ -165,12 +207,10 @@ export default function RestaurantDetail() {
           <Text style={styles.categoryCenter}>{restaurant.category}</Text>
         </View>
 
-        {/* 3. 위치 정보 */}
+        {/* 3. 위치 정보 — 자치구만 표시 (영업주기 데이터 없음) */}
         <View style={styles.locationBlock}>
           <Icon name="location" size={14} color={color.text.secondary} />
           <Text style={styles.locationText}>{restaurant.district}</Text>
-          <Text style={styles.locationDot}>·</Text>
-          <Text style={styles.locationStatus}>{restaurant.status}</Text>
         </View>
 
         {/* 4. 탭 */}
@@ -197,14 +237,28 @@ export default function RestaurantDetail() {
           <SummaryTab
             restaurant={restaurant}
             axes={adjustedAxes}
-            dataScore={dataScore}
-            ownerScore={ownerScore}
-            userScore={userScore}
+            baseScore={restaurant.score}
             adjustedScore={adjustedScore}
+            impactDelta={impactDelta}
           />
         )}
-        {tab === '리뷰' && <ReviewTab restaurant={restaurant} />}
-        {tab === '정보' && <InfoTab restaurant={restaurant} />}
+        {tab === '리뷰' && (
+          <ReviewTab
+            restaurant={restaurant}
+            isOwner={isOwner}
+            ownerUserId={kakaoUser?.id ?? null}
+          />
+        )}
+        {tab === '정보' && (
+          <InfoTab
+            restaurant={restaurant}
+            isOwner={isOwner}
+            onEditPress={() => setEditOpen(true)}
+            onComposePost={() => setPostComposeOpen(true)}
+            ownerUserId={kakaoUser?.id ?? null}
+            ownerName={kakaoUser?.nickname ?? '사장님'}
+          />
+        )}
 
         <View style={{ height: 96 }} />
       </ScrollView>
@@ -244,6 +298,38 @@ export default function RestaurantDetail() {
         }}
         onClose={() => setShareOpen(false)}
       />
+
+      {isAdmin ? (
+        <OwnerGrantModal
+          visible={grantOpen}
+          restaurantId={restaurant.id}
+          restaurantName={restaurant.name}
+          onClose={() => setGrantOpen(false)}
+        />
+      ) : null}
+
+      {isOwner && kakaoUser ? (
+        <>
+          <OwnerEditModal
+            visible={editOpen}
+            restaurantId={restaurant.id}
+            initial={{
+              address: restaurant.address,
+              phone: restaurant.phone,
+              hours: restaurant.hours,
+              closedDay: restaurant.closedDay,
+            }}
+            current={ownerEdit}
+            onClose={() => setEditOpen(false)}
+          />
+          <OwnerPostComposeModal
+            visible={postComposeOpen}
+            restaurantId={restaurant.id}
+            userId={kakaoUser.id}
+            onClose={() => setPostComposeOpen(false)}
+          />
+        </>
+      ) : null}
     </View>
   );
 }
@@ -283,17 +369,15 @@ function NotFoundState() {
 function SummaryTab({
   restaurant,
   axes,
-  dataScore,
-  ownerScore,
-  userScore,
+  baseScore,
   adjustedScore,
+  impactDelta,
 }: {
   restaurant: Restaurant;
   axes: AxisScore[];
-  dataScore: number;
-  ownerScore: number;
-  userScore: number;
+  baseScore: number;
   adjustedScore: number;
+  impactDelta: number;
 }) {
   return (
     <View>
@@ -313,27 +397,30 @@ function SummaryTab({
             centerLabel={`${adjustedScore}점`}
           />
         </View>
-        <View style={styles.scoreFlow}>
-          <View style={styles.scoreFlowItem}>
-            <Text style={styles.scoreFlowLabel}>데이터</Text>
-            <Text style={styles.scoreFlowValue}>{dataScore}<Text style={styles.scoreFlowMax}> / 50</Text></Text>
+        {impactDelta !== 0 && (
+          <View style={styles.scoreFlow}>
+            <View style={styles.scoreFlowItem}>
+              <Text style={styles.scoreFlowLabel}>5축 합산</Text>
+              <Text style={styles.scoreFlowValue}>{baseScore}점</Text>
+            </View>
+            <Icon name="forward" size={14} color={color.text.tertiary} />
+            <View style={styles.scoreFlowItem}>
+              <Text style={styles.scoreFlowLabel}>리뷰 보정</Text>
+              <Text
+                style={[
+                  styles.scoreFlowValue,
+                  { color: impactDelta > 0 ? color.status.success : color.status.danger },
+                ]}>
+                {impactDelta > 0 ? '+' : ''}{impactDelta}점
+              </Text>
+            </View>
+            <Icon name="forward" size={14} color={color.text.tertiary} />
+            <View style={styles.scoreFlowItem}>
+              <Text style={styles.scoreFlowLabel}>종합</Text>
+              <Text style={[styles.scoreFlowValueEmphasis]}>{adjustedScore}점</Text>
+            </View>
           </View>
-          <Text style={styles.scoreFlowPlus}>+</Text>
-          <View style={styles.scoreFlowItem}>
-            <Text style={styles.scoreFlowLabel}>사장님</Text>
-            <Text style={styles.scoreFlowValue}>{Math.round(ownerScore)}<Text style={styles.scoreFlowMax}> / 25</Text></Text>
-          </View>
-          <Text style={styles.scoreFlowPlus}>+</Text>
-          <View style={styles.scoreFlowItem}>
-            <Text style={styles.scoreFlowLabel}>사용자</Text>
-            <Text style={styles.scoreFlowValue}>{Math.round(userScore)}<Text style={styles.scoreFlowMax}> / 25</Text></Text>
-          </View>
-          <Icon name="forward" size={14} color={color.text.tertiary} />
-          <View style={styles.scoreFlowItem}>
-            <Text style={styles.scoreFlowLabel}>종합</Text>
-            <Text style={styles.scoreFlowValueEmphasis}>{adjustedScore}점</Text>
-          </View>
-        </View>
+        )}
       </Card>
 
       <Text style={styles.sectionTitle}>식탐정 평가 상세</Text>
@@ -470,7 +557,15 @@ function ReviewComposeCTA({ restaurantId }: { restaurantId: string }) {
   );
 }
 
-function ReviewTab({ restaurant }: { restaurant: Restaurant }) {
+function ReviewTab({
+  restaurant,
+  isOwner,
+  ownerUserId,
+}: {
+  restaurant: Restaurant;
+  isOwner: boolean;
+  ownerUserId: number | null;
+}) {
   const kakaoUser = useKakaoUser();
   const myReviews = useMyReviewsFor(restaurant.id);
   const allMyReviews = useMyReviews();
@@ -493,7 +588,18 @@ function ReviewTab({ restaurant }: { restaurant: Restaurant }) {
 
   return (
     <View>
-      <ReviewComposeCTA restaurantId={restaurant.id} />
+      {isOwner ? (
+        <Card variant="tinted" padding="m" radius="l" style={{ marginBottom: spacing.l }}>
+          <View style={styles.ownerNoticeRow}>
+            <Icon name="logo" size={14} color={color.brand.primary} />
+            <Text style={styles.ownerNoticeText}>
+              내 가게에는 리뷰를 작성할 수 없어요. 답글로 고객 피드백에 응대해 주세요.
+            </Text>
+          </View>
+        </Card>
+      ) : (
+        <ReviewComposeCTA restaurantId={restaurant.id} />
+      )}
 
       <View style={styles.reviewSummary}>
         <Text style={styles.reviewCount}>총 {totalCount}건</Text>
@@ -501,56 +607,318 @@ function ReviewTab({ restaurant }: { restaurant: Restaurant }) {
       </View>
 
       {myReviews.map((rv) => (
-        <HygieneReviewCard
+        <ReviewCardWithReply
           key={rv.id}
-          review={rv}
-          nickname={myNickname}
-          totalReviews={allMyReviews.length}
-          onDelete={() => handleDelete(rv.id)}
-        />
+          reviewId={rv.id}
+          isOwner={isOwner}
+          ownerUserId={ownerUserId}>
+          {(reply, canReply) => (
+            <HygieneReviewCard
+              review={rv}
+              nickname={myNickname}
+              totalReviews={allMyReviews.length}
+              onDelete={() => handleDelete(rv.id)}
+              reply={reply}
+              canReply={canReply}
+              onSubmitReply={(body) => ownerUserId && setReviewReply(rv.id, ownerUserId, body)}
+              onRemoveReply={() => removeReviewReply(rv.id)}
+            />
+          )}
+        </ReviewCardWithReply>
       ))}
 
       {restaurant.reviews.map((rv) => (
-        <View key={rv.id} style={styles.reviewCard}>
-          <View style={styles.reviewHeader}>
-            <Text style={styles.reviewAuthor} numberOfLines={1}>{rv.author}</Text>
-            <View style={styles.reviewStarsRow}>
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Icon
-                  key={i}
-                  name="star"
-                  size={11}
-                  color={i < rv.rating ? color.brand.secondary : color.border.default}
-                />
-              ))}
-            </View>
-            <Text style={styles.reviewMeta}>리뷰 {mockAuthorCount.get(rv.author) ?? 1}건</Text>
-            <Text style={styles.reviewDate}>{rv.date}</Text>
-          </View>
-          <Text style={styles.reviewBody}>{rv.body}</Text>
-          {rv.hygieneTags.length > 0 && (
-            <View style={styles.reviewTagsRow}>
-              {rv.hygieneTags.map((t) => (
-                <View key={t} style={styles.reviewTag}>
-                  <Text style={styles.reviewTagText}>{t}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
+        <MockReviewCard
+          key={rv.id}
+          rv={rv}
+          authorCount={mockAuthorCount.get(rv.author) ?? 1}
+          isOwner={isOwner}
+          ownerUserId={ownerUserId}
+        />
       ))}
     </View>
   );
 }
 
-function InfoTab({ restaurant }: { restaurant: Restaurant }) {
+// 사용자 리뷰 카드 + 사장님 답글 wiring 헬퍼
+function ReviewCardWithReply({
+  reviewId,
+  isOwner,
+  ownerUserId,
+  children,
+}: {
+  reviewId: string;
+  isOwner: boolean;
+  ownerUserId: number | null;
+  children: (reply: ReturnType<typeof useReviewReply>, canReply: boolean) => React.ReactElement;
+}) {
+  const reply = useReviewReply(reviewId);
+  const canReply = isOwner && ownerUserId != null;
+  return children(reply, canReply);
+}
+
+// mock review (시연용 하드코딩 리뷰) 카드 — 사장님 답글 지원
+function MockReviewCard({
+  rv,
+  authorCount,
+  isOwner,
+  ownerUserId,
+}: {
+  rv: import('@/constants/MockData').Review;
+  authorCount: number;
+  isOwner: boolean;
+  ownerUserId: number | null;
+}) {
+  const reply = useReviewReply(rv.id);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const canReply = isOwner && ownerUserId != null;
+
   return (
-    <Card variant="outlined" padding="l" radius="l">
-      <InfoRow label="주소" value={restaurant.address} />
-      <InfoRow label="전화" value={restaurant.phone} />
-      <InfoRow label="영업" value={restaurant.hours} />
-      <InfoRow label="휴무" value={restaurant.closedDay} />
-    </Card>
+    <View style={styles.reviewCard}>
+      <View style={styles.reviewHeader}>
+        <Text style={styles.reviewAuthor} numberOfLines={1}>{rv.author}</Text>
+        <View style={styles.reviewStarsRow}>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Icon
+              key={i}
+              name="star"
+              size={11}
+              color={i < rv.rating ? color.brand.secondary : color.border.default}
+            />
+          ))}
+        </View>
+        <Text style={styles.reviewMeta}>리뷰 {authorCount}건</Text>
+        <Text style={styles.reviewDate}>{rv.date}</Text>
+      </View>
+      <Text style={styles.reviewBody}>{rv.body}</Text>
+      {rv.hygieneTags.length > 0 && (
+        <View style={styles.reviewTagsRow}>
+          {rv.hygieneTags.map((t) => (
+            <View key={t} style={styles.reviewTag}>
+              <Text style={styles.reviewTagText}>{t}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* 사장님 답글 영역 */}
+      {editing ? (
+        <View style={styles.replyEditBox}>
+          <View style={styles.replyHeaderRow}>
+            <View style={styles.replyOwnerBadge}>
+              <Icon name="logo" size={10} color={color.text.onBrand} />
+              <Text style={styles.replyOwnerBadgeText}>사장님</Text>
+            </View>
+            <Text style={styles.replyEditHint}>답글 작성</Text>
+          </View>
+          <TextInput
+            value={draft}
+            onChangeText={(t) => setDraft(t.slice(0, 300))}
+            placeholder="고객님께 정중하게 답변해 주세요"
+            placeholderTextColor={color.text.tertiary}
+            multiline
+            style={styles.replyInputArea}
+            accessibilityLabel="사장님 답글 입력"
+          />
+          <View style={styles.replyEditActions}>
+            <Pressable
+              onPress={() => setEditing(false)}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.replyCancelBtn, pressed && { opacity: 0.6 }]}>
+              <Text style={styles.replyCancelText}>취소</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                if (!ownerUserId || !draft.trim()) return;
+                setReviewReply(rv.id, ownerUserId, draft.trim());
+                setEditing(false);
+              }}
+              disabled={!draft.trim()}
+              accessibilityRole="button"
+              style={({ pressed }) => [
+                styles.replySaveBtn,
+                !draft.trim() && { opacity: 0.4 },
+                pressed && draft.trim() ? { opacity: 0.85 } : null,
+              ]}>
+              <Text style={styles.replySaveText}>{reply ? '수정' : '등록'}</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : reply ? (
+        <View style={styles.replyShowBox}>
+          <View style={styles.replyHeaderRow}>
+            <View style={styles.replyOwnerBadge}>
+              <Icon name="logo" size={10} color={color.text.onBrand} />
+              <Text style={styles.replyOwnerBadgeText}>사장님 답글</Text>
+            </View>
+            {canReply ? (
+              <View style={styles.replyShowActions}>
+                <Pressable
+                  onPress={() => { setDraft(reply.body); setEditing(true); }}
+                  hitSlop={6}
+                  accessibilityRole="button"
+                  accessibilityLabel="답글 수정"
+                  style={({ pressed }) => [styles.replyMiniBtn, pressed && { opacity: 0.5 }]}>
+                  <Icon name="pencil" size={11} color={color.text.tertiary} />
+                </Pressable>
+                <Pressable
+                  onPress={() => removeReviewReply(rv.id)}
+                  hitSlop={6}
+                  accessibilityRole="button"
+                  accessibilityLabel="답글 삭제"
+                  style={({ pressed }) => [styles.replyMiniBtn, pressed && { opacity: 0.5 }]}>
+                  <Icon name="close" size={11} color={color.text.tertiary} />
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+          <Text style={styles.replyShowBody}>{reply.body}</Text>
+        </View>
+      ) : canReply ? (
+        <Pressable
+          onPress={() => { setDraft(''); setEditing(true); }}
+          accessibilityRole="button"
+          accessibilityLabel="답글 달기"
+          style={({ pressed }) => [styles.replyPromptBtn, pressed && { opacity: 0.7 }]}>
+          <Icon name="chat" size={12} color={color.brand.primary} />
+          <Text style={styles.replyPromptText}>사장님 답글 달기</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+function InfoTab({
+  restaurant,
+  isOwner,
+  onEditPress,
+  onComposePost,
+  ownerUserId,
+  ownerName,
+}: {
+  restaurant: Restaurant;
+  isOwner: boolean;
+  onEditPress: () => void;
+  onComposePost: () => void;
+  ownerUserId: number | null;
+  ownerName: string;
+}) {
+  const ownerEdit = useOwnerEditFor(restaurant.id);
+  const posts = useOwnerPostsFor(restaurant.id);
+
+  // raw + 사장님 수정값 합성. 빈 문자열은 raw 유지.
+  const address = ownerEdit?.address || restaurant.address;
+  const phone = ownerEdit?.phone || restaurant.phone;
+  const hours = ownerEdit?.hours || restaurant.hours;
+  const closedDay = ownerEdit?.closedDay || restaurant.closedDay;
+  const intro = ownerEdit?.intro || '';
+  const isEdited = !!ownerEdit && (ownerEdit.address || ownerEdit.phone || ownerEdit.hours || ownerEdit.closedDay || ownerEdit.intro);
+
+  return (
+    <View>
+      {/* 가게 정보 카드 */}
+      <Card variant="outlined" padding="l" radius="l">
+        <View style={styles.infoHeader}>
+          <Text style={styles.cardTitle}>가게 정보</Text>
+          {isEdited ? (
+            <View style={styles.editedBadge}>
+              <Icon name="pencil" size={10} color={color.brand.primary} />
+              <Text style={styles.editedBadgeText}>사장님 업데이트</Text>
+            </View>
+          ) : null}
+        </View>
+        <InfoRow label="주소" value={address} />
+        <InfoRow label="전화" value={phone} />
+        <InfoRow label="영업" value={hours} />
+        <InfoRow label="휴무" value={closedDay} />
+
+        {intro ? (
+          <View style={styles.introBlock}>
+            <Text style={styles.introLabel}>사장님 소개</Text>
+            <Text style={styles.introText}>{intro}</Text>
+          </View>
+        ) : null}
+
+        {isOwner ? (
+          <View style={{ marginTop: spacing.m }}>
+            <Button variant="ghost" size="sm" leftIcon="pencil" onPress={onEditPress}>
+              가게 정보 수정
+            </Button>
+          </View>
+        ) : null}
+      </Card>
+
+      {/* 사장님 인증 게시글 섹션 */}
+      <View style={styles.ownerSection}>
+        <View style={styles.ownerSectionHeader}>
+          <View style={styles.ownerSectionTitleRow}>
+            <View style={styles.ownerSectionBadge}>
+              <Icon name="logo" size={11} color={color.text.onBrand} />
+              <Text style={styles.ownerSectionBadgeText}>사장님</Text>
+            </View>
+            <Text style={styles.ownerSectionTitle}>가게가 들려주는 이야기</Text>
+          </View>
+          <Text style={styles.ownerSectionSubtitle}>
+            사장님이 직접 올리는 위생·운영 인증 게시글이에요. 게시글이 늘면 신뢰 점수에 +가산.
+          </Text>
+        </View>
+
+        {posts.length === 0 ? (
+          <View style={styles.ownerEmpty}>
+            <Icon name="chat" size={20} color={color.text.tertiary} />
+            <Text style={styles.ownerEmptyText}>
+              {isOwner
+                ? '첫 게시글을 올려 가게의 노력을 알려주세요'
+                : '아직 사장님 게시글이 없어요'}
+            </Text>
+          </View>
+        ) : (
+          <Card variant="outlined" padding="none" radius="l">
+            {posts.map((p, i) => (
+              <View key={p.id} style={i === 0 ? styles.ownerPostFirst : null}>
+                <OwnerPostCard
+                  post={p}
+                  authorName={ownerUserId === p.userId ? ownerName : '사장님'}
+                  onDelete={
+                    ownerUserId === p.userId
+                      ? () => {
+                          if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+                            if (!window.confirm('이 게시글을 삭제할까요?')) return;
+                          }
+                          removeOwnerPost(p.id);
+                        }
+                      : undefined
+                  }
+                />
+              </View>
+            ))}
+          </Card>
+        )}
+
+        {isOwner ? (
+          <View style={{ marginTop: spacing.m }}>
+            <Button variant="primary" size="md" leftIcon="pencil" fullWidth onPress={onComposePost}>
+              사장님 게시글 작성
+            </Button>
+          </View>
+        ) : (
+          <Pressable
+            onPress={() =>
+              router.push({
+                pathname: '/owner/apply',
+                params: { id: restaurant.id, name: restaurant.name },
+              } as any)
+            }
+            accessibilityRole="button"
+            accessibilityLabel="사장님 인증 신청 안내 보기"
+            style={({ pressed }) => [styles.applyLink, pressed && { opacity: 0.7 }]}>
+            <Icon name="forward" size={12} color={color.brand.primary} />
+            <Text style={styles.applyLinkText}>이 가게 사장님이신가요? 인증 신청 안내</Text>
+          </Pressable>
+        )}
+      </View>
+    </View>
   );
 }
 
@@ -665,8 +1033,6 @@ const styles = StyleSheet.create({
   scoreFlowLabel: { ...typography.caption, color: color.text.tertiary },
   scoreFlowValue: { ...typography.subheadlineEmphasized, color: color.text.primary },
   scoreFlowValueEmphasis: { ...typography.bodyEmphasized, color: color.brand.primary },
-  scoreFlowMax: { ...typography.footnote, color: color.text.tertiary },
-  scoreFlowPlus: { ...typography.captionEmphasized, color: color.text.tertiary, marginHorizontal: 2 },
   summaryDelta: {
     ...typography.captionEmphasized,
   },
@@ -895,6 +1261,157 @@ const styles = StyleSheet.create({
     borderRadius: radius.s,
     backgroundColor: color.fill.quaternary,
   },
+
+  // ===== 사장님 모드 (Top bar 배지·Info·Reply) =====
+  ownerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.s,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    backgroundColor: color.brand.primary,
+    marginRight: spacing.xs,
+  },
+  ownerBadgeText: { ...typography.footnote, fontWeight: '700', color: color.text.onBrand, letterSpacing: 0.3 },
+
+  // Info tab — 가게 정보 카드 헤더 + 사장님 섹션
+  infoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.xs,
+  },
+  editedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: spacing.s,
+    paddingVertical: 2,
+    backgroundColor: color.brand.primarySoft,
+    borderRadius: radius.pill,
+  },
+  editedBadgeText: { ...typography.footnote, fontWeight: '700', color: color.brand.primary },
+  introBlock: {
+    marginTop: spacing.m,
+    paddingTop: spacing.m,
+    borderTopWidth: 1,
+    borderTopColor: color.border.default,
+  },
+  introLabel: { ...typography.captionEmphasized, color: color.text.secondary, marginBottom: spacing.xs },
+  introText: { ...typography.subheadline, color: color.text.primary, lineHeight: 22 },
+
+  ownerNoticeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.s },
+  ownerNoticeText: { flex: 1, ...typography.caption, color: color.text.secondary },
+
+  ownerSection: { marginTop: spacing.xl },
+  ownerSectionHeader: { marginBottom: spacing.m },
+  ownerSectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.s, marginBottom: spacing.xxs },
+  ownerSectionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: spacing.s,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    backgroundColor: color.brand.primary,
+  },
+  ownerSectionBadgeText: { ...typography.footnote, fontWeight: '700', color: color.text.onBrand, letterSpacing: 0.3 },
+  ownerSectionTitle: { ...typography.headline, color: color.text.primary },
+  ownerSectionSubtitle: { ...typography.caption, color: color.text.secondary },
+
+  ownerEmpty: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.s,
+    paddingVertical: spacing.l,
+    paddingHorizontal: spacing.l,
+    borderRadius: radius.l,
+    backgroundColor: color.fill.tertiary,
+  },
+  ownerEmptyText: { flex: 1, ...typography.caption, color: color.text.secondary },
+  ownerPostFirst: { borderTopWidth: 0 },
+
+  applyLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: spacing.m,
+    paddingVertical: spacing.s,
+    alignSelf: 'flex-start',
+  },
+  applyLinkText: { ...typography.captionEmphasized, color: color.brand.primary },
+
+  // Mock review reply (HygieneReviewCard와 룩 통일)
+  replyHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  replyOwnerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: color.brand.primary,
+    paddingHorizontal: spacing.s,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+  },
+  replyOwnerBadgeText: { ...typography.footnote, fontWeight: '700', color: color.text.onBrand },
+  replyEditHint: { ...typography.footnote, color: color.text.tertiary, flex: 1 },
+
+  replyShowBox: {
+    marginTop: spacing.s,
+    paddingHorizontal: spacing.m,
+    paddingVertical: spacing.s,
+    backgroundColor: color.brand.primarySoft,
+    borderRadius: radius.m,
+    gap: spacing.xs,
+  },
+  replyShowBody: { ...typography.subheadline, color: color.text.primary },
+  replyShowActions: { flexDirection: 'row', gap: spacing.xs },
+  replyMiniBtn: {
+    width: 22, height: 22, borderRadius: 11,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: color.surface.subtle,
+  },
+
+  replyEditBox: {
+    marginTop: spacing.s,
+    padding: spacing.m,
+    backgroundColor: color.brand.primarySoft,
+    borderRadius: radius.m,
+    gap: spacing.xs,
+  },
+  replyInputArea: {
+    backgroundColor: color.surface.subtle,
+    borderRadius: radius.s,
+    paddingHorizontal: spacing.s,
+    paddingVertical: spacing.s,
+    minHeight: 64,
+    ...typography.body,
+    color: color.text.primary,
+    textAlignVertical: 'top',
+  },
+  replyEditActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.xs },
+  replyCancelBtn: { paddingHorizontal: spacing.m, paddingVertical: spacing.xs + 2 },
+  replyCancelText: { ...typography.captionEmphasized, color: color.text.secondary },
+  replySaveBtn: {
+    paddingHorizontal: spacing.m,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radius.pill,
+    backgroundColor: color.brand.primary,
+  },
+  replySaveText: { ...typography.captionEmphasized, color: color.text.onBrand },
+
+  replyPromptBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: spacing.s,
+    paddingHorizontal: spacing.s,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radius.pill,
+    backgroundColor: color.brand.primarySoft,
+    alignSelf: 'flex-start',
+  },
+  replyPromptText: { ...typography.captionEmphasized, color: color.brand.primary },
 
   // Sticky CTA
   bottomCta: {

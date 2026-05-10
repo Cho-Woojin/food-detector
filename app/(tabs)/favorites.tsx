@@ -2,17 +2,17 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { Icon } from '@/components/Icon';
 import { Cheese } from '@/constants/Assets';
 import { color, radius, spacing, typography } from '@/constants/tokens';
-import { AnimatedHeart, AppHeader, Chip, EmptyState, IconButton, Screen } from '@/components/ui';
+import { AnimatedHeart, AppHeader, Card, Chip, EmptyState, IconButton, Screen } from '@/components/ui';
 // Chip is still used in the filter row above the list.
 import type { Restaurant as RawRestaurant } from '@/constants/Restaurant';
 import { ensureRawById, ensureRecomputedIndex } from '@/utils/dataStore';
 import { toggleLike as toggleLikeStore, useLikedIds } from '@/utils/favorites';
-import { adjustedScoreAndGrade, useReviewImpactMap } from '@/utils/reviews';
-import { useOwnerScoreMap } from '@/utils/owner';
+import { adjustedScoreAndGrade, EMPTY_REVIEW_IMPACT, useReviewImpactMap } from '@/utils/reviews';
+import { useOwnerImpactMap } from '@/utils/owner';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 
-type Grade = 'GOLDEN' | 'SILVER' | 'BRONZE' | 'ROTTEN';
+type Grade = 'GOLDEN' | 'SILVER' | 'BRONZE';
 type Favorite = {
   id: string;
   name: string;
@@ -23,16 +23,15 @@ type Favorite = {
   district: string;
 };
 
-const FILTERS = ['전체', 'GOLDEN', 'SILVER', 'BRONZE', 'ROTTEN'] as const;
+const FILTERS = ['전체', 'GOLDEN', 'SILVER', 'BRONZE'] as const;
 type Filter = (typeof FILTERS)[number];
 type SortKey = 'score' | 'recent' | 'name';
 
 const FILTER_LABEL: Record<Filter, string> = {
   전체: '전체',
-  GOLDEN: '골드',
+  GOLDEN: '골든',
   SILVER: '실버',
   BRONZE: '브론즈',
-  ROTTEN: '썩은',
 };
 
 const SORT_LABEL: Record<SortKey, string> = {
@@ -42,17 +41,13 @@ const SORT_LABEL: Record<SortKey, string> = {
 };
 
 const GRADE_LABEL: Record<Grade, string> = {
-  GOLDEN: '골드 치즈',
+  GOLDEN: '골든 치즈',
   SILVER: '실버 치즈',
   BRONZE: '브론즈 치즈',
-  ROTTEN: '썩은 치즈',
 };
 
 const CHEESE_BY_GRADE = (g: Grade) =>
-  g === 'GOLDEN' ? Cheese.gold
-    : g === 'SILVER' ? Cheese.silver
-    : g === 'BRONZE' ? Cheese.bronze
-    : null;
+  g === 'GOLDEN' ? Cheese.gold : g === 'SILVER' ? Cheese.silver : Cheese.bronze;
 
 export default function FavoritesScreen() {
   const [filter, setFilter] = useState<Filter>('전체');
@@ -61,7 +56,7 @@ export default function FavoritesScreen() {
   const [rawMap, setRawMap] = useState<Map<string, RawRestaurant> | null>(null);
   const likedIds = useLikedIds();
   const impactMap = useReviewImpactMap();
-  const ownerScoreMap = useOwnerScoreMap();
+  const ownerImpactMap = useOwnerImpactMap();
 
   // 좋아요한 ID들의 메타정보를 인덱스에서 조회 (G/S/B만 좋아요 카드로 표시)
   // raw 데이터도 같이 캐싱 → 상세 페이지와 동일한 5축 axes 산식 사용
@@ -71,11 +66,12 @@ export default function FavoritesScreen() {
       if (cancelled) return;
       const list: Favorite[] = rows
         .filter((r) => likedIds.has(r.i))
+        .filter((r) => r.gr === 'GOLDEN' || r.gr === 'SILVER' || r.gr === 'BRONZE')
         .map((r) => ({
           id: r.i,
           name: r.n,
           category: r.c,
-          grade: r.gr,
+          grade: r.gr === 'GOLDEN' ? 'GOLDEN' : r.gr === 'SILVER' ? 'SILVER' : 'BRONZE',
           score: r.s,
           distance: '—',
           district: r.g,
@@ -88,23 +84,24 @@ export default function FavoritesScreen() {
     };
   }, [likedIds]);
 
-  // 위생 리뷰 + 사장님 인증 보정 — 상세/지도와 동일한 종합 점수 산식 사용
+  // 위생 리뷰 + 사장님 인증 보정 — 상세 페이지와 동일한 산식 (raw 데이터로 axes 빌드)
+  // INVESTIGATING으로 떨어지면 BRONZE로 클램프 (좋아요 화면은 G/S/B만)
   const adjusted = useMemo(() => {
+    if (impactMap.size === 0 && ownerImpactMap.size === 0) return favorites;
     if (!rawMap) return favorites;
     return favorites.map((f) => {
+      const impact = impactMap.get(f.id);
+      const owner = ownerImpactMap.get(f.id);
       const raw = rawMap.get(f.id);
       if (!raw) return f;
-      const impact = impactMap.get(f.id);
-      const ownerScore = ownerScoreMap.get(f.id) ?? 0;
-      if ((!impact || impact.reviewCount === 0) && ownerScore === 0) return f;
-      const { score, grade } = adjustedScoreAndGrade(
-        raw,
-        impact ?? { userScore: 0, reviewCount: 0, rawAvg: 0, foreignReports: 0, foreignTotal: 0 },
-        ownerScore,
-      );
-      return { ...f, score, grade };
+      if (!impact && !owner) return f;
+      const reviewImp = impact ?? EMPTY_REVIEW_IMPACT;
+      const ownerDelta = owner?.delta ?? 0;
+      const { score, grade } = adjustedScoreAndGrade(raw, reviewImp, ownerDelta);
+      const safeGrade: Grade = grade === 'INVESTIGATING' ? 'BRONZE' : grade;
+      return { ...f, score, grade: safeGrade };
     });
-  }, [favorites, impactMap, ownerScoreMap, rawMap]);
+  }, [favorites, impactMap, ownerImpactMap, rawMap]);
 
   const filtered = useMemo(() => {
     let list = filter === '전체' ? adjusted : adjusted.filter((f) => f.grade === filter);
@@ -173,6 +170,16 @@ export default function FavoritesScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
+        {totalCount > 0 ? (
+          <BreakdownCard
+            counts={{
+              GOLDEN: adjusted.filter((f) => likedIds.has(f.id) && f.grade === 'GOLDEN').length,
+              SILVER: adjusted.filter((f) => likedIds.has(f.id) && f.grade === 'SILVER').length,
+              BRONZE: adjusted.filter((f) => likedIds.has(f.id) && f.grade === 'BRONZE').length,
+            }}
+            total={totalCount}
+          />
+        ) : null}
         {filtered.map((item, i) => (
           <View key={item.id}>
             <RestaurantRow
@@ -227,15 +234,11 @@ function RestaurantRow({
       style={({ pressed }) => [styles.row, pressed && { backgroundColor: color.fill.quaternary }]}>
       {/* Thumbnail */}
       <View style={styles.thumb}>
-        {CHEESE_BY_GRADE(item.grade) ? (
-          <Image
-            source={CHEESE_BY_GRADE(item.grade)!}
-            style={styles.thumbImg}
-            resizeMode="contain"
-          />
-        ) : (
-          <Icon name="warning" size={32} color={color.cheese.ROTTEN.fg} />
-        )}
+        <Image
+          source={CHEESE_BY_GRADE(item.grade)}
+          style={styles.thumbImg}
+          resizeMode="contain"
+        />
       </View>
 
       {/* Info column */}
@@ -268,6 +271,49 @@ function RestaurantRow({
   );
 }
 
+// 좋아요 분포 — profile에서 옮겨옴. G/S/B만 카운트 (favorites는 이 셋만 표시).
+function BreakdownCard({
+  counts,
+  total,
+}: {
+  counts: { GOLDEN: number; SILVER: number; BRONZE: number };
+  total: number;
+}) {
+  const data = [
+    { key: 'GOLDEN' as const, count: counts.GOLDEN, label: '골든', fg: color.cheese.GOLDEN.fg },
+    { key: 'SILVER' as const, count: counts.SILVER, label: '실버', fg: color.cheese.SILVER.fg },
+    { key: 'BRONZE' as const, count: counts.BRONZE, label: '브론즈', fg: color.cheese.BRONZE.fg },
+  ];
+  return (
+    <Card variant="elevated" padding="l" style={styles.breakdownCard}>
+      <View style={styles.breakdownHeader}>
+        <Text style={styles.breakdownTitle}>나의 좋아요 분포</Text>
+        <Text style={styles.breakdownTotal}>총 {total}곳</Text>
+      </View>
+      <View style={styles.breakdownBar}>
+        {data.map((d) =>
+          d.count > 0 ? (
+            <View
+              key={d.key}
+              style={[styles.breakdownBarSeg, { flex: d.count, backgroundColor: d.fg }]}
+            />
+          ) : null
+        )}
+      </View>
+      <View style={styles.breakdownLegend}>
+        {data.map((d) => (
+          <View key={d.key} style={styles.breakdownChip}>
+            <View style={[styles.breakdownDot, { backgroundColor: d.fg }]} />
+            <Text style={styles.breakdownChipText}>
+              {d.label} {d.count}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </Card>
+  );
+}
+
 const styles = StyleSheet.create({
   controlBar: {
     flexDirection: 'row',
@@ -291,6 +337,29 @@ const styles = StyleSheet.create({
   sortText: { ...typography.captionEmphasized, color: color.text.secondary },
 
   scrollContent: { paddingTop: spacing.xs, paddingBottom: spacing.xxl },
+
+  // 좋아요 분포 카드
+  breakdownCard: { marginHorizontal: spacing.l, marginBottom: spacing.m },
+  breakdownHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginBottom: spacing.s,
+  },
+  breakdownTitle: { ...typography.bodyEmphasized, color: color.text.primary },
+  breakdownTotal: { ...typography.caption, color: color.text.tertiary },
+  breakdownBar: {
+    flexDirection: 'row',
+    height: 8,
+    borderRadius: radius.pill,
+    overflow: 'hidden',
+    backgroundColor: color.fill.tertiary,
+  },
+  breakdownBarSeg: { height: '100%' },
+  breakdownLegend: { flexDirection: 'row', gap: spacing.m, marginTop: spacing.s, flexWrap: 'wrap' },
+  breakdownChip: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  breakdownDot: { width: 8, height: 8, borderRadius: 4 },
+  breakdownChipText: { ...typography.caption, color: color.text.secondary, fontWeight: '600' },
 
   // List row (no card, no shadow)
   row: {

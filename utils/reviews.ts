@@ -226,6 +226,13 @@ export function adjustedScoreAndGrade(
   return { score, grade };
 }
 
+// Legacy helpers kept for compatibility with existing owner-mode screens.
+export function applyReviewImpact(baseScore: number, impact: ReviewScoreImpact): number {
+  return Math.max(0, Math.min(100, Math.round(baseScore + impact.userScore)));
+}
+
+export const EMPTY_REVIEW_IMPACT: ReviewScoreImpact = EMPTY_IMPACT;
+
 // =====================================================================
 // 5축 'D축(리뷰 분석)' 시각화 — 5축 레이더 차트의 D 슬롯에 표시
 // =====================================================================
