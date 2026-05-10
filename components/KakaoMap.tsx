@@ -596,7 +596,18 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
             wantedList.push(r);
           }
 
-          // 3) 더 이상 필요 없는 마커 제거
+          // 3) Idempotency 가드 — 마커 set이 이전과 동일하면 setMap 호출 없이 종료
+          // (검색·좋아요·데이터 변경 useEffect가 의도와 무관하게 호출되어도 시각 변동 방지)
+          const current = markersByIdRef.current;
+          let identical = current.size === want.size;
+          if (identical) {
+            for (const id of want) {
+              if (!current.has(id)) { identical = false; break; }
+            }
+          }
+          if (identical) return;
+
+          // 4) 더 이상 필요 없는 마커 제거
           for (const [id, entry] of markersByIdRef.current) {
             if (!want.has(id)) {
               entry.marker.setMap(null);
@@ -606,7 +617,7 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
             }
           }
 
-          // 4) 신규 마커 생성
+          // 5) 신규 마커 생성
           for (const r of wantedList) {
             if (markersByIdRef.current.has(r.id)) continue;
             const entry = createEntry(r);
