@@ -1,11 +1,11 @@
 // utils/scoring.ts
 // 식탐정 점수 체계 단일 원본. 자세한 명세는 data/SCORING_AND_SCHEMA.md.
 //
-// 종합 점수(0~100) = 데이터(0~50) + 사장님(0~25) + 사용자(0~25)
+// 종합 점수(0~100) = 데이터(0~70) + 사장님(0~15) + 사용자(0~15)
 //
 // - 데이터 점수: data/by-gu/*.json의 score 필드 (정적, scripts/split-restaurants.js에서 계산)
-// - 사장님 점수: utils/owner.ts에서 최근 30일 청소 인증 건수 × 2.5
-// - 사용자 점수: utils/reviews.ts에서 별점 평균 × 5
+// - 사장님 점수: utils/owner.ts에서 최근 30일 청소 인증 건수 × 1.5
+// - 사용자 점수: utils/reviews.ts에서 별점 평균 × 3
 //
 // 등급(GOLDEN/SILVER/BRONZE/ROTTEN)은 종합 점수 + 과락 조건으로 결정.
 
@@ -13,16 +13,17 @@ import type { GradeKey } from '@/constants/Restaurant';
 
 // ===== 점수 만점 =====
 export const SCORE_MAX = {
-  DATA: 50,
-  OWNER: 25,
-  USER: 25,
+  DATA: 70,
+  OWNER: 15,
+  USER: 15,
   TOTAL: 100,
 } as const;
 
 // ===== 등급 임계값 =====
 // SILVER 임계값은 "썩은치즈 면제 라인"도 겸함 — 이 값 이상이면 과락 있어도 BRONZE 이상.
+// GOLDEN 65: 위생등급 매우우수 단독(70)이 launch 시점에도 GOLDEN 진입 가능.
 export const GRADE_THRESHOLDS = {
-  GOLDEN: 80,
+  GOLDEN: 65,
   SILVER: 50,
 } as const;
 
@@ -35,18 +36,20 @@ export const GRADE_THRESHOLDS = {
 // → 처분 종류만으로 ROTTEN 판단하면 식탐정의 본질(위생·식중독)과 어긋남.
 //   대신 by-gu의 flags.hygieneViolation (AI 분류 위생 직결 위반 bool) 사용.
 //   자세한 분석은 data/violations-classified.json + data/SCORING_AND_SCHEMA.md.
+//
+// 위생관리평가(I1540) 트리거는 제거됨 (2026-05-10) — I1540은 식품제조·가공업체 평가라
+// 음식점에 부적절. 자세한 건 data/SCORING_AND_SCHEMA.md.
 export const ROTTEN_TRIGGER = {
-  // 과락 1: 사용자 리뷰 ≥ N개 AND 사용자 점수 ≤ M/25
+  // 과락 1: 사용자 리뷰 ≥ N개 AND 사용자 점수 ≤ M/15
   USER_MIN_REVIEWS: 10,
-  USER_MAX_SCORE: 10,
-  // 과락 2: 식약처 평가에서 중점관리업소로 분류된 경우 (위생 미흡 직접 시그널)
-  EVAL_FAIL: '중점관리업소' as const,
-  // 과락 3: AI 분류로 hygieneViolation=true (이물·유통기한·무등록 식품 등)
+  USER_MAX_SCORE: 6,  // 별점 평균 ≤ 2.0 (2.0 × 3 = 6/15)
+  // 과락 2: AI 분류로 hygieneViolation=true (이물·유통기한·무등록 식품 등)
   // → flags.hygieneViolation 직접 체크
 } as const;
 
 // ===== 사장님 점수 =====
-const OWNER_PER_VERIFICATION = 2.5;
+// 최근 30일 인증 건수 × 1.5, max 15 (= 10건 만점)
+const OWNER_PER_VERIFICATION = 1.5;
 const OWNER_WINDOW_MS = 30 * 24 * 60 * 60 * 1000; // 30일
 
 export function ownerScoreFromCount(count30d: number): number {
@@ -58,11 +61,11 @@ export function countWithinWindow(timestamps: number[], now = Date.now()): numbe
 }
 
 // ===== 사용자 점수 =====
+// 별점 1~5 → 점수 3~15 (avg × 3)
 export function userScoreFromRatings(ratings: number[]): number {
   if (ratings.length === 0) return 0;
   const avg = ratings.reduce((a, b) => a + b, 0) / ratings.length;
-  // 별점 1~5 → 점수 5~25. 만점 25 클램프.
-  return Math.max(0, Math.min(SCORE_MAX.USER, avg * 5));
+  return Math.max(0, Math.min(SCORE_MAX.USER, avg * 3));
 }
 
 // ===== 종합 점수 =====
@@ -75,11 +78,10 @@ export function totalScoreOf(dataScore: number, ownerScore: number, userScore: n
 export type DeriveGradeInput = {
   score: number;            // 종합 점수 0~100
   flags?: {
-    evalGrade?: string;        // 자율/일반/중점/평가불능/'' — 중점관리는 ROTTEN 트리거
     punishTypes?: string;      // 보존 (UI 표시·통계용). ROTTEN 트리거에는 사용 안 함.
     hygieneViolation?: boolean; // AI 분류 결과 위생 직결 위반 — ROTTEN 트리거
   };
-  userScore?: number;       // 0~25, default 0
+  userScore?: number;       // 0~15, default 0
   userReviewCount?: number; // default 0
 };
 
@@ -89,7 +91,7 @@ export function deriveGrade(input: DeriveGradeInput | number): GradeKey {
 
   const { score, flags = {}, userScore = 0, userReviewCount = 0 } = input;
 
-  if (score >= GRADE_THRESHOLDS.GOLDEN) return 'GOLDEN';   // 80+
+  if (score >= GRADE_THRESHOLDS.GOLDEN) return 'GOLDEN';   // 65+
   if (score >= GRADE_THRESHOLDS.SILVER) return 'SILVER';   // 50+
 
   // score < SILVER 임계값 — 썩은치즈 조건 평가
@@ -97,11 +99,9 @@ export function deriveGrade(input: DeriveGradeInput | number): GradeKey {
     userReviewCount >= ROTTEN_TRIGGER.USER_MIN_REVIEWS &&
     userScore <= ROTTEN_TRIGGER.USER_MAX_SCORE;
 
-  const evalFail = flags.evalGrade === ROTTEN_TRIGGER.EVAL_FAIL;
-
   const hygieneFail = !!flags.hygieneViolation;
 
-  return userFail || evalFail || hygieneFail ? 'ROTTEN' : 'BRONZE';
+  return userFail || hygieneFail ? 'ROTTEN' : 'BRONZE';
 }
 
 // ===== 사람이 읽는 라벨 =====
