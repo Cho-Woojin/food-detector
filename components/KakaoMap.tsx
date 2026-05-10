@@ -18,8 +18,6 @@ interface KakaoMapProps {
   likedIds?: Set<string>;
   /** 강제로 표시할 마커 id (검색 결과 등) — minLevel/viewport 무시하고 노출 */
   forcedVisibleIds?: Set<string>;
-  /** 사용자가 지도를 드래그·줌으로 움직였을 때 호출. "이 지역에서 검색" 버튼 노출 트리거. */
-  onMapMoved?: () => void;
   /** 지도 빈 영역 클릭 또는 드래그 시작 — 선택 해제용 */
   onMapDismiss?: () => void;
   /** 사용자 현재 위치 — 파란 점 + 정확도 반경 표시. accuracy는 m 단위 */
@@ -32,8 +30,6 @@ export type KakaoMapHandle = {
   panTo: (lat: number, lng: number) => void;
   setLevel: (lv: number) => void;
   setMapType: (type: 'ROADMAP' | 'SKYVIEW' | 'HYBRID') => void;
-  /** 현재 viewport로 마커 재계산 (수동 "이 지역에서 검색"용) */
-  searchThisArea: () => void;
 };
 
 // 등급별 단순 dot 마커: 비비드 컬러로 지도 배경(회색·주황 도로/건물)과 충돌 회피
@@ -228,7 +224,6 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
     mapType = 'ROADMAP',
     likedIds,
     forcedVisibleIds,
-    onMapMoved,
     onMapDismiss,
     userLocation,
   },
@@ -243,7 +238,6 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
   const forcedVisibleIdsRef = useRef<Set<string>>(new Set());
   const selectedIdRef = useRef<string | null>(null);
   const onMarkerClickRef = useRef(onMarkerClick);
-  const onMapMovedRef = useRef(onMapMoved);
   const onMapDismissRef = useRef(onMapDismiss);
   // 현위치 파란 점 + 정확도 반경
   const userMarkerRef = useRef<any>(null);
@@ -330,7 +324,6 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
       entry.marker.setImage(img);
     }
   }, [cheeseB64]);
-  useEffect(() => { onMapMovedRef.current = onMapMoved; }, [onMapMoved]);
   useEffect(() => { onMapDismissRef.current = onMapDismiss; }, [onMapDismiss]);
   useEffect(() => { likedIdsRef.current = likedIds ?? new Set(); }, [likedIds]);
   useEffect(() => {
@@ -413,9 +406,6 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
         if (!map || !w.kakao?.maps?.MapTypeId) return;
         const id = w.kakao.maps.MapTypeId[type];
         map.setMapTypeId(id);
-      },
-      searchThisArea: () => {
-        applyViewportRef.current();
       },
     }),
     []
@@ -522,6 +512,9 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
           if (lv <= 5) return 48;    // 250m
           return 56;                 // 500m+
         };
+        // mode='full': 현재 viewport 안의 모든 식당을 후보로 재계산 (init / 검색버튼 / 데이터 변경)
+        // mode='rezoom': 마지막 full에서 정해진 후보 set 그대로, 셀 크기만 새 줌으로 dedup 재계산
+        //   → 사용자가 줌만 변경한 경우 새 영역 데이터 로드 없이 밀도만 자동 조정
         const applyViewport = () => {
           if (!mapInstanceRef.current) return;
           const bounds = map.getBounds();
@@ -531,7 +524,7 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
           const north = ne.getLat(), east = ne.getLng();
           const level = map.getLevel();
 
-          // 1) 후보 식당 + 우선순위 점수 계산
+          // 1) 후보 식당 + 우선순위 점수 계산 — 매 idle마다 현재 viewport 기준으로 재구성
           // - GOLDEN: 9개뿐이라 viewport 무시하고 항상 후보
           // - 좋아요 / 강제 표시(검색): 줌 레벨·viewport 무시하고 mustShow=true (dedup도 우회)
           // - 최대 줌인(level ≤ NO_DEDUP_LEVEL): minLevel 제한 우회 — viewport 안의 모든 등급 마커 노출
@@ -596,7 +589,18 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
             wantedList.push(r);
           }
 
-          // 3) 더 이상 필요 없는 마커 제거
+          // 3) Idempotency 가드 — 마커 set이 이전과 동일하면 setMap 호출 없이 종료
+          // (검색·좋아요·데이터 변경 useEffect가 의도와 무관하게 호출되어도 시각 변동 방지)
+          const current = markersByIdRef.current;
+          let identical = current.size === want.size;
+          if (identical) {
+            for (const id of want) {
+              if (!current.has(id)) { identical = false; break; }
+            }
+          }
+          if (identical) return;
+
+          // 4) 더 이상 필요 없는 마커 제거
           for (const [id, entry] of markersByIdRef.current) {
             if (!want.has(id)) {
               entry.marker.setMap(null);
@@ -606,7 +610,7 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
             }
           }
 
-          // 4) 신규 마커 생성
+          // 5) 신규 마커 생성
           for (const r of wantedList) {
             if (markersByIdRef.current.has(r.id)) continue;
             const entry = createEntry(r);
@@ -639,15 +643,13 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
         };
 
         applyViewportRef.current = applyViewport;
-        // 초기 1회만 자동 렌더. 이후 사용자가 드래그·줌하면 onMapMoved만 emit하고
-        // 마커는 그대로 — "이 지역에서 검색" 버튼을 눌러야 갱신됨 (캐치테이블 패턴).
+        // 모든 idle(pan·zoom)에서 자동 full apply — viewport 검사로 화면 안 마커만 유지,
+        // dedup 셀 크기로 zoom level별 밀도도 자동 조정. 별도 검색 버튼 불필요.
         applyViewport();
-        let lastApplied = true; // 방금 자동 호출했으므로
         kakao.maps.event.addListener(map, 'idle', () => {
-          if (lastApplied) { lastApplied = false; return; }
-          // 마커 클릭으로 인한 setCenter 후의 idle은 사용자 이동이 아니므로 무시
+          // 마커 클릭으로 인한 setCenter 후의 idle은 직전에 이미 처리된 상태이므로 스킵
           if (Date.now() - lastMarkerClickRef.current < 500) return;
-          onMapMovedRef.current?.();
+          applyViewport();
         });
         // 빈 영역 클릭 → 시트 닫기. 마커 클릭은 marker click과 map click이 함께 fire되므로
         // 마커 클릭 직후(300ms 이내)의 map click은 무시 → 시트가 떴다 사라지는 버그 방지
@@ -659,9 +661,6 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
         kakao.maps.event.addListener(map, 'dragstart', () => {
           onMapDismissRef.current?.();
         });
-        // searchThisArea 호출 시 lastApplied 플래그 리셋해서 다음 idle을 사용자 이동으로 취급
-        const wrapped = applyViewportRef.current;
-        applyViewportRef.current = () => { lastApplied = true; wrapped(); };
 
         // 초기 selectedId가 있고 viewport 안이면 강조
         if (selectedIdRef.current) {

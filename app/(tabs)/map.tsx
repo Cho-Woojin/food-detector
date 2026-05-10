@@ -69,7 +69,6 @@ export default function MapScreen() {
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<CategoryKey | 'ALL'>('ALL');
-  const [mapMoved, setMapMoved] = useState(false);
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null);
   const likedIds = useLikedIds();
 
@@ -249,7 +248,6 @@ export default function MapScreen() {
               likedIds={likedIds}
               forcedVisibleIds={forcedVisibleIds}
               userLocation={userLoc}
-              onMapMoved={() => setMapMoved(true)}
               centerLat={center.lat}
               centerLng={center.lng}
               zoom={targetId ? 3 : 5}
@@ -353,20 +351,7 @@ export default function MapScreen() {
         </View>
 
 
-        {/* "이 지역에서 검색" 버튼 — 사용자가 지도를 이동·줌하면 등장 */}
-        {mapMoved && (
-          <Pressable
-            onPress={() => {
-              mapHandleRef.current?.searchThisArea();
-              setMapMoved(false);
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="이 지역에서 검색"
-            style={({ pressed }) => [styles.researchBtn, pressed && { opacity: 0.85 }]}>
-            <Icon name="search" size={14} color={color.surface.subtle} />
-            <Text style={styles.researchBtnText}>이 지역에서 검색</Text>
-          </Pressable>
-        )}
+        {/* 마커는 매 지도 이동·줌마다 viewport 기준으로 자동 재계산 (별도 검색 버튼 불필요) */}
 
         {/* 마커 클릭 시 노출되는 바텀시트 — 요약(collapsed) ↔ 결과 카드(expanded) */}
         <RestaurantBottomSheet
@@ -474,21 +459,6 @@ const styles = StyleSheet.create({
     ...(elevation.raised as ViewStyle),
   },
 
-  // "이 지역에서 검색" 떠있는 버튼 (지도 상단 가운데)
-  researchBtn: {
-    position: 'absolute',
-    top: 120,
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    backgroundColor: color.brand.primary,
-    paddingHorizontal: spacing.m,
-    paddingVertical: spacing.s,
-    borderRadius: radius.pill,
-    ...(elevation.raised as ViewStyle),
-  },
-  researchBtnText: { ...typography.captionEmphasized, color: color.surface.subtle },
   zoomDivider: { height: 1, backgroundColor: color.border.default },
 
   // 선택 카드
