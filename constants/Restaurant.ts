@@ -1,7 +1,7 @@
 // constants/Restaurant.ts
 
 // 4단계 치즈 등급 — utils/scoring.ts의 deriveGrade()로 결정.
-// GOLDEN ≥ 80, SILVER 60~79, BRONZE < 60 (기본), ROTTEN < 60 + 과락 조건
+// GOLDEN ≥ 80, SILVER 50~79, BRONZE < 50 (기본), ROTTEN < 50 + 과락 조건 (트랩 치즈)
 export type GradeKey = 'GOLDEN' | 'SILVER' | 'BRONZE' | 'ROTTEN';
 
 // 새 카테고리 (CSV 재분류)
@@ -49,7 +49,7 @@ export interface Restaurant {
   riskTags?: RiskTag[];
   menuHints?: string[];
   geoFallback?: boolean;   // 좌표가 자치구 centroid 폴백인지
-  // 썩은치즈 과락 평가용 (런타임)
+  // 트랩 치즈 과락 평가용 (런타임)
   userReviewCount?: number;
   // 데이터 점수 세부 (UI breakdown 표시용)
   dataBreakdown?: { hygiene: number; model: number; bonus: number; punish: number };

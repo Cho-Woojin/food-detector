@@ -12,9 +12,13 @@ import { Cheese } from '@/constants/Assets';
 import { HygieneGuideModal } from '@/components/HygieneGuideModal';
 import { Restaurant as DataRestaurant, GradeKey, RiskTag } from '@/constants/Restaurant';
 import { color, radius, spacing, typography } from '@/constants/tokens';
-import { toUIRestaurant } from '@/utils/adapter';
+import { deriveGrade, toUIRestaurant } from '@/utils/adapter';
 import { useIsLiked, toggleLike } from '@/utils/favorites';
-import { AnimatedHeart } from '@/components/ui';
+import { AnimatedHeart, Chip } from '@/components/ui';
+import { BottomSheetSymbols } from '@/components/score/BottomSheetSymbols';
+import { useOwnerImpactFor } from '@/utils/owner';
+import { computeReviewImpact, useReviewsFor } from '@/utils/reviews';
+import { totalScoreOf } from '@/utils/scoring';
 
 interface Props {
   /** 선택된 식당 (null이면 시트 닫힘) */
@@ -29,36 +33,8 @@ export type RestaurantBottomSheetHandle = {
   close: () => void;
 };
 
-// 2단계: 작은 카드 / 중간 확장(5축 + CTA). 상세는 CTA 버튼으로 접근
+// 2단계: 작은 카드 / 중간 확장(점수 구성 + CTA). 상세는 CTA 버튼으로 접근
 const SNAP_POINTS = ['16%', '30%'];
-
-// 5축 아이콘·라벨 매핑
-type AxisKey = 'hygiene' | 'admin' | 'trust' | 'review' | 'gap';
-const AXIS_DISPLAY: { key: AxisKey; label: string; icon: string }[] = [
-  { key: 'hygiene', label: '위생등급',   icon: 'logo' },
-  { key: 'admin',   label: '행정처분',   icon: 'warning' },
-  { key: 'trust',   label: '사장님 인증', icon: 'star' },
-  { key: 'review',  label: '리뷰 분석',   icon: 'chat' },
-  { key: 'gap',     label: '메뉴 안전도', icon: 'leaf' },
-];
-
-const TONE_COLOR: Record<string, string> = {
-  green: '#22C55E',
-  yellow: '#F59E0B',
-  red: '#EF4444',
-};
-
-// rating → 짧은 상태 라벨
-const shortStatus = (key: AxisKey, rating: string): string => {
-  if (rating === '데이터 부족') return '—';
-  if (key === 'hygiene') return rating === '보유' ? 'A' : '—';
-  if (key === 'admin') return rating === '이력 없음' ? '없음' : rating;
-  if (key === 'trust') {
-    if (rating === '미인증') return '미인증';
-    return '인증';
-  }
-  return rating; // 좋음/양호/주의/보통 등
-};
 
 const RISK_LABEL: Partial<Record<RiskTag, string>> = {
   raw_fish: '날생선 취급',
@@ -69,12 +45,47 @@ const RISK_LABEL: Partial<Record<RiskTag, string>> = {
   raw_chicken: '닭회',
 };
 
-// 등급별 표시 메타. 치즈 갯수 + 라벨 + 한줄평
-const GRADE_META: Record<GradeKey, { count: number; label: string; phrase: string }> = {
-  GOLDEN: { count: 3, label: '골드 치즈',   phrase: '데이터·사장님·사용자 모두 우수' },
-  SILVER: { count: 2, label: '실버 치즈',   phrase: '믿고 갈 수 있는 식당' },
-  BRONZE: { count: 1, label: '브론즈 치즈', phrase: '평범한 동네 식당' },
-  ROTTEN: { count: 0, label: '썩은 치즈',   phrase: '주의가 필요한 식당' },
+// 등급별 표시 메타. 치즈 갯수 + 라벨. (한줄평은 buildSignalPhrase로 동적 생성)
+const GRADE_META: Record<GradeKey, { count: number; label: string }> = {
+  GOLDEN: { count: 3, label: '골드 치즈' },
+  SILVER: { count: 2, label: '실버 치즈' },
+  BRONZE: { count: 1, label: '브론즈 치즈' },
+  ROTTEN: { count: 0, label: '트랩 치즈' },
+};
+
+// 시그널 기반 한줄평. 시그널이 없으면 null — phrase 영역 자체 미노출.
+// 우선순위: 부정 시그널 > 복합 긍정 > 단일 긍정 > 평가 등급 > 약한 부정
+type Phrase = { text: string; tone: 'success' | 'danger' | 'warning' | 'neutral' };
+function buildSignalPhrase(r: DataRestaurant): Phrase | null {
+  if (r.hygieneViolation) return { text: '식약처 위생 직결 위반 이력', tone: 'danger' };
+  if (r.evalGrade === '중점관리업소') return { text: '식약처 중점관리업소', tone: 'danger' };
+
+  const hyg = r.hyg === 1;
+  const mod = r.mod === 1;
+  if (hyg && mod) return { text: '위생등급 지정 + 모범음식점', tone: 'success' };
+  if (hyg) return { text: '식약처 위생등급 지정업소', tone: 'success' };
+  if (mod) return { text: '모범음식점 지정', tone: 'success' };
+
+  if (r.evalGrade === '자율관리업소') return { text: '자율관리업소', tone: 'success' };
+  if (r.evalGrade === '일반관리업소') return { text: '일반관리업소', tone: 'neutral' };
+  if (r.evalGrade === '평가불능업소') return { text: '평가불능업소', tone: 'warning' };
+
+  if ((r.pun ?? 0) > 0) {
+    const firstPunish = (r.punishTypes ?? '').split('|').filter(Boolean)[0];
+    return {
+      text: firstPunish ? `${firstPunish} 이력 있음` : '행정처분 이력 있음',
+      tone: 'warning',
+    };
+  }
+
+  return null;
+}
+
+const PHRASE_TONE_STYLE: Record<Phrase['tone'], { bg: string; fg: string; icon: 'logo' | 'warning' | 'alert' | 'check' }> = {
+  success: { bg: 'rgba(34,197,94,0.10)',  fg: '#16A34A', icon: 'logo' },
+  danger:  { bg: 'rgba(255,59,48,0.10)',  fg: '#DC2626', icon: 'warning' },
+  warning: { bg: 'rgba(255,149,0,0.10)',  fg: '#B45309', icon: 'alert' },
+  neutral: { bg: 'rgba(120,120,128,0.10)', fg: '#475569', icon: 'check' },
 };
 
 
@@ -98,19 +109,57 @@ export const RestaurantBottomSheet = forwardRef<RestaurantBottomSheetHandle, Pro
 
     const ui = useMemo(() => (restaurant ? toUIRestaurant(restaurant) : null), [restaurant]);
 
+    // 동적 점수: 사장님 인증 + 사용자 리뷰 → 종합 점수·등급 갱신.
+    // 지도 마커 색상은 raw.grade 기준이지만 시트는 동적 등급으로 라벨/색 노출.
+    const ownerImpact = useOwnerImpactFor(restaurant?.id ?? null);
+    const reviews = useReviewsFor(restaurant?.id ?? null);
+    const reviewImpact = useMemo(() => computeReviewImpact(reviews), [reviews]);
+
+    const dataScore = restaurant?.dataScore ?? 0;
+    const adjustedScore = restaurant
+      ? totalScoreOf(dataScore, ownerImpact.delta, reviewImpact.userScore)
+      : 0;
+    const adjustedGrade: GradeKey = restaurant
+      ? deriveGrade({
+          score: adjustedScore,
+          flags: {
+            evalGrade: restaurant.evalGrade,
+            punishTypes: restaurant.punishTypes,
+            hygieneViolation: restaurant.hygieneViolation,
+          },
+          userScore: reviewImpact.userScore,
+          userReviewCount: reviewImpact.reviewCount,
+        }) as GradeKey
+      : 'BRONZE';
+
     // 단일 BottomSheet 인스턴스를 항상 마운트해두고 contents만 조건부.
     // 이전엔 if-early-return으로 두 BottomSheet를 분기 렌더했는데, restaurant 토글 시
     // 한쪽이 unmount → onClose fire → setSelected(null) 사이클로 시트가 떴다 사라짐.
-    const cheeseFg = ui ? (color.cheese[ui.grade]?.fg ?? color.text.primary) : color.text.primary;
-    const meta = ui ? (GRADE_META[ui.grade] ?? GRADE_META.BRONZE) : GRADE_META.BRONZE;
-    const cheeseImg = !ui ? Cheese.bronze
-      : ui.grade === 'GOLDEN' ? Cheese.gold
-        : ui.grade === 'SILVER' ? Cheese.silver
-        : ui.grade === 'BRONZE' ? Cheese.bronze
-        : null; // ROTTEN — 치즈 이미지 X (텍스트 라벨로 표시)
+    const cheeseFg = color.cheese[adjustedGrade]?.fg ?? color.text.primary;
+    const meta = GRADE_META[adjustedGrade] ?? GRADE_META.BRONZE;
+    const cheeseImg = adjustedGrade === 'GOLDEN' ? Cheese.gold
+      : adjustedGrade === 'SILVER' ? Cheese.silver
+      : adjustedGrade === 'BRONZE' ? Cheese.bronze
+      : null; // ROTTEN — 치즈 이미지 X (텍스트 라벨로 표시)
 
     const goDetail = () => { if (restaurant) router.push(`/restaurant/${restaurant.id}` as any); };
     const risks = restaurant?.riskTags ?? [];
+
+    // ROTTEN(트랩 치즈) 사유 — 50점 미만 + 과락 충족 시 노출
+    const rottenReasons: string[] = [];
+    if (adjustedGrade === 'ROTTEN' && restaurant) {
+      if (restaurant.evalGrade === '중점관리업소') rottenReasons.push('중점관리업소');
+      if (restaurant.hygieneViolation) rottenReasons.push('위생 직결 위반');
+      if (reviewImpact.reviewCount >= 10 && reviewImpact.userScore <= 10) {
+        rottenReasons.push('사용자 평점 낮음');
+      }
+    }
+
+    // 시그널 기반 한줄평 — 시그널 없으면 null. ROTTEN은 사유 칩이 더 자세해 phrase 생략.
+    const phrase: Phrase | null = restaurant && adjustedGrade !== 'ROTTEN'
+      ? buildSignalPhrase(restaurant)
+      : null;
+    const phraseStyle = phrase ? PHRASE_TONE_STYLE[phrase.tone] : PHRASE_TONE_STYLE.neutral;
 
     return (
       <>
@@ -144,46 +193,57 @@ export const RestaurantBottomSheet = forwardRef<RestaurantBottomSheetHandle, Pro
             </Text>
           </View>
 
-          {/* 점수 + 치즈 (이름보다 아래·작게) */}
+          {/* 등급 — 치즈 이미지 + 라벨 (점수는 내부 산정 수단, 미노출) */}
           <View style={styles.scoreRow}>
-            <Text style={[styles.score, { color: cheeseFg }]}>{ui.score}점</Text>
-            {meta.count > 0 && cheeseImg && (
+            {cheeseImg ? (
               <Image source={cheeseImg} style={styles.cheeseIcon} resizeMode="contain" />
+            ) : (
+              <Icon name="warning" size={16} color={cheeseFg} />
             )}
-            {ui.grade === 'ROTTEN' && (
-              <Text style={[styles.score, { color: cheeseFg }]}>· 썩은 치즈</Text>
-            )}
+            <Text style={[styles.score, { color: cheeseFg }]}>{meta.label}</Text>
           </View>
 
-          {/* 한줄 요약 (체크 아이콘 + 텍스트) */}
-          <View style={styles.phraseRow}>
-            <View style={styles.phraseDot}>
-              <Icon name="logo" size={12} color={'#fff'} />
+          {/* 시그널 기반 한줄평 — 시그널 없거나 ROTTEN(아래 사유 칩으로 대체)이면 미노출 */}
+          {phrase ? (
+            <View style={[styles.phraseRow, { backgroundColor: phraseStyle.bg }]}>
+              <View style={[styles.phraseDot, { backgroundColor: phraseStyle.fg }]}>
+                <Icon name={phraseStyle.icon} size={12} color={'#fff'} />
+              </View>
+              <Text style={[styles.phrase, { color: phraseStyle.fg }]}>{phrase.text}</Text>
             </View>
-            <Text style={styles.phrase}>{meta.phrase}</Text>
-          </View>
+          ) : null}
 
-          {/* === 중간 확장 — 5축 아이콘 분석 === */}
+          {/* === 중간 확장 — 5심볼 (등급 강조) === */}
           <View style={styles.divider} />
 
           <Text style={styles.axisTitle}>식탐정 5가지 분석</Text>
 
-          <View style={styles.axisRow}>
-            {AXIS_DISPLAY.map((ax) => {
-              const axData = ui.axes.find((a) => a.key === ax.key);
-              const tone = (axData?.tone ?? 'yellow') as keyof typeof TONE_COLOR;
-              const status = axData ? shortStatus(ax.key, axData.rating) : '—';
-              return (
-                <View key={ax.key} style={styles.axisItem}>
-                  <View style={[styles.axisIconBox, { borderColor: TONE_COLOR[tone] }]}>
-                    <Icon name={ax.icon as any} size={18} color={TONE_COLOR[tone]} />
-                  </View>
-                  <Text style={[styles.axisStatus, { color: TONE_COLOR[tone] }]} numberOfLines={1}>{status}</Text>
-                  <Text style={styles.axisLabel} numberOfLines={1}>{ax.label}</Text>
-                </View>
-              );
-            })}
+          <View style={styles.scoreBarBlock}>
+            <BottomSheetSymbols
+              input={{
+                hygieneDesignated: restaurant.hyg === 1,
+                hygieneViolation: !!restaurant.hygieneViolation,
+                punishCount: restaurant.pun ?? 0,
+                punishTypes: restaurant.punishTypes,
+                hasModel: restaurant.mod === 1,
+                evalGrade: restaurant.evalGrade,
+                ownerDelta: ownerImpact.delta,
+                ownerPostCount: ownerImpact.postCount,
+                reviewCount: reviewImpact.reviewCount,
+                reviewAvg: reviewImpact.rawAvg,
+                foreignTotal: reviewImpact.foreignTotal,
+              }}
+            />
           </View>
+
+          {/* ROTTEN 사유 칩 */}
+          {rottenReasons.length > 0 && (
+            <View style={styles.rottenReasonRow}>
+              {rottenReasons.map((r) => (
+                <Chip key={r} variant="info" size="sm" tone="danger">{r}</Chip>
+              ))}
+            </View>
+          )}
 
           {/* 위험 태그 — 클릭하면 위생 가이드 모달 */}
           {risks.length > 0 && (
@@ -267,13 +327,12 @@ const styles = StyleSheet.create({
   openDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#22C55E', marginLeft: 2 },
   openText: { ...typography.caption, color: '#22C55E', fontWeight: '600' },
 
-  // ===== 한줄평 =====
+  // ===== 한줄평 (시그널 기반, tone에 따라 색은 inline로 덮어씀) =====
   phraseRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
     marginTop: spacing.s,
-    backgroundColor: 'rgba(34,197,94,0.08)',
     paddingHorizontal: spacing.s,
     paddingVertical: spacing.xs,
     borderRadius: radius.m,
@@ -281,10 +340,9 @@ const styles = StyleSheet.create({
   },
   phraseDot: {
     width: 18, height: 18, borderRadius: 9,
-    backgroundColor: '#22C55E',
     alignItems: 'center', justifyContent: 'center',
   },
-  phrase: { ...typography.footnote, color: color.text.primary, fontWeight: '600' },
+  phrase: { ...typography.footnote, fontWeight: '600' },
 
   // ===== divider =====
   divider: {
@@ -292,30 +350,22 @@ const styles = StyleSheet.create({
     marginVertical: spacing.m,
   },
 
-  // ===== 5축 분석 =====
+  // ===== 점수 구성 (50/25/25) =====
   axisTitle: {
     ...typography.subheadlineEmphasized,
     color: color.text.primary,
-    marginBottom: spacing.m,
+    marginBottom: spacing.s,
   },
-  axisRow: {
+  scoreBarBlock: {
+    marginBottom: spacing.s,
+  },
+  rottenReasonRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+    marginBottom: spacing.s,
   },
-  axisItem: {
-    alignItems: 'center',
-    flex: 1,
-    gap: 4,
-  },
-  axisIconBox: {
-    width: 44, height: 44,
-    borderRadius: 22,
-    borderWidth: 2,
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: color.surface.subtle,
-  },
-  axisStatus: { ...typography.captionEmphasized },
-  axisLabel: { ...typography.caption, color: color.text.secondary },
 
   // ===== 태그 =====
   tagsBlock: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.m },

@@ -141,7 +141,7 @@ function StepSearch({
       <View style={styles.textTop}>
         <Text style={styles.bigQuote2}>안전한 식당을 한눈에</Text>
         <Text style={styles.subBodyLeft}>
-          식당명을 입력하면 식탐정의 위생 점수와 등급을 바로 확인할 수 있어요.
+          식당명을 입력하면 식탐정의 위생 등급을 바로 확인할 수 있어요.
         </Text>
       </View>
 
@@ -174,7 +174,12 @@ function StepSearch({
                 <Text style={styles.searchName} numberOfLines={1}>{r.n}</Text>
                 <Text style={styles.searchMeta}>{r.c} · {r.g}</Text>
               </View>
-              <Text style={styles.searchScore}>{r.s}점</Text>
+              <Text style={styles.searchScore}>
+                {r.gr === 'GOLDEN' ? '골든'
+                  : r.gr === 'SILVER' ? '실버'
+                  : r.gr === 'BRONZE' ? '브론즈'
+                  : '트랩'}
+              </Text>
             </View>
           );
         })}

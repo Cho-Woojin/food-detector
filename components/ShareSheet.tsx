@@ -41,7 +41,11 @@ export function ShareSheet({ visible, target, onClose }: Props) {
   }
 
   const url = (typeof window !== 'undefined' ? window.location.origin : '') + `/restaurant/${target.id}`;
-  const shareText = `${target.name} — 식탐정 ${target.score}점 (${target.cat} · ${target.gu})`;
+  const gradeKr = target.grade === 'GOLDEN' ? '골드 치즈'
+    : target.grade === 'SILVER' ? '실버 치즈'
+    : target.grade === 'BRONZE' ? '브론즈 치즈'
+    : '트랩 치즈';
+  const shareText = `${target.name} — 식탐정 ${gradeKr} (${target.cat} · ${target.gu})`;
 
   const onCopy = async () => {
     try {

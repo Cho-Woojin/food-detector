@@ -235,9 +235,9 @@ function userScore(reviews: Review[]): number {
 | **🧀 골드 치즈** | score ≥ **65** | `#F1C40F` (golden) |
 | **🧀 실버 치즈** | 50 ≤ score < 65 | `#94A3B8` (silver) |
 | **🧀 브론즈 치즈** | score < 50 (기본) | `#CD7F32` (bronze) |
-| **🚨 썩은 치즈** | score < 50 AND 과락 조건 | `#FF3B30` (danger red) |
+| **🚨 트랩 치즈** | score < 50 AND 과락 조건 | `#FF3B30` (danger red) |
 
-### 썩은 치즈 과락 조건
+### 트랩 치즈 과락 조건
 
 **점수가 50 미만일 때만** 평가. 50점 이상이면 과락이 있어도 무조건 실버 이상.
 
@@ -248,9 +248,9 @@ function userScore(reviews: Review[]): number {
 | **과락 1** (사용자) | 사용자 리뷰 ≥ 10개 **AND** 사용자 점수 ≤ 6/15 (별점 평균 ≤ 2.0) |
 | **과락 2** (AI 분류 위생 위반) | `flags.hygieneViolation = true` — AI가 식약처 I2630 행정처분의 위반사유(VILTCN)를 분석해 "식품 위생 직결 위반"으로 분류한 경우. 자세한 카테고리·분류 결과는 `data/violations-classified.json` 참조. |
 
-**과락 1 OR 과락 2** 둘 중 하나만 달성해도 썩은 치즈.
+**과락 1 OR 과락 2** 둘 중 하나만 달성해도 트랩 치즈.
 
-> 옛 룰의 "과락 2: 중점관리업소"는 2026-05-10 제거됨. I1540 위생관리평가가 음식점 평가가 아니라 식품제조·가공업체 평가였기 때문. 자세한 건 위 §1️⃣ 데이터 점수 가산 표 참조.
+> 옛 룰의 "중점관리업소 과락"은 2026-05-10 제거됨. I1540 위생관리평가가 음식점 평가가 아니라 식품제조·가공업체 평가였기 때문. 자세한 건 위 §1️⃣ 데이터 점수 가산 표 참조.
 
 #### 행정처분 종류만으로 판단하지 않는 이유
 
@@ -284,7 +284,7 @@ function deriveGrade(input: {
   if (score >= 65) return 'GOLDEN';
   if (score >= 50) return 'SILVER';
 
-  // score < 50 — 썩은 치즈 조건 평가
+  // score < 50 — 트랩 치즈 조건 평가
   const userFail = userReviewCount >= 10 && userScore <= 6;
   const hygieneFail = !!flags.hygieneViolation;
 

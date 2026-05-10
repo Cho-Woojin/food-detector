@@ -41,7 +41,8 @@ const GRADE_STYLE: Record<string, { color: string; size: number; border: number;
   GOLDEN:        { color: '#FACC15', size: 36, border: 1, zIndex: 50, minLevel: 14 }, // 노랑 치즈
   SILVER:        { color: '#A3B8C2', size: 36, border: 1, zIndex: 40, minLevel: 5  }, // 실버 치즈
   BRONZE:        { color: '#CD7F32', size: 36, border: 1, zIndex: 30, minLevel: 4  }, // 브론즈 치즈
-  WARNING:       { color: '#EF4444', size: 36, border: 1, zIndex: 35, minLevel: 4  }, // 빨강 경고
+  ROTTEN:        { color: '#FF3B30', size: 36, border: 1, zIndex: 60, minLevel: 8  }, // 트랩 치즈 — 위험 식별
+  WARNING:       { color: '#EF4444', size: 36, border: 1, zIndex: 35, minLevel: 4  }, // 빨강 경고 (legacy)
   NEEDS_DATA:    { color: '#D1D5DB', size: 28, border: 1, zIndex: 10, minLevel: -1 }, // 회색 — 검색/좋아요만
   INVESTIGATING: { color: '#D1D5DB', size: 28, border: 1, zIndex: 10, minLevel: -1 },
 };
@@ -99,8 +100,9 @@ const GRADE_ICON: Record<string, IconKind> = {
   GOLDEN: 'cheese',
   SILVER: 'cheese',
   BRONZE: 'cheese',
+  ROTTEN: 'warning',          // 트랩 치즈 — 빨강 삼각형 + 느낌표
   WARNING: 'warning',
-  NEEDS_DATA: 'magnify',     // 수집중 = 돋보기
+  NEEDS_DATA: 'magnify',      // 수집중 = 돋보기
   INVESTIGATING: 'magnify',
 };
 

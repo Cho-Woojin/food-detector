@@ -64,9 +64,9 @@ data/
 | **GOLDEN** (골드 치즈) | score ≥ **65** | `#F1C40F` |
 | **SILVER** (실버 치즈) | 50 ≤ score < 65 | `#94A3B8` |
 | **BRONZE** (브론즈 치즈) | score < 50 (기본) | `#CD7F32` |
-| **ROTTEN** (썩은 치즈) | score < 50 AND 과락 | `#FF3B30` |
+| **ROTTEN** (트랩 치즈) | score < 50 AND 과락 | `#FF3B30` |
 
-**썩은 치즈 과락 조건** (50 미만일 때만 평가):
+**트랩 치즈 과락 조건** (50 미만일 때만 평가):
 - 과락 1: 사용자 리뷰 ≥ 10개 AND 사용자 점수 ≤ 6/15 (별점 평균 ≤ 2.0)
 - 과락 2: `flags.hygieneViolation = true` (AI가 행정처분 위반사유를 위생 직결로 분류)
 - 둘 중 하나라도 → ROTTEN, 그 외엔 BRONZE

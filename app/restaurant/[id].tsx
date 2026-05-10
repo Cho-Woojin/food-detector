@@ -4,23 +4,25 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/Icon';
-import { SpiderChart5 } from '@/components/SpiderChart5';
 import { Cheese, Mascots, type MascotKey } from '@/constants/Assets';
-import { AxisScore, Grade, Restaurant } from '@/constants/MockData';
+import { Grade, Restaurant } from '@/constants/MockData';
+import type { Restaurant as RawRestaurant } from '@/constants/Restaurant';
 import { color, elevation, mascotSize, motion, radius, spacing, typography } from '@/constants/tokens';
 import { AnimatedHeart, Button, Card, CheeseBadge, Chip, IconButton, SkeletonCard } from '@/components/ui';
+import { DataBreakdownCard } from '@/components/score/DataBreakdownCard';
+import { OwnerScoreCard } from '@/components/score/OwnerScoreCard';
+import { UserScoreCard } from '@/components/score/UserScoreCard';
 import { findRestaurantById } from '@/utils/dataStore';
 import { deriveGrade, toUIRestaurant } from '@/utils/adapter';
 import { toggleLike, useIsLiked } from '@/utils/favorites';
 import { loginWithKakao, useKakaoUser } from '@/utils/kakaoAuth';
 import {
-  applyReviewImpact,
   removeReview,
-  reviewAxisFromImpact,
   useImpactFor,
   useMyReviews,
   useMyReviewsFor,
 } from '@/utils/reviews';
+import { totalScoreOf } from '@/utils/scoring';
 import { useIsAdmin } from '@/utils/admin';
 import {
   removeOwnerPost,
@@ -46,7 +48,7 @@ const MASCOT_BY_GRADE: Record<Grade, MascotKey> = {
   GOLDEN: 'ceremony',
   SILVER: 'thanks',
   BRONZE: 'thanks',
-  INVESTIGATING: 'search',
+  ROTTEN: 'warning',
 };
 
 export default function RestaurantDetail() {
@@ -55,6 +57,7 @@ export default function RestaurantDetail() {
   const [tab, setTab] = useState<Tab>('평가');
   const liked = useIsLiked(typeof id === 'string' ? id : null);
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
+  const [raw, setRaw] = useState<RawRestaurant | null>(null);
   const [loading, setLoading] = useState(true);
   const [shareOpen, setShareOpen] = useState(false);
 
@@ -74,6 +77,7 @@ export default function RestaurantDetail() {
     setLoading(true);
     findRestaurantById(String(id ?? '')).then((r) => {
       if (cancelled) return;
+      setRaw(r);
       setRestaurant(r ? toUIRestaurant(r) : null);
       setLoading(false);
     });
@@ -85,39 +89,29 @@ export default function RestaurantDetail() {
   // 점수 보정은 모든 사용자 리뷰 (백엔드 집계 시뮬), 표시는 본인 리뷰만 분리
   const reviewImpact = useImpactFor(typeof id === 'string' ? id : null);
 
-  // D축('리뷰 분석')에 사용자 위생 리뷰 반영 + C축('신뢰 인증')에 사장님 게시글 반영
-  // 5축 그래프와 합산 점수 일관 유지
-  const adjustedAxes = useMemo(() => {
-    if (!restaurant) return [];
-    let axes = restaurant.axes;
-    if (reviewImpact.reviewCount > 0) {
-      const reviewAxis = reviewAxisFromImpact(reviewImpact, restaurant.score / 100);
-      axes = axes.map((a) => (a.key === 'review' ? { ...a, ...reviewAxis } : a));
-    }
-    if (ownerImpact.postCount > 0) {
-      // C축에 사장님 인증 효과 시각화 — score는 25 max 안에서 비례 가산
-      axes = axes.map((a) => {
-        if (a.key !== 'trust') return a;
-        const boost = Math.min(25 - a.score, ownerImpact.delta);
-        const newScore = Math.min(a.max, a.score + boost);
-        return { ...a, score: newScore, rating: '사장님 인증', tone: 'green' as const };
-      });
-    }
-    return axes;
-  }, [restaurant, reviewImpact, ownerImpact]);
-
-  // 점수는 raw 사전 계산 + 리뷰 delta + 사장님 delta. 지도·좋아요와 동일 산식.
-  const adjustedScore = restaurant
-    ? Math.max(0, Math.min(100, applyReviewImpact(restaurant.score, reviewImpact) + ownerImpact.delta))
-    : 0;
-  const adjustedGrade = useMemo(() => deriveGrade(adjustedScore), [adjustedScore]);
-  const impactDelta = restaurant ? adjustedScore - restaurant.score : 0;
+  // 종합 점수 = 데이터(0~50) + 사장님(0~25) + 사용자(0~25). 지도·좋아요와 동일 산식.
+  const dataScore = raw?.dataScore ?? 0;
+  const adjustedScore = totalScoreOf(dataScore, ownerImpact.delta, reviewImpact.userScore);
+  const adjustedGrade = useMemo(
+    () =>
+      deriveGrade({
+        score: adjustedScore,
+        flags: {
+          evalGrade: raw?.evalGrade,
+          punishTypes: raw?.punishTypes,
+          hygieneViolation: raw?.hygieneViolation,
+        },
+        userScore: reviewImpact.userScore,
+        userReviewCount: reviewImpact.reviewCount,
+      }),
+    [adjustedScore, raw?.evalGrade, raw?.punishTypes, raw?.hygieneViolation, reviewImpact.userScore, reviewImpact.reviewCount],
+  );
+  const impactDelta = adjustedScore - dataScore;
 
   if (loading) return <LoadingState />;
   if (!restaurant) return <NotFoundState />;
 
   const mascot = MASCOT_BY_GRADE[adjustedGrade];
-  const cheeseFg = color.cheese[adjustedGrade].fg;
 
   return (
     <View style={styles.root}>
@@ -146,43 +140,9 @@ export default function RestaurantDetail() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
 
-        {/* 1. 검사 결과 종합 카드 — 점수와 등급에 시선 집중 */}
-        <Card variant="elevated" padding="xl" radius="xl" style={styles.summaryCard}>
+        {/* 1. 검사 결과 종합 카드 — 등급만 (점수는 내부 산정 수단, 사용자에게 미노출) */}
+        <Card variant="elevated" padding="m" radius="l" style={styles.summaryCard}>
           <Image source={Mascots[mascot]} style={styles.summaryMascot} resizeMode="contain" />
-          <Text style={styles.summaryLabel}>검사 결과 종합</Text>
-          <View style={styles.summaryScoreRow}>
-            <Text style={[styles.summaryScore, { color: cheeseFg }]}>{adjustedScore}</Text>
-            <Text style={styles.summaryScoreUnit}>/ 100점</Text>
-          </View>
-          {(reviewImpact.reviewCount > 0 || ownerImpact.postCount > 0) && (
-            <View style={styles.summaryDeltaWrap}>
-              <Text
-                style={[
-                  styles.summaryDelta,
-                  { color: impactDelta > 0
-                      ? color.status.success
-                      : impactDelta < 0
-                        ? color.status.danger
-                        : color.text.secondary },
-                ]}>
-                {impactDelta > 0 ? '+' : ''}{impactDelta}점 — {
-                  reviewImpact.reviewCount > 0 && ownerImpact.postCount > 0
-                    ? `위생 리뷰 ${reviewImpact.reviewCount}건·사장님 ${ownerImpact.postCount}건 반영`
-                    : reviewImpact.reviewCount > 0
-                      ? `위생 리뷰 ${reviewImpact.reviewCount}건 반영`
-                      : `사장님 인증 ${ownerImpact.postCount}건 반영`
-                }
-              </Text>
-              <Text style={styles.summaryDeltaSub}>
-                {reviewImpact.reviewCount > 0
-                  ? `별점 ${reviewImpact.rawAvg.toFixed(1)}${reviewImpact.foreignReports > 0 ? ` · 이물질 ${reviewImpact.foreignTotal}건` : ''}`
-                  : ''}
-                {reviewImpact.reviewCount > 0 && ownerImpact.postCount > 0 ? ' · ' : ''}
-                {ownerImpact.postCount > 0 ? `사장님 ${ownerImpact.postCount}건 (+${ownerImpact.delta})` : ''}
-                {' · 기본 '}{restaurant.score}점
-              </Text>
-            </View>
-          )}
           <CheeseBadge grade={adjustedGrade} size="md" showLabel style={styles.summaryBadge} />
         </Card>
 
@@ -233,13 +193,12 @@ export default function RestaurantDetail() {
         </View>
 
         {/* Tab content */}
-        {tab === '평가' && (
+        {tab === '평가' && raw && (
           <SummaryTab
             restaurant={restaurant}
-            axes={adjustedAxes}
-            baseScore={restaurant.score}
-            adjustedScore={adjustedScore}
-            impactDelta={impactDelta}
+            raw={raw}
+            adjustedGrade={adjustedGrade}
+            reviewImpact={reviewImpact}
           />
         )}
         {tab === '리뷰' && (
@@ -368,67 +327,39 @@ function NotFoundState() {
 
 function SummaryTab({
   restaurant,
-  axes,
-  baseScore,
-  adjustedScore,
-  impactDelta,
+  raw,
+  adjustedGrade,
+  reviewImpact,
 }: {
   restaurant: Restaurant;
-  axes: AxisScore[];
-  baseScore: number;
-  adjustedScore: number;
-  impactDelta: number;
+  raw: RawRestaurant;
+  adjustedGrade: Grade;
+  reviewImpact: { reviewCount: number; userScore: number };
 }) {
   return (
     <View>
       <AIMenuGuideCard guide={restaurant.menuGuide} />
 
-      <Card variant="elevated" padding="l" radius="l" style={{ marginBottom: spacing.l }}>
-        <Text style={styles.cardTitle}>식탐정 평가 요약</Text>
-        <View style={{ alignItems: 'center', marginTop: spacing.m }}>
-          <SpiderChart5
-            axes={axes.map((a) => ({
-              key: a.key,
-              label: a.label,
-              score: a.score,
-              max: a.max,
-            }))}
-            size={240}
-            centerLabel={`${adjustedScore}점`}
-          />
-        </View>
-        {impactDelta !== 0 && (
-          <View style={styles.scoreFlow}>
-            <View style={styles.scoreFlowItem}>
-              <Text style={styles.scoreFlowLabel}>5축 합산</Text>
-              <Text style={styles.scoreFlowValue}>{baseScore}점</Text>
-            </View>
-            <Icon name="forward" size={14} color={color.text.tertiary} />
-            <View style={styles.scoreFlowItem}>
-              <Text style={styles.scoreFlowLabel}>리뷰 보정</Text>
-              <Text
-                style={[
-                  styles.scoreFlowValue,
-                  { color: impactDelta > 0 ? color.status.success : color.status.danger },
-                ]}>
-                {impactDelta > 0 ? '+' : ''}{impactDelta}점
-              </Text>
-            </View>
-            <Icon name="forward" size={14} color={color.text.tertiary} />
-            <View style={styles.scoreFlowItem}>
-              <Text style={styles.scoreFlowLabel}>종합</Text>
-              <Text style={[styles.scoreFlowValueEmphasis]}>{adjustedScore}점</Text>
-            </View>
-          </View>
-        )}
-      </Card>
+      {/* ROTTEN(트랩 치즈) 사유 칩 — 50점 미만 + 과락일 때만 노출 */}
+      {adjustedGrade === 'ROTTEN' ? (
+        <RottenReasons raw={raw} reviewImpact={reviewImpact} />
+      ) : null}
 
-      <Text style={styles.sectionTitle}>식탐정 평가 상세</Text>
-      <Card variant="elevated" padding="none" radius="l">
-        {axes.map((a, i) => (
-          <AxisRow key={a.key} axis={a} index={i} showDivider={i < axes.length - 1} />
-        ))}
-      </Card>
+      {/* 공공 데이터 시그널 — 위생등급/모범/평가/처분 항목별 체크 */}
+      <DataBreakdownCard
+        breakdown={raw.dataBreakdown}
+        flags={{
+          hygieneDesignated: raw.hyg === 1,
+          hasModel: raw.mod === 1,
+          evalGrade: raw.evalGrade,
+          punishCount: raw.pun,
+          punishTypes: raw.punishTypes,
+        }}
+      />
+
+      {/* 사장님 인증 + 사용자 리뷰 — 활동량/별점만 표기 */}
+      <OwnerScoreCard restaurantId={raw.id} />
+      <UserScoreCard restaurantId={raw.id} />
 
       {restaurant.adminActions.length > 0 ? (
         <AdminActionsCard actions={restaurant.adminActions} />
@@ -438,7 +369,45 @@ function SummaryTab({
           <Text style={styles.adminEmptyText}>최근 1년간 깨끗한 운영을 이어왔어요</Text>
         </View>
       )}
+
     </View>
+  );
+}
+
+function RottenReasons({
+  raw,
+  reviewImpact,
+}: {
+  raw: RawRestaurant;
+  reviewImpact: { reviewCount: number; userScore: number };
+}) {
+  const reasons: string[] = [];
+  if (raw.evalGrade === '중점관리업소') reasons.push('중점관리업소');
+  if (raw.hygieneViolation) reasons.push('위생 직결 위반');
+  if (reviewImpact.reviewCount >= 10 && reviewImpact.userScore <= 10) {
+    reasons.push('사용자 평점 낮음');
+  }
+  if (reasons.length === 0) return null;
+
+  return (
+    <Card
+      variant="tinted"
+      tint="danger"
+      padding="m"
+      radius="l"
+      style={{ marginBottom: spacing.l }}>
+      <View style={styles.rottenHeader}>
+        <Icon name="warning" size={16} color={color.status.danger} />
+        <Text style={styles.rottenTitle}>트랩 치즈로 분류된 이유</Text>
+      </View>
+      <View style={styles.rottenChips}>
+        {reasons.map((r) => (
+          <Chip key={r} variant="info" size="sm" tone="danger">
+            {r}
+          </Chip>
+        ))}
+      </View>
+    </Card>
   );
 }
 
@@ -860,7 +829,7 @@ function InfoTab({
             <Text style={styles.ownerSectionTitle}>가게가 들려주는 이야기</Text>
           </View>
           <Text style={styles.ownerSectionSubtitle}>
-            사장님이 직접 올리는 위생·운영 인증 게시글이에요. 게시글이 늘면 신뢰 점수에 +가산.
+            사장님이 직접 올리는 위생·운영 인증 게시글이에요. 게시글이 늘면 등급이 올라가요.
           </Text>
         </View>
 
@@ -931,34 +900,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function AxisRow({ axis, index, showDivider }: { axis: AxisScore; index: number; showDivider: boolean }) {
-  return (
-    <View style={[styles.axisCard, showDivider && styles.axisDivider]}>
-      <View style={[styles.axisLetter, { backgroundColor: toneBg(axis.tone) }]}>
-        <Text style={[styles.axisLetterText, { color: toneFg(axis.tone) }]}>
-          {String.fromCharCode(65 + index)}
-        </Text>
-      </View>
-      <View style={{ flex: 1 }}>
-        <View style={styles.axisHeaderRow}>
-          <Text style={styles.axisName}>{axis.label}</Text>
-          <Text style={styles.axisSource}>({axis.source})</Text>
-        </View>
-        <View style={styles.barTrack}>
-          <View style={[styles.barFill, { width: `${(axis.score / axis.max) * 100}%`, backgroundColor: toneFg(axis.tone) }]} />
-        </View>
-      </View>
-      <View style={styles.axisRight}>
-        <Text style={styles.axisScore}>
-          {axis.score}<Text style={styles.axisMax}> / {axis.max}</Text>
-        </Text>
-        <Text style={[styles.axisRating, { color: toneFg(axis.tone) }]}>{axis.rating}</Text>
-      </View>
-    </View>
-  );
-}
-
-// ===== Tone helpers =====
+// ===== Severity helpers (행정처분 카드용) =====
 
 function severityLabel(s: 'low' | 'medium' | 'high') {
   return s === 'high' ? '중대' : s === 'medium' ? '주의' : '경미';
@@ -970,16 +912,6 @@ function severityStyle(s: 'low' | 'medium' | 'high') {
   if (s === 'high') return { backgroundColor: color.status.dangerSoft };
   if (s === 'medium') return { backgroundColor: color.status.warningSoft };
   return { backgroundColor: color.status.successSoft };
-}
-function toneBg(tone: 'green' | 'yellow' | 'red') {
-  if (tone === 'green') return color.status.successSoft;
-  if (tone === 'yellow') return color.status.warningSoft;
-  return color.status.dangerSoft;
-}
-function toneFg(tone: 'green' | 'yellow' | 'red') {
-  if (tone === 'green') return color.status.success;
-  if (tone === 'yellow') return color.status.warning;
-  return color.status.danger;
 }
 
 // ===== Styles =====
@@ -1003,48 +935,30 @@ const styles = StyleSheet.create({
 
   scrollContent: { paddingHorizontal: spacing.l, paddingTop: spacing.s },
 
-  // 1. Summary card (검사 결과 종합)
+  // 1. Summary card — 등급만 (점수는 내부 산정 수단)
   summaryCard: { alignItems: 'center', gap: spacing.s },
-  summaryMascot: { width: mascotSize.featured, height: mascotSize.featured },
-  summaryLabel: {
-    ...typography.captionEmphasized,
-    color: color.text.secondary,
-    letterSpacing: 0.4,
-  },
-  summaryScoreRow: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.xs },
-  summaryScore: { ...typography.display, fontSize: 56, lineHeight: 60 },
-  summaryScoreUnit: { ...typography.subheadline, color: color.text.tertiary },
-  summaryDeltaWrap: {
-    marginTop: spacing.xxs,
-    alignItems: 'center',
-    gap: 2,
-  },
-  scoreFlow: {
+  summaryMascot: { width: mascotSize.inline, height: mascotSize.inline },
+  summaryBadge: { marginTop: 0 },
+
+  // ROTTEN(트랩 치즈) 사유 카드
+  rottenHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.s,
-    marginTop: spacing.m,
-    paddingTop: spacing.m,
-    borderTopWidth: 1,
-    borderTopColor: color.border.default,
+    gap: 6,
+    marginBottom: spacing.s,
   },
-  scoreFlowItem: { alignItems: 'center', gap: 2 },
-  scoreFlowLabel: { ...typography.caption, color: color.text.tertiary },
-  scoreFlowValue: { ...typography.subheadlineEmphasized, color: color.text.primary },
-  scoreFlowValueEmphasis: { ...typography.bodyEmphasized, color: color.brand.primary },
-  summaryDelta: {
-    ...typography.captionEmphasized,
+  rottenTitle: {
+    ...typography.subheadlineEmphasized,
+    color: color.status.danger,
   },
-  summaryDeltaSub: {
-    ...typography.caption,
-    color: color.text.tertiary,
-    textAlign: 'center',
+  rottenChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
   },
-  summaryBadge: { marginTop: spacing.xs },
 
-  // 2. Name block (가운데 정렬)
-  nameBlock: { alignItems: 'center', marginTop: spacing.xl, gap: spacing.xs },
+  // 2. Name block — 화면 세로 중앙보다 살짝 위에 위치하도록 marginTop 축소
+  nameBlock: { alignItems: 'center', marginTop: spacing.m, gap: spacing.xxs },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1053,6 +967,8 @@ const styles = StyleSheet.create({
   },
   nameCenter: {
     ...typography.title,
+    fontSize: 22,
+    lineHeight: 28,
     color: color.text.primary,
     textAlign: 'center',
   },
@@ -1103,35 +1019,6 @@ const styles = StyleSheet.create({
   // Cards / sections
   cardTitle: { ...typography.bodyEmphasized, color: color.text.primary },
   sectionTitle: { ...typography.headline, color: color.text.primary, marginBottom: spacing.m },
-
-  // Axis rows
-  axisCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.m + 2,
-    paddingHorizontal: spacing.m,
-    gap: spacing.m,
-  },
-  axisDivider: { borderBottomWidth: 1, borderBottomColor: color.border.default },
-  axisLetter: {
-    width: 28, height: 28, borderRadius: radius.pill,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  axisLetterText: { ...typography.captionEmphasized },
-  axisHeaderRow: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.xs, marginBottom: spacing.xs + 2 },
-  axisName: { ...typography.subheadlineEmphasized, color: color.text.primary },
-  axisSource: { ...typography.footnote, color: color.text.tertiary },
-  barTrack: {
-    height: 6,
-    backgroundColor: color.fill.tertiary,
-    borderRadius: radius.s,
-    overflow: 'hidden',
-  },
-  barFill: { height: '100%', borderRadius: radius.s },
-  axisRight: { alignItems: 'flex-end', minWidth: 60 },
-  axisScore: { ...typography.subheadlineEmphasized, color: color.text.primary },
-  axisMax: { ...typography.footnote, color: color.text.tertiary },
-  axisRating: { ...typography.footnote, marginTop: 2 },
 
   // Info tab
   infoRow: { flexDirection: 'row', paddingVertical: spacing.s },

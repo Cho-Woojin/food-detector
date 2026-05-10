@@ -20,14 +20,14 @@ export const SCORE_MAX = {
 } as const;
 
 // ===== 등급 임계값 =====
-// SILVER 임계값은 "썩은치즈 면제 라인"도 겸함 — 이 값 이상이면 과락 있어도 BRONZE 이상.
-// GOLDEN 65: 위생등급 매우우수 단독(70)이 launch 시점에도 GOLDEN 진입 가능.
+// SILVER 임계값은 "트랩 치즈 면제 라인"도 겸함 — 이 값 이상이면 과락 있어도 BRONZE 이상.
+// GOLDEN 65: 위생등급 + 추가 인증 1개+ 받은 식당이 launch 시점에도 GOLDEN 진입 가능.
 export const GRADE_THRESHOLDS = {
   GOLDEN: 65,
   SILVER: 50,
 } as const;
 
-// ===== 썩은치즈 과락 조건 =====
+// ===== 트랩 치즈 과락 조건 =====
 // (참고) 옛 룰은 punishTypes의 영업정지/영업소폐쇄/과태료/과징금을 트리거로 썼지만,
 // 식약처 I2630 행정처분 텍스트를 AI(claude-opus-4-7)로 309건 분류한 결과:
 // - 영업소폐쇄(241) + 영업허가·등록취소(24) ≈ 거의 다 폐업·시설철거 행정정리 (위생 무관)
@@ -86,7 +86,7 @@ export type DeriveGradeInput = {
 };
 
 export function deriveGrade(input: DeriveGradeInput | number): GradeKey {
-  // 숫자만 넘기면 score-only fallback (flags 없음 → 썩은 평가 불가, BRONZE로 떨어짐)
+  // 숫자만 넘기면 score-only fallback (flags 없음 → 트랩 평가 불가, BRONZE로 떨어짐)
   if (typeof input === 'number') return deriveGrade({ score: input });
 
   const { score, flags = {}, userScore = 0, userReviewCount = 0 } = input;
@@ -94,7 +94,7 @@ export function deriveGrade(input: DeriveGradeInput | number): GradeKey {
   if (score >= GRADE_THRESHOLDS.GOLDEN) return 'GOLDEN';   // 65+
   if (score >= GRADE_THRESHOLDS.SILVER) return 'SILVER';   // 50+
 
-  // score < SILVER 임계값 — 썩은치즈 조건 평가
+  // score < SILVER 임계값 — 트랩 치즈 조건 평가
   const userFail =
     userReviewCount >= ROTTEN_TRIGGER.USER_MIN_REVIEWS &&
     userScore <= ROTTEN_TRIGGER.USER_MAX_SCORE;
@@ -109,7 +109,7 @@ export const GRADE_LABEL_KR: Record<GradeKey, string> = {
   GOLDEN: '골드 치즈',
   SILVER: '실버 치즈',
   BRONZE: '브론즈 치즈',
-  ROTTEN: '썩은 치즈',
+  ROTTEN: '트랩 치즈',
 };
 
 export const GRADE_PHRASE: Record<GradeKey, string> = {

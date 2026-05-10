@@ -191,7 +191,6 @@ export default function HomeScreen() {
                 <RestaurantCard
                   key={r.id}
                   name={r.name}
-                  score={r.score}
                   meta={r.category}
                   grade={r.grade}
                   onPress={() => router.push(`/restaurant/${r.id}` as any)}
@@ -216,7 +215,6 @@ export default function HomeScreen() {
             <RestaurantCard
               key={r.id}
               name={r.name}
-              score={r.score}
               meta={r.district}
               grade="GOLDEN"
               onPress={() => router.push(`/restaurant/${r.id}` as any)}
@@ -378,19 +376,18 @@ const TONE_FG: Record<'success' | 'warning' | 'danger', string> = {
 
 function RestaurantCard({
   name,
-  score,
   meta,
   grade,
   onPress,
 }: {
   name: string;
-  score: number;
   meta: string;
   grade: 'GOLDEN' | 'SILVER' | 'BRONZE';
   onPress: () => void;
 }) {
   const cheeseSrc = grade === 'GOLDEN' ? Cheese.gold : grade === 'SILVER' ? Cheese.silver : Cheese.bronze;
   const cheeseFg = color.cheese[grade].fg;
+  const gradeLabel = grade === 'GOLDEN' ? '골든 치즈' : grade === 'SILVER' ? '실버 치즈' : '브론즈 치즈';
   return (
     <Card
       variant="elevated"
@@ -405,7 +402,7 @@ function RestaurantCard({
       </View>
       <Text style={styles.cardName} numberOfLines={1}>{name}</Text>
       <View style={styles.cardMetaRow}>
-        <Text style={[styles.cardScore, { color: cheeseFg }]}>{score}점</Text>
+        <Text style={[styles.cardScore, { color: cheeseFg }]}>{gradeLabel}</Text>
         <Text style={styles.cardMetaSep}>·</Text>
         <Text style={styles.cardMeta} numberOfLines={1}>{meta}</Text>
       </View>
