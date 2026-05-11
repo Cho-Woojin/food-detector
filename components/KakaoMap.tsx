@@ -196,10 +196,13 @@ function buildImageCache(kakao: any, cheeseB64?: CheeseB64): ImageCache {
   const mk = (grade: string, fill: string, size: number, liked: boolean) => {
     const totalW = size + SHADOW_PAD * 2;
     const totalH = Math.round((size * 80) / 64) + SHADOW_PAD * 2;
+    // 꼬리 끝(SVG viewBox 64x80의 32,70)이 좌표를 정확히 가리키도록 offset 계산.
+    // 픽셀 위치 = viewBox좌표 * (size/64) + SHADOW_PAD
+    const tailTipY = 70 * (size / 64) + SHADOW_PAD;
     return new kakao.maps.MarkerImage(
       bubbleMarkerSrc(grade, fill, size, 1, cheeseB64, liked),
       new kakao.maps.Size(totalW, totalH),
-      { offset: new kakao.maps.Point(totalW / 2, totalH - SHADOW_PAD) }
+      { offset: new kakao.maps.Point(totalW / 2, tailTipY) }
     );
   };
   for (const g of Object.keys(GRADE_STYLE)) {
