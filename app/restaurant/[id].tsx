@@ -17,11 +17,7 @@ import { gateAction } from '@/utils/loginGate';
 import { loginWithKakao, useKakaoUser } from '@/utils/kakaoAuth';
 import {
   computeReviewImpact,
-  removeReview,
   useImpactFor,
-  useMyReviews,
-  useMyReviewsFor,
-  useReviews,
   useReviewsFor,
 } from '@/utils/reviews';
 import { totalScoreOf } from '@/utils/scoring';
@@ -38,7 +34,6 @@ import {
   useReviewReply,
 } from '@/utils/owner';
 import { ShareSheet } from '@/components/ShareSheet';
-import { HygieneReviewCard } from '@/components/HygieneReviewCard';
 import { OwnerEditModal } from '@/components/OwnerEditModal';
 import { OwnerGrantModal } from '@/components/OwnerGrantModal';
 import { OwnerPostCard } from '@/components/OwnerPostCard';
@@ -90,8 +85,15 @@ export default function RestaurantDetail() {
     };
   }, [id]);
 
-  // 점수 보정은 모든 사용자 리뷰 (백엔드 집계 시뮬), 표시는 본인 리뷰만 분리
-  const reviewImpact = useImpactFor(typeof id === 'string' ? id : null);
+  // 점수 보정용 impact — 가게 상세에서는 lazy fetch한 reviews로 직접 계산해
+  // stats view 캐시(앱 시작 시 1회 load)와의 시차로 인한 불일치를 막는다.
+  // stats view 캐시는 fetch 진행 중인 짧은 순간을 위한 fallback.
+  const reviewsForThis = useReviewsFor(typeof id === 'string' ? id : null);
+  const fallbackImpact = useImpactFor(typeof id === 'string' ? id : null);
+  const reviewImpact = useMemo(
+    () => (reviewsForThis.length > 0 ? computeReviewImpact(reviewsForThis) : fallbackImpact),
+    [reviewsForThis, fallbackImpact],
+  );
 
   // 종합 점수 = 데이터(0~50) + 사장님(0~25) + 사용자(0~25). 지도·좋아요와 동일 산식.
   const dataScore = raw?.dataScore ?? 0;
@@ -744,21 +746,20 @@ function UserReviewCard({
   ownerUserId: number | null;
 }) {
   const reviews = useReviewsFor(restaurantId);
-  const allReviews = useReviews();
   const impact = useMemo(() => computeReviewImpact(reviews), [reviews]);
   const kakaoUser = useKakaoUser();
   const loggedIn = !!kakaoUser;
   const myNickname = kakaoUser?.nickname ?? '나';
   const myId = kakaoUser?.id != null ? String(kakaoUser.id) : null;
 
-  // 작성자별 누적 리뷰 수
+  // 같은 가게 안의 작성자별 누적 리뷰 수 (lazy fetch 패턴에서 전체 리뷰 캐시는 사라짐)
   const userReviewCount = useMemo(() => {
     const map = new Map<string, number>();
-    for (const r of allReviews) {
+    for (const r of reviews) {
       if (r.userId) map.set(r.userId, (map.get(r.userId) ?? 0) + 1);
     }
     return map;
-  }, [allReviews]);
+  }, [reviews]);
 
   const onComposePress = () => {
     if (loggedIn) {
