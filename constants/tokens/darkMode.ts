@@ -33,7 +33,8 @@ export const darkColor = {
     default: 'rgba(84,84,88,0.65)',
     strong:  '#3A3A3C',
     focus:   '#30D158',
-    danger:  '#FF453A',
+    // 다크모드에선 라이트모드 코랄에 비해 한 톤 밝게 (가독성)
+    danger:  '#FF7060',
   },
   fill: {
     primary:    'rgba(120,120,128,0.36)',
@@ -41,13 +42,14 @@ export const darkColor = {
     tertiary:   'rgba(118,118,128,0.24)',
     quaternary: 'rgba(118,118,128,0.18)',
   },
+  // 위험·경고는 따뜻한 코랄/테라코타 톤 — 라이트모드와 동기화하되 한 단계 밝게.
   status: {
     success:     '#30D158',
     successSoft: 'rgba(48,209,88,0.16)',
-    warning:     '#FF9F0A',
-    warningSoft: 'rgba(255,159,10,0.16)',
-    danger:      '#FF453A',
-    dangerSoft:  'rgba(255,69,58,0.16)',
+    warning:     '#FF9F5C',                 // 따뜻한 호박색 오렌지
+    warningSoft: 'rgba(255,159,92,0.18)',
+    danger:      '#FF7060',                 // 따뜻한 코랄
+    dangerSoft:  'rgba(255,112,96,0.18)',
     info:        '#0A84FF',
     infoSoft:    'rgba(10,132,255,0.16)',
     neutral:     '#98989D',

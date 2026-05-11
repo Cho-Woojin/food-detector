@@ -6,7 +6,7 @@ import { Icon } from '@/components/Icon';
 import { HygieneReviewCard } from '@/components/HygieneReviewCard';
 import { Button, IconButton } from '@/components/ui';
 import { color, spacing, typography } from '@/constants/tokens';
-import { useKakaoUser } from '@/utils/kakaoAuth';
+import { loginWithKakao, useKakaoUser } from '@/utils/kakaoAuth';
 import { removeReview, useMyReviews } from '@/utils/reviews';
 
 export default function MyReviewsScreen() {
@@ -14,6 +14,32 @@ export default function MyReviewsScreen() {
   const reviews = useMyReviews();
   const kakaoUser = useKakaoUser();
   const nickname = kakaoUser?.nickname ?? '나';
+
+  // 비로그인: 내 리뷰는 사용자 단위 데이터라 빈 페이지 대신 로그인 유도
+  if (!kakaoUser) {
+    return (
+      <View style={styles.root}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={[styles.topBar, { paddingTop: insets.top + spacing.xs }]}>
+          <IconButton icon="back" size="md" accessibilityLabel="뒤로 가기" onPress={() => router.back()} />
+          <Text style={styles.topTitle}>내 위생 리뷰</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <View style={styles.emptyWrap}>
+          <Icon name="user" size={36} color={color.text.tertiary} />
+          <Text style={styles.emptyTitle}>로그인이 필요해요</Text>
+          <Text style={styles.emptyBody}>
+            카카오 로그인하면 내가 작성한 위생 리뷰를 한 곳에서 볼 수 있어요
+          </Text>
+          <View style={{ width: 240, marginTop: spacing.l }}>
+            <Button variant="primary" size="md" fullWidth leftIcon="chat" onPress={() => loginWithKakao()}>
+              카카오 로그인
+            </Button>
+          </View>
+        </View>
+      </View>
+    );
+  }
 
   const handleDelete = (id: string) => {
     if (typeof window !== 'undefined' && typeof window.confirm === 'function') {

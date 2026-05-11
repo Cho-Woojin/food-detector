@@ -10,7 +10,7 @@ import { Icon } from '@/components/Icon';
 import { Button, Card, IconButton } from '@/components/ui';
 import { color, radius, spacing, typography } from '@/constants/tokens';
 
-const SUPPORT_EMAIL = 'food-detective@example.com';
+const SUPPORT_EMAIL = 'choworkin@gmail.com';
 
 const REQUIRED_DOCS = [
   { icon: 'logo' as const, label: '사업자등록증 사본', hint: '국세청 발급, 최근 6개월 이내' },

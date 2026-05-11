@@ -22,10 +22,11 @@ interface Props {
   onClose: () => void;
 }
 
+// 가이드 톤 — 따뜻한 호박/테라코타/코랄 (status 토큰과 동기화)
 const TONE_COLOR: Record<Guide['tone'], { fg: string; bg: string }> = {
-  caution: { fg: '#F59E0B', bg: 'rgba(245,158,11,0.1)' },
-  warning: { fg: '#F97316', bg: 'rgba(249,115,22,0.1)' },
-  danger:  { fg: '#EF4444', bg: 'rgba(239,68,68,0.1)' },
+  caution: { fg: '#F5C037', bg: 'rgba(245,192,55,0.14)' },
+  warning: { fg: '#F08A4B', bg: 'rgba(240,138,75,0.14)' },
+  danger:  { fg: '#EF5B4C', bg: 'rgba(239,91,76,0.14)' },
 };
 
 export function HygieneGuideModal({ tag, onClose }: Props) {

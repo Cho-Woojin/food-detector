@@ -67,6 +67,16 @@ export function foodPoisonLabel(score: number): string {
 }
 
 /**
+ * 식약처 식중독지수 점수 → 4단계 번호 (1=관심, 4=위험). UI는 점수 대신 단계만 노출.
+ */
+export function foodPoisonStage(score: number): 1 | 2 | 3 | 4 {
+  if (score >= 86) return 4;
+  if (score >= 71) return 3;
+  if (score >= 55) return 2;
+  return 1;
+}
+
+/**
  * 기온 라벨 (평년 비교 데이터 없어서 단순 분류로 대체).
  */
 export function tempLabel(temp: number): string {

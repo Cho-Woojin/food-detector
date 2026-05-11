@@ -15,10 +15,11 @@ interface Props {
   onClose: () => void;
 }
 
+// 가이드 톤 — 따뜻한 호박/테라코타/코랄 (status 토큰과 동기화)
 const TONE_COLOR = {
-  caution: '#F59E0B',
-  warning: '#F97316',
-  danger:  '#EF4444',
+  caution: '#F5C037',
+  warning: '#F08A4B',
+  danger:  '#EF5B4C',
 };
 
 export function HygieneGuideListModal({ visible, onClose }: Props) {

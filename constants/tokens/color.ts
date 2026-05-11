@@ -43,7 +43,8 @@ export const color = {
     default:  'rgba(60,60,67,0.18)',
     strong:   '#C6C6C8',
     focus:    '#22C55E',
-    danger:   '#FF3B30',
+    // 따뜻한 코랄 레드 — Apple system red(#FF3B30)보다 톤이 부드럽고 음식 앱 분위기에 맞음
+    danger:   '#EF5B4C',
   },
 
   // ===== Fill (HIG system fills) =====
@@ -55,13 +56,14 @@ export const color = {
   },
 
   // ===== Status (HIG system) =====
+  // 위험·경고 색은 따뜻한 코랄·테라코타 톤 — 음식 앱 분위기에 부합하고 차가운 system red 대비 덜 자극적.
   status: {
     success:      '#34C759',
     successSoft:  'rgba(52,199,89,0.12)',
-    warning:      '#FF9500',
-    warningSoft:  'rgba(255,149,0,0.12)',
-    danger:       '#FF3B30',
-    dangerSoft:   'rgba(255,59,48,0.12)',
+    warning:      '#F08A4B',                 // 따뜻한 테라코타 오렌지 (구 #FF9500)
+    warningSoft:  'rgba(240,138,75,0.14)',
+    danger:       '#EF5B4C',                 // 따뜻한 코랄 레드 (구 #FF3B30)
+    dangerSoft:   'rgba(239,91,76,0.14)',
     info:         '#007AFF',
     infoSoft:     'rgba(0,122,255,0.12)',
     neutral:      '#8E8E93',
@@ -70,19 +72,21 @@ export const color = {
 
   // ===== Risk levels (4 stages) =====
   // 식약처 식중독 예측지수 단계와 동기화 — 관심(<55)/주의(55~70)/경고(71~85)/위험(≥86)
+  // 경고·위험은 위 status.warning/danger와 동일 색상 (단일 원본)
   risk: {
     1: { fg: '#34C759', bg: 'rgba(52,199,89,0.12)' },   // 관심
-    2: { fg: '#FFCC00', bg: 'rgba(255,204,0,0.16)' },   // 주의
-    3: { fg: '#FF9500', bg: 'rgba(255,149,0,0.12)' },   // 경고
-    4: { fg: '#FF3B30', bg: 'rgba(255,59,48,0.12)' },   // 위험
+    2: { fg: '#F5C037', bg: 'rgba(245,192,55,0.16)' },  // 주의 — 따뜻한 골든 옐로
+    3: { fg: '#F08A4B', bg: 'rgba(240,138,75,0.14)' },  // 경고 — 테라코타 오렌지
+    4: { fg: '#EF5B4C', bg: 'rgba(239,91,76,0.14)' },   // 위험 — 코랄 레드
   },
 
   // ===== Cheese grades =====
+  // ROTTEN은 status.danger와 같은 톤 — 위험 시그널 단일 원본 유지
   cheese: {
     GOLDEN: { fg: '#F1C40F', bg: '#FFF4CC' },
     SILVER: { fg: '#94A3B8', bg: '#E2E8F0' },
     BRONZE: { fg: '#CD7F32', bg: '#F5DEB3' },
-    ROTTEN: { fg: '#FF3B30', bg: 'rgba(255,59,48,0.12)' },
+    ROTTEN: { fg: '#EF5B4C', bg: 'rgba(239,91,76,0.14)' },
   },
 
   // ===== Owner mode =====

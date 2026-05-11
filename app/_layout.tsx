@@ -26,7 +26,11 @@ TextAny.defaultProps.style = [{ fontFamily }, TextAny.defaultProps.style];
 
 const InputAny = TextInput as any;
 InputAny.defaultProps = InputAny.defaultProps || {};
-InputAny.defaultProps.style = [{ fontFamily }, InputAny.defaultProps.style];
+// 웹 브라우저 기본 focus outline(노랑 박스) 전역 제거 — 컴포넌트별로 border/색상으로 강조.
+InputAny.defaultProps.style = [
+  { fontFamily, outlineStyle: 'none', outlineWidth: 0 },
+  InputAny.defaultProps.style,
+];
 
 export {
   // Catch any errors thrown by the Layout component.

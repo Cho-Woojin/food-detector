@@ -6,6 +6,7 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Icon } from '@/components/Icon';
 import { color, radius, spacing, typography } from '@/constants/tokens';
 import type { OwnerPost } from '@/utils/owner';
+import { relativeTime } from '@/utils/time';
 
 export type OwnerPostCardProps = {
   post: OwnerPost;
@@ -14,7 +15,7 @@ export type OwnerPostCardProps = {
 };
 
 export function OwnerPostCard({ post, authorName, onDelete }: OwnerPostCardProps) {
-  const dateLabel = formatDate(post.createdAt);
+  const dateLabel = relativeTime(post.createdAt);
 
   return (
     <View style={styles.card}>
@@ -46,11 +47,6 @@ export function OwnerPostCard({ post, authorName, onDelete }: OwnerPostCardProps
   );
 }
 
-function formatDate(ts: number): string {
-  const d = new Date(ts);
-  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
-}
-
 const styles = StyleSheet.create({
   card: {
     paddingVertical: spacing.m,
@@ -63,13 +59,14 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     marginBottom: spacing.xs,
   },
+  // 사장님 배지 — Top bar / Reply 와 동일 스펙 (paddingVertical 3, gap 3)
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
     backgroundColor: color.brand.primary,
     paddingHorizontal: spacing.s,
-    paddingVertical: 2,
+    paddingVertical: 3,
     borderRadius: radius.pill,
   },
   badgeText: {
