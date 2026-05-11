@@ -28,15 +28,6 @@ export type MenuGuide = {
   updatedAt: string;
 };
 
-export type Review = {
-  id: string;
-  author: string;
-  rating: number;
-  date: string;
-  body: string;
-  hygieneTags: string[];
-};
-
 export type Restaurant = {
   id: string;
   name: string;
@@ -52,15 +43,12 @@ export type Restaurant = {
   // 영업주기 실시간 데이터 부재 — UI에서 더 이상 노출하지 않음 (optional 처리)
   status?: '영업중' | '영업종료' | '브레이크타임';
   highlight?: string;
-  reviewCount: number;
-  hygieneReviewCount: number;
   /** @deprecated 5축 시각화 폐기. mock data 호환 위해 optional로만 유지 */
   axes?: AxisScore[];
   detectiveNote: string;
   scoreSummary: string;
   menuGuide: MenuGuide;
   adminActions: AdminAction[];
-  reviews: Review[];
 };
 
 const goldenAxes = (): AxisScore[] => [
@@ -147,55 +135,6 @@ const menuGuideGukbap = (): MenuGuide => ({
   updatedAt: baseUpdated,
 });
 
-const reviewsClean = (): Review[] => [
-  {
-    id: 'r1',
-    author: '맛집탐험가',
-    rating: 5,
-    date: '2025-04-29',
-    body: '주방이 보이는데 정리정돈이 잘 되어 있어요. 음식도 항상 일정한 맛.',
-    hygieneTags: ['주방 청결', '식기 깨끗'],
-  },
-  {
-    id: 'r2',
-    author: '동네주민',
-    rating: 4,
-    date: '2025-04-21',
-    body: '매번 갈 때마다 신선한 재료를 쓰는 게 보여요.',
-    hygieneTags: ['재료 신선'],
-  },
-];
-
-const reviewsMixed = (): Review[] => [
-  {
-    id: 'r1',
-    author: '리얼리뷰',
-    rating: 4,
-    date: '2025-04-30',
-    body: '맛은 좋아요. 다만 점심 피크에 테이블 정리가 약간 늦은 적 있음.',
-    hygieneTags: ['맛 좋음'],
-  },
-  {
-    id: 'r2',
-    author: '관찰자',
-    rating: 3,
-    date: '2025-04-15',
-    body: '평균 이상이지만 화장실 청결도는 평범했어요.',
-    hygieneTags: ['평균'],
-  },
-];
-
-const reviewsCaution = (): Review[] => [
-  {
-    id: 'r1',
-    author: '솔직후기',
-    rating: 3,
-    date: '2025-05-01',
-    body: '맛은 추억의 맛. 다만 위생은 좀 더 신경 쓰셨으면 합니다.',
-    hygieneTags: ['주의'],
-  },
-];
-
 export const RESTAURANTS: Restaurant[] = [
   {
     id: '1',
@@ -211,14 +150,11 @@ export const RESTAURANTS: Restaurant[] = [
     closedDay: '일요일',
     status: '영업중',
     highlight: '식탐정 평가 모두 양호',
-    reviewCount: 248,
-    hygieneReviewCount: 17,
     axes: goldenAxes(),
     detectiveNote: '식탐정 평가 모두 양호. 강남구 역삼동에서 신뢰할 수 있는 한식집입니다.',
     scoreSummary: '92점 골든 치즈 — 식탐정 평가 모두 양호한 검증된 한식집',
     menuGuide: menuGuideHansik(),
     adminActions: [],
-    reviews: reviewsClean(),
   },
   {
     id: '2',
@@ -233,14 +169,11 @@ export const RESTAURANTS: Restaurant[] = [
     hours: '10:30 - 21:00',
     closedDay: '없음',
     status: '영업중',
-    reviewCount: 142,
-    hygieneReviewCount: 9,
     axes: silverAxes(),
     detectiveNote: '주방 위생 양호. 점심 회전율이 높아 재료 신선도가 우수합니다.',
     scoreSummary: '87점 실버 치즈 — 회전율 높고 재료 신선한 국수 전문점',
     menuGuide: menuGuideNoodle(),
     adminActions: [],
-    reviews: reviewsClean(),
   },
   {
     id: '3',
@@ -256,14 +189,11 @@ export const RESTAURANTS: Restaurant[] = [
     closedDay: '월요일',
     status: '영업중',
     highlight: '식약처 위생등급 우수',
-    reviewCount: 312,
-    hygieneReviewCount: 24,
     axes: goldenAxes(),
     detectiveNote: '튀김 온도 관리가 일관되고, 기름 교체 주기가 정확합니다.',
     scoreSummary: '91점 골든 치즈 — 튀김 온도·기름 관리가 우수한 돈까스 전문점',
     menuGuide: menuGuidePorkCutlet(),
     adminActions: [],
-    reviews: reviewsClean(),
   },
   {
     id: '4',
@@ -279,14 +209,11 @@ export const RESTAURANTS: Restaurant[] = [
     closedDay: '없음',
     status: '영업중',
     highlight: '식탐정 평가 모두 90+',
-    reviewCount: 248,
-    hygieneReviewCount: 17,
     axes: goldenAxes(),
     detectiveNote: '식탐정 평가 모두 90점 이상. 청운효자동에서 가장 믿을 수 있는 냉면집입니다.',
     scoreSummary: '95점 골든 치즈 — 식탐정 평가 모두 90+ 청운효자동 최고 평가 냉면집',
     menuGuide: menuGuideNaengmyeon(),
     adminActions: [],
-    reviews: reviewsClean(),
   },
   {
     id: '5',
@@ -301,14 +228,11 @@ export const RESTAURANTS: Restaurant[] = [
     hours: '11:00 - 22:00',
     closedDay: '일요일',
     status: '영업중',
-    reviewCount: 167,
-    hygieneReviewCount: 11,
     axes: silverAxes(),
     detectiveNote: '오랜 단골이 많은 동네 한식집. 위생 리뷰도 꾸준히 양호합니다.',
     scoreSummary: '84점 실버 치즈 — 단골이 인정한 동네 한식집, 꾸준한 위생 관리',
     menuGuide: menuGuideHansik(),
     adminActions: [],
-    reviews: reviewsClean(),
   },
   {
     id: '6',
@@ -323,8 +247,6 @@ export const RESTAURANTS: Restaurant[] = [
     hours: '11:00 - 21:00',
     closedDay: '화요일',
     status: '영업중',
-    reviewCount: 98,
-    hygieneReviewCount: 6,
     axes: bronzeAxes(),
     detectiveNote: '맛은 좋지만 일부 위생 항목이 보통 수준. 개선 추적 중입니다.',
     scoreSummary: '76점 브론즈 치즈 — 맛은 좋으나 일부 위생 항목 개선 권장',
@@ -338,7 +260,6 @@ export const RESTAURANTS: Restaurant[] = [
         severity: 'low',
       },
     ],
-    reviews: reviewsMixed(),
   },
   {
     id: '8',
@@ -353,8 +274,6 @@ export const RESTAURANTS: Restaurant[] = [
     hours: '11:00 - 22:00',
     closedDay: '없음',
     status: '영업중',
-    reviewCount: 187,
-    hygieneReviewCount: 5,
     axes: [
       { key: 'hygiene', label: '위생등급', source: '식약처', score: 22, max: 30, rating: '양호', tone: 'green' },
       { key: 'admin', label: '행정처분', source: '서울시·자치구', score: 14, max: 30, rating: '주의', tone: 'red' },
@@ -388,7 +307,6 @@ export const RESTAURANTS: Restaurant[] = [
         severity: 'medium',
       },
     ],
-    reviews: reviewsMixed(),
   },
   {
     id: '7',
@@ -403,8 +321,6 @@ export const RESTAURANTS: Restaurant[] = [
     hours: '06:00 - 22:00',
     closedDay: '없음',
     status: '영업중',
-    reviewCount: 54,
-    hygieneReviewCount: 3,
     axes: investigatingAxes(),
     detectiveNote: '최근 행정처분 이력이 있어 식탐정이 지켜보고 있습니다.',
     scoreSummary: '64점 트랩 치즈 — 최근 행정처분 이력으로 식탐정이 모니터링',
@@ -425,7 +341,6 @@ export const RESTAURANTS: Restaurant[] = [
         severity: 'medium',
       },
     ],
-    reviews: reviewsCaution(),
   },
 ];
 

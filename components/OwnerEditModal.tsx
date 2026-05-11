@@ -209,15 +209,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.l,
     paddingVertical: spacing.s,
   },
-  title: { ...typography.headline, color: color.text.primary },
+  title: { ...typography.title, fontSize: 18, lineHeight: 24, color: color.text.primary },
   cancel: { ...typography.body, color: color.text.secondary },
 
   content: { paddingHorizontal: spacing.l, paddingTop: spacing.s, paddingBottom: spacing.xl },
 
   fieldBlock: { marginBottom: spacing.l },
-  label: { ...typography.captionEmphasized, color: color.text.secondary, marginBottom: spacing.xs },
+  label: { ...typography.subheadlineEmphasized, color: color.text.primary, marginBottom: spacing.xs },
+  // 입력 톤은 리뷰 작성의 memoInput과 동일 (surface.subtle + 1px border)
   input: {
-    backgroundColor: color.fill.tertiary,
+    backgroundColor: color.surface.subtle,
+    borderWidth: 1,
+    borderColor: color.border.default,
     borderRadius: radius.m,
     paddingHorizontal: spacing.m,
     paddingVertical: spacing.m,
@@ -225,7 +228,7 @@ const styles = StyleSheet.create({
     color: color.text.primary,
   },
   inputMultiline: { minHeight: 110, textAlignVertical: 'top' },
-  inputError: { borderWidth: 1, borderColor: color.status.danger },
+  inputError: { borderColor: color.status.danger },
   errorText: { ...typography.footnote, color: color.status.danger, marginTop: spacing.xxs },
   counterText: { ...typography.footnote, color: color.text.tertiary, textAlign: 'right', marginTop: spacing.xxs },
 

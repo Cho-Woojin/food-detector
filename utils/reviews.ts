@@ -304,14 +304,6 @@ function ensureMyReviewsLoaded(userId: string | null) {
 // Public API — Read
 // =====================================================================
 
-/**
- * @deprecated 전체 리뷰 캐시는 lazy fetch 패턴에서 제거됨.
- * 항상 빈 배열 반환. 가게별 리뷰는 useReviewsFor, 본인 리뷰는 useMyReviews 사용.
- */
-export function getReviews(): HygieneReview[] {
-  return [];
-}
-
 export function getReviewsFor(restaurantId: string): HygieneReview[] {
   return reviewsByRestaurant.get(restaurantId) ?? [];
 }
@@ -492,13 +484,6 @@ export function adjustedScoreAndGrade(
 // React hooks
 // =====================================================================
 
-/**
- * @deprecated 전체 리뷰 메모리 캐시 제거됨 (lazy fetch 패턴).
- * 항상 빈 배열 반환. 가게별은 useReviewsFor, 본인은 useMyReviews 사용.
- */
-export function useReviews(): HygieneReview[] {
-  return useSyncExternalStore(subscribe, () => EMPTY_REVIEW_ARRAY, () => EMPTY_REVIEW_ARRAY);
-}
 const EMPTY_REVIEW_ARRAY: HygieneReview[] = [];
 
 /**
@@ -522,14 +507,6 @@ export function useMyReviews(): HygieneReview[] {
     ensureMyReviewsLoaded(user?.id != null ? String(user.id) : null);
   }, [user?.id]);
   return useSyncExternalStore(subscribe, () => myReviews, () => myReviews);
-}
-
-export function useMyReviewsFor(restaurantId: string | undefined | null): HygieneReview[] {
-  const mine = useMyReviews();
-  return useMemo(() => {
-    if (!restaurantId) return EMPTY_REVIEW_ARRAY;
-    return mine.filter((r) => r.restaurantId === restaurantId);
-  }, [mine, restaurantId]);
 }
 
 /**

@@ -8,7 +8,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "build": "expo export --platform web",
-    "build:preview": "expo export --platform web && npx serve dist"
+    "build:preview": "expo export --platform web && npx serve dist",
+    "lint": "expo lint"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.1",
@@ -17,9 +18,11 @@
     "@react-navigation/native": "^7.1.8",
     "@supabase/supabase-js": "^2.105.4",
     "expo": "~54.0.33",
+    "expo-blur": "~15.0.8",
     "expo-constants": "~18.0.13",
     "expo-font": "~14.0.11",
     "expo-image-picker": "~17.0.11",
+    "expo-linear-gradient": "~15.0.8",
     "expo-linking": "~8.0.11",
     "expo-router": "~6.0.23",
     "expo-splash-screen": "~31.0.13",
@@ -39,6 +42,8 @@
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~10.0.0",
     "proj4": "^2.20.8",
     "react-test-renderer": "19.1.0",
     "typescript": "~5.9.2"

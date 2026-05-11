@@ -47,15 +47,6 @@ function persistRecent(list: string[]) {
   }
 }
 
-const POPULAR = [
-  { kw: '강남 한식',   trend: 'up' },
-  { kw: '냉면',        trend: 'up' },
-  { kw: '돈까스',      trend: 'flat' },
-  { kw: '국수',        trend: 'down' },
-  { kw: '한식',        trend: 'flat' },
-  { kw: '중식',        trend: 'down' },
-] as const;
-
 // 지도 탭과 동일한 카테고리 (CategoryKey와 매칭)
 const CATEGORIES = [
   '한식', '치킨', '카페디저트', '일식', '중식', '양식', '분식', '고기',
@@ -290,47 +281,12 @@ export default function SearchScreen() {
             ) : (
               <EmptyState mascot="search" mascotSize="sm" title="검색하면 여기에 기록이 쌓여요" paddingY="l" />
             )}
-
-            {/* 3. 인기 검색어 */}
-            <SectionHeader
-              title="인기 검색어"
-              subtitle="오늘 12:00 기준"
-              marginTop="xl"
-              marginBottom="s"
-            />
-            <View>
-              {POPULAR.map((p, i) => (
-                <Pressable
-                  key={p.kw}
-                  onPress={() => setQuery(p.kw)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${p.kw} 검색`}
-                  style={({ pressed }) => [styles.popularRow, pressed && { backgroundColor: color.fill.tertiary }]}>
-                  <Text style={[styles.popularRank, i < 3 && { color: color.brand.primary }]}>
-                    {i + 1}
-                  </Text>
-                  <Text style={styles.popularText}>{p.kw}</Text>
-                  <TrendArrow trend={p.trend} />
-                </Pressable>
-              ))}
-            </View>
           </>
         )}
 
         <View style={{ height: 32 }} />
       </ScrollView>
     </View>
-  );
-}
-
-function TrendArrow({ trend }: { trend: 'up' | 'down' | 'flat' }) {
-  if (trend === 'flat') {
-    return <Text style={[styles.trendText, { color: color.text.tertiary }]}>—</Text>;
-  }
-  return (
-    <Text style={[styles.trendText, { color: trend === 'up' ? color.status.danger : color.status.info }]}>
-      {trend === 'up' ? '▲' : '▼'}
-    </Text>
   );
 }
 
@@ -393,18 +349,6 @@ const styles = StyleSheet.create({
   groupTitle: { ...typography.captionEmphasized, color: color.text.secondary, marginBottom: spacing.s },
 
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.s },
-
-  popularRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.m,
-    paddingVertical: spacing.s + 2,
-    minHeight: 36,
-    borderRadius: radius.s,
-  },
-  popularRank: { ...typography.subheadlineEmphasized, color: color.text.secondary, width: 18 },
-  popularText: { ...typography.subheadline, color: color.text.primary, flex: 1 },
-  trendText: { ...typography.caption },
 
   // 카테고리 가로 스크롤 칩 (지도 탭과 동일 스타일)
   catScroll: { marginHorizontal: -spacing.l, flexGrow: 0 },

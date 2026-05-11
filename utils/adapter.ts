@@ -7,7 +7,6 @@ import {
   Grade,
   MenuGuide,
   Restaurant as UIRestaurant,
-  Review,
 } from '@/constants/MockData';
 import { deriveGrade as deriveGradeCore } from '@/utils/scoring';
 
@@ -155,40 +154,6 @@ function buildAdminActions(r: Restaurant): AdminAction[] {
   }));
 }
 
-// ---------- 리뷰 (mock) ----------
-function buildReviews(grade: GradeKey): Review[] {
-  if (grade === 'GOLDEN' || grade === 'SILVER') {
-    return [
-      {
-        id: 'r1', author: '맛집탐험가', rating: 5, date: '2025-04-29',
-        body: '주방이 깔끔하고 음식 맛이 일정해요. 다시 방문 의사 있습니다.',
-        hygieneTags: ['주방 청결', '식기 깨끗'],
-      },
-      {
-        id: 'r2', author: '동네주민', rating: 4, date: '2025-04-21',
-        body: '재료가 신선해요. 가족 단위로 자주 가는 곳입니다.',
-        hygieneTags: ['재료 신선'],
-      },
-    ];
-  }
-  if (grade === 'BRONZE') {
-    return [
-      {
-        id: 'r1', author: '리얼리뷰', rating: 4, date: '2025-04-30',
-        body: '맛은 좋은데 위생은 보통이에요. 점심 시간엔 분주해 보입니다.',
-        hygieneTags: ['평균'],
-      },
-    ];
-  }
-  return [
-    {
-      id: 'r1', author: '솔직후기', rating: 3, date: '2025-05-01',
-      body: '맛은 추억의 맛. 다만 위생은 좀 더 신경 쓰셨으면 합니다.',
-      hygieneTags: ['주의'],
-    },
-  ];
-}
-
 // ---------- 주소 → 도로명/동 (구는 항상 포함) ----------
 // 결과 카드 헤더는 한 줄이라 짧게: "강남구 자곡로" 또는 "강남구 자곡동". 도로명이 있으면 우선.
 function extractDistrict(r: Restaurant): string {
@@ -257,13 +222,6 @@ export function toUIRestaurant(r: Restaurant): UIRestaurant {
       ? `${score}점 ${labelKr} — 행정처분 이력 있음, 주의 필요`
       : `${score}점 ${labelKr} — 사용자 평이 좋지 않음, 주의 필요`;
 
-  // mock 리뷰 selector — Grade 4단계에서 우선순위 매핑
-  const mockReviewKey = grade === 'GOLDEN' || grade === 'SILVER'
-    ? 'GOLDEN'
-    : grade === 'BRONZE'
-    ? 'BRONZE'
-    : 'ROTTEN';
-
   return {
     id: r.id,
     name: r.name,
@@ -277,13 +235,10 @@ export function toUIRestaurant(r: Restaurant): UIRestaurant {
     hours: defaultHours(r.cat),
     closedDay: '매장 문의',
     highlight: r.hyg ? '식약처 위생등급 보유' : undefined,
-    reviewCount: 0,
-    hygieneReviewCount: 0,
     detectiveNote: scoreSummary,
     scoreSummary,
     menuGuide: buildMenuGuide(r.cat),
     adminActions: buildAdminActions(r),
-    reviews: buildReviews(mockReviewKey as any),
   };
 }
 
