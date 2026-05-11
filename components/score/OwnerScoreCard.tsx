@@ -16,7 +16,7 @@ export function OwnerScoreCard({ restaurantId }: OwnerScoreCardProps) {
   const active = impact.postCount > 0;
 
   return (
-    <Card variant="elevated" padding="l" radius="l" style={{ marginBottom: spacing.l }}>
+    <Card variant="flat" padding="l" radius="l" style={{ marginBottom: spacing.l }}>
       <View style={styles.header}>
         <Text style={styles.title}>사장님 인증</Text>
         <View style={[styles.statusPill, active ? styles.pillActive : styles.pillInactive]}>

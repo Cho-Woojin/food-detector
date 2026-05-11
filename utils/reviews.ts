@@ -73,6 +73,15 @@ export function tagsFor(sentiment: ReviewSentiment): readonly string[] {
   return sentiment === 'positive' ? POSITIVE_TAGS : NEGATIVE_TAGS;
 }
 
+// 새 모델 (2026-05): 4개 항목별 별점 + 방문 시점 칩 + 한 줄 메모
+export type AxisRating = {
+  table?: number;       // 테이블·식기 청결도
+  food?: number;        // 음식 신선도·품질
+  staff?: number;       // 직원 위생 (위생복·마스크)
+  restroom?: number;    // 화장실 위생
+};
+export type VisitWindow = 'today' | 'week' | 'older'; // 오늘·어제 / 1주일 / 1주일+
+
 // =====================================================================
 // 타입
 // =====================================================================
@@ -84,13 +93,16 @@ export type HygieneReview = {
   userProfileImage?: string | null;
   restaurantId: string;
   restaurantName: string;
-  rating: number;            // 1..5
-  tags: string[];
-  foreignObjects: string[];
-  body: string;
+  rating: number;            // 1..5 — 새 모델에서는 axisRatings 평균. 호환용 보존.
+  tags: string[];            // (옛 모델 호환) 긍정/부정 태그 묶음
+  foreignObjects: string[];  // (옛 모델 호환) 이물질 발견
+  body: string;              // 한 줄 위생 메모 (50자 권장)
   photos: string[];          // public URL (Storage) 또는 base64 dataURL (legacy)
-  visitDate: string;         // 'YYYY-MM-DD'
+  visitDate: string;         // 방문일 'YYYY-MM-DD' (호환 보존, 새 모델에서는 visitWindow 기반 산출)
   createdAt: number;         // ms epoch
+  // 신규 (옵셔널)
+  axisRatings?: AxisRating;  // 4개 항목별 별점. 없으면 옛 rating만.
+  visitWindow?: VisitWindow; // 방문 시점 칩
 };
 
 export type AddReviewInput = Omit<HygieneReview, 'id' | 'createdAt'>;

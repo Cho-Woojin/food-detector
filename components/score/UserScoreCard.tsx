@@ -17,7 +17,7 @@ export function UserScoreCard({ restaurantId }: UserScoreCardProps) {
   const has = impact.reviewCount > 0;
 
   return (
-    <Card variant="elevated" padding="l" radius="l" style={{ marginBottom: spacing.l }}>
+    <Card variant="flat" padding="l" radius="l" style={{ marginBottom: spacing.l }}>
       <View style={styles.header}>
         <Text style={styles.title}>사용자 리뷰</Text>
         {has ? (
@@ -63,10 +63,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: spacing.s,
-    paddingVertical: 4,
-    borderRadius: 999,
-    backgroundColor: color.cheese.GOLDEN.bg,
   },
   starText: {
     ...typography.captionEmphasized,

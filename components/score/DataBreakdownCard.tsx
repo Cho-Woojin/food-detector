@@ -49,7 +49,7 @@ export function DataBreakdownCard({ breakdown, flags }: DataBreakdownCardProps) 
   ];
 
   return (
-    <Card variant="elevated" padding="l" radius="l" style={{ marginBottom: spacing.l }}>
+    <Card variant="flat" padding="l" radius="l" style={{ marginBottom: spacing.l }}>
       <Text style={styles.title}>공공 데이터 시그널</Text>
       <Text style={styles.subtitle}>식약처·행안부 공공데이터에서 받은 인증·이력</Text>
 

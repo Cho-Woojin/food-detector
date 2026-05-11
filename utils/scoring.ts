@@ -35,7 +35,7 @@ export const GRADE_THRESHOLDS = {
 // - 영업정지(44) 중 위생 직결은 단 3건 (이물·유통기한·무등록 식품). 나머지 41건은
 //   청소년 주류·유흥접객·성매매 등 사회·도덕 위반 — 식중독 위험과 무관.
 // → 처분 종류만으로 ROTTEN 판단하면 식탐정의 본질(위생·식중독)과 어긋남.
-//   대신 by-gu의 flags.hygieneViolation (AI 분류 위생 직결 위반 bool) 사용.
+//   대신 by-gu의 flags.hygieneViolation (AI 분류 + 새올민원 위생 키워드 룰) 사용.
 //   자세한 분석은 data/violations-classified.json + data/SCORING_AND_SCHEMA.md.
 //
 // 위생관리평가(I1540) 트리거는 제거됨 (2026-05-10) — I1540은 식품제조·가공업체 평가라
@@ -79,8 +79,10 @@ export function totalScoreOf(dataScore: number, ownerScore: number, userScore: n
 export type DeriveGradeInput = {
   score: number;            // 종합 점수 0~100
   flags?: {
+    /** @deprecated I1540은 식품제조·가공업체 평가로 음식점과 무관 — 더 이상 트리거에 사용 안 함 */
+    evalGrade?: string;
     punishTypes?: string;      // 보존 (UI 표시·통계용). ROTTEN 트리거에는 사용 안 함.
-    hygieneViolation?: boolean; // AI 분류 결과 위생 직결 위반 — ROTTEN 트리거
+    hygieneViolation?: boolean; // AI 분류 + 새올민원 위생 키워드 룰 — ROTTEN 트리거
   };
   userScore?: number;       // 0~15, default 0
   userReviewCount?: number; // default 0

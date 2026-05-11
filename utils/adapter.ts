@@ -189,11 +189,19 @@ function buildReviews(grade: GradeKey): Review[] {
   ];
 }
 
-// ---------- 주소 → 동/지역 ----------
+// ---------- 주소 → 도로명/동 (구는 항상 포함) ----------
+// 결과 카드 헤더는 한 줄이라 짧게: "강남구 자곡로" 또는 "강남구 자곡동". 도로명이 있으면 우선.
 function extractDistrict(r: Restaurant): string {
-  // "서울특별시 강남구 자곡로 186, ..." → "강남구 자곡동" (간단 추출)
-  const m = r.addr.match(/([가-힣]+동)/);
-  return m ? `${r.gu} ${m[1]}` : r.gu;
+  const cleaned = r.addr
+    .replace(/^서울특별시\s*/, '')
+    .replace(/^서울시\s*/, '')
+    .replace(/\(.*?\)/g, '')
+    .trim();
+  const roadMatch = cleaned.match(/([가-힣]+구)\s+([가-힣A-Za-z0-9]+(?:대?로|길))/);
+  if (roadMatch) return `${roadMatch[1]} ${roadMatch[2]}`;
+  const dongMatch = cleaned.match(/([가-힣]+구)\s+([가-힣]+(?:동|가))/);
+  if (dongMatch) return `${dongMatch[1]} ${dongMatch[2]}`;
+  return r.gu;
 }
 
 // ---------- 영업 시간 (mock) ----------

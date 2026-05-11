@@ -15,11 +15,12 @@ export const Mascots = {
 
 export type MascotKey = keyof typeof Mascots;
 
-// Cheese trophies (3 grades)
+// Cheese trophies (4 grades — rotten은 트랩 치즈)
 export const Cheese = {
   gold: require('@/assets/cheese/gold.png'),
   silver: require('@/assets/cheese/silver.png'),
   bronze: require('@/assets/cheese/bronze.png'),
+  rotten: require('@/assets/cheese/trap.png'),
 } as const;
 
 // SVG는 public/cheese/에 두고 정적 URL로 참조 (Expo web의 public dir이 root에서 서빙됨)
@@ -28,6 +29,7 @@ export const CheeseSvg = {
   gold: '/cheese/gold.svg',
   silver: '/cheese/silver.svg',
   bronze: '/cheese/bronze.svg',
+  rotten: '/cheese/trap.svg',
 } as const;
 
 export type CheeseKey = keyof typeof Cheese;

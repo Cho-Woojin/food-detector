@@ -338,6 +338,7 @@ function gradeCheese(gr: Grade) {
   if (gr === 'GOLDEN') return <Image source={Cheese.gold} style={styles.suggestCheese} resizeMode="contain" />;
   if (gr === 'SILVER') return <Image source={Cheese.silver} style={styles.suggestCheese} resizeMode="contain" />;
   if (gr === 'BRONZE') return <Image source={Cheese.bronze} style={styles.suggestCheese} resizeMode="contain" />;
+  if (gr === 'ROTTEN') return <Image source={Cheese.rotten} style={styles.suggestCheese} resizeMode="contain" />;
   return null;
 }
 
