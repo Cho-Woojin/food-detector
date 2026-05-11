@@ -127,15 +127,27 @@ function subscribe(fn: () => void): () => void {
 }
 
 async function loadFromSupabase(): Promise<void> {
-  const { data, error } = await supabase
-    .from('reviews')
-    .select('*')
-    .order('created_at', { ascending: false });
-  if (error) {
-    if (__DEV__) console.warn('[reviews] load failed', error);
-    return;
+  // PostgREST 기본 max-rows가 1000이라 .select() 단일 호출로는 그 이상 못 받음.
+  // 페이지네이션해서 모두 누적.
+  const PAGE = 1000;
+  const all: any[] = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from('reviews')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(from, from + PAGE - 1);
+    if (error) {
+      if (__DEV__) console.warn('[reviews] load failed', error);
+      return;
+    }
+    const chunk = data ?? [];
+    all.push(...chunk);
+    if (chunk.length < PAGE) break;
+    from += PAGE;
   }
-  reviews = (data ?? []).map(rowToReview);
+  reviews = all.map(rowToReview);
   loaded = true;
   emit();
 }
