@@ -103,7 +103,7 @@ PR `feat/db-supabase`로 도입. **식당 마스터 데이터(`data/by-gu/`)는 
 
 | 테이블 | 용도 | 키 |
 |---|---|---|
-| `reviews` | 위생 리뷰 (별점·태그·이물질·사진·한줄평) | uuid id |
+| `reviews` | 위생 리뷰 (4축 별점·방문시점·태그·이물질·사진·한줄평) | uuid id |
 | `favorites` | 즐겨찾기 | (user_id, restaurant_id) PK |
 | `restaurant_ownership` | 식당 → 사장님 (1:1) | restaurant_id PK |
 | `owner_posts` | 사장님 인증 게시글 | uuid id |

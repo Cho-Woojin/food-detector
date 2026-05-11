@@ -8,6 +8,13 @@ const POISONMAP_RISK = 'https://poisonmap.mfds.go.kr/api/risk.do';
 const POISONMAP_WEATHER = 'https://poisonmap.mfds.go.kr/api/weather.do?a=1';
 const SEOUL = '서울특별시';
 
+// 로컬 dev(localhost:8081) cross-origin 호출 허용. 공개 데이터 프록시라 * 안전.
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+
 type RiskItem = {
   sd: string;
   sgg: string | null;
@@ -33,11 +40,15 @@ type WeatherItem = {
 };
 
 export default async function handler(req: Request): Promise<Response> {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+
   const url = new URL(req.url);
   const gu = url.searchParams.get('gu')?.trim() ?? '';
 
   if (!gu) {
-    return Response.json({ error: 'gu query required' }, { status: 400 });
+    return Response.json({ error: 'gu query required' }, { status: 400, headers: CORS_HEADERS });
   }
 
   try {
@@ -61,7 +72,7 @@ export default async function handler(req: Request): Promise<Response> {
     if (!risk || !weather) {
       return Response.json(
         { error: `'${gu}' not found in poisonmap` },
-        { status: 404 },
+        { status: 404, headers: CORS_HEADERS },
       );
     }
 
@@ -85,6 +96,7 @@ export default async function handler(req: Request): Promise<Response> {
       },
       {
         headers: {
+          ...CORS_HEADERS,
           'Cache-Control': 'public, s-maxage=600, stale-while-revalidate=3600',
         },
       },
@@ -92,7 +104,7 @@ export default async function handler(req: Request): Promise<Response> {
   } catch (err) {
     return Response.json(
       { error: 'poisonmap fetch failed', detail: String(err) },
-      { status: 502 },
+      { status: 502, headers: CORS_HEADERS },
     );
   }
 }

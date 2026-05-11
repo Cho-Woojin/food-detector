@@ -28,7 +28,6 @@ import {
   type Tone,
 } from '@/utils/riskCalculator';
 
-
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   // 위치 — 초기 paint는 캐시값으로 빠르게, 마운트마다 fresh 요청 + Kakao 역지오코딩.
@@ -284,7 +283,8 @@ function formatRegTime(s?: string): string {
   return `${m[4]}:${m[5]}`;
 }
 
-// ===== 환경 카드 row — 5개 가로 스크롤 =====
+// ===== 환경 카드 row — 기온·습도·미세먼지 3개 균등 배치 =====
+// 식중독은 위 RiskCard에 이미 점수로 표시되어 제외. 자외선은 데이터 소스 없어 제외.
 
 type EnvCardItem = {
   label: string;     // 카드 상단 컬러 텍스트 — 기온/습도/미세먼지

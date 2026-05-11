@@ -1,12 +1,14 @@
 // 홈 화면 환경 데이터 클라이언트.
 // /api/env 프록시 호출 + localStorage 1시간 캐시.
 
-import { Platform } from 'react-native';
 import { GuKey } from '@/constants/Restaurant';
 
-// 웹: 같은 origin 상대 경로. 네이티브(Expo Go): 배포 도메인 절대 URL.
-// 네이티브에서 상대 경로는 base URL이 없어 fetch 실패 → 흰 화면·로딩 무한 원인.
-const API_BASE = Platform.OS === 'web' ? '' : 'https://food-detector-dun.vercel.app';
+// 항상 배포 도메인 절대 URL.
+// 네이티브(Expo Go): base URL이 없어 절대 URL 필수.
+// 웹: 로컬 dev(localhost:8081)에는 /api/env 라우트가 없으므로 prod 프록시 호출.
+//     prod 배포(food-detector-dun.vercel.app)에선 self-call이라 CORS 영향 없음.
+//     로컬 dev에서 cross-origin이 되므로 api/env.ts가 CORS 헤더를 줘야 함.
+const API_BASE = 'https://food-detector-dun.vercel.app';
 
 export type EnvData = {
   gu: string;
