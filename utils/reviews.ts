@@ -148,6 +148,15 @@ function ensureLoaded() {
 }
 
 function rowToReview(row: any): HygieneReview {
+  const axis: AxisRating = {};
+  if (row.axis_table != null) axis.table = Number(row.axis_table);
+  if (row.axis_food != null) axis.food = Number(row.axis_food);
+  if (row.axis_staff != null) axis.staff = Number(row.axis_staff);
+  if (row.axis_restroom != null) axis.restroom = Number(row.axis_restroom);
+  const visitWindow: VisitWindow | undefined =
+    row.visit_window === 'today' || row.visit_window === 'week' || row.visit_window === 'older'
+      ? row.visit_window
+      : undefined;
   return {
     id: String(row.id),
     userId: row.user_id ?? null,
@@ -162,6 +171,8 @@ function rowToReview(row: any): HygieneReview {
     photos: publicUrlsFor(row.photo_paths ?? []),
     visitDate: String(row.visit_date ?? ''),
     createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
+    axisRatings: Object.keys(axis).length > 0 ? axis : undefined,
+    visitWindow,
   };
 }
 
@@ -200,6 +211,11 @@ export async function addReview(input: AddReviewInput): Promise<HygieneReview | 
       body: input.body || null,
       photo_paths: photoPaths,
       visit_date: input.visitDate,
+      axis_table: input.axisRatings?.table ?? null,
+      axis_food: input.axisRatings?.food ?? null,
+      axis_staff: input.axisRatings?.staff ?? null,
+      axis_restroom: input.axisRatings?.restroom ?? null,
+      visit_window: input.visitWindow ?? null,
     })
     .select()
     .single();
