@@ -50,22 +50,16 @@ interface RawRestaurant {
   breakdown: { data: number; hygiene: number; model: number; punish: number; bonus?: number; evalDelta?: number };
   flags: {
     hygieneDesignated: boolean;
-    hygieneGrade?: string;          // '매우우수' | '우수' | '좋음' | undefined (미상)
+    hygieneGrade?: '매우우수' | '우수' | '좋음' | '';  // apply-hygiene-grades.js 출력
     hasModel: boolean;
     safeRestaurant?: boolean;
     safeRestaurantSince?: string;
     goodPrice?: boolean;
-    goodPriceMenus?: { name: string; price: number | string }[];
+    goodPriceMenus?: { name: string; price: number | string }[];  // apply-good-price.js 출력
     punishCount: number;
     punishTypes: string;
     hygieneViolation?: boolean;
     punishReasons?: string;
-    // 추가 인증 — 데이터 파이프라인 보강 후에만 채워짐 (옵셔널)
-    hygieneGrade?: '매우우수' | '우수' | '좋음' | '';
-    safeRestaurant?: boolean;
-    safeRestaurantSince?: string;
-    goodPrice?: boolean;
-    goodPriceMenus?: string;
   };
   riskTags: RiskTag[];
   menuHints: string[];
@@ -135,7 +129,7 @@ function adapt(r: RawRestaurant): Restaurant {
     safeRestaurant: r.flags.safeRestaurant,
     safeRestaurantSince: r.flags.safeRestaurantSince,
     goodPrice: r.flags.goodPrice,
-    goodPriceMenus: r.flags.goodPriceMenus,
+    goodPriceMenus: r.flags.goodPriceMenus?.map((m) => m.name).join('|') || undefined,
   };
 }
 
