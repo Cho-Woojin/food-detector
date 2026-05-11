@@ -1,4 +1,4 @@
-import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useEffect, useMemo, useState } from 'react';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,27 +16,19 @@ import { toggleLike, useIsLiked } from '@/utils/favorites';
 import { loginWithKakao, useKakaoUser } from '@/utils/kakaoAuth';
 import {
   computeReviewImpact,
-  removeReview,
   useImpactFor,
-  useMyReviews,
-  useMyReviewsFor,
-  useReviews,
   useReviewsFor,
 } from '@/utils/reviews';
 import { totalScoreOf } from '@/utils/scoring';
 import { useIsAdmin } from '@/utils/admin';
 import {
   removeOwnerPost,
-  removeReviewReply,
-  setReviewReply,
   useIsOwnerOf,
   useOwnerEditFor,
   useOwnerImpactFor,
   useOwnerPostsFor,
-  useReviewReply,
 } from '@/utils/owner';
 import { ShareSheet } from '@/components/ShareSheet';
-import { HygieneReviewCard } from '@/components/HygieneReviewCard';
 import { OwnerEditModal } from '@/components/OwnerEditModal';
 import { OwnerGrantModal } from '@/components/OwnerGrantModal';
 import { OwnerPostCard } from '@/components/OwnerPostCard';
@@ -88,8 +80,15 @@ export default function RestaurantDetail() {
     };
   }, [id]);
 
-  // 점수 보정은 모든 사용자 리뷰 (백엔드 집계 시뮬), 표시는 본인 리뷰만 분리
-  const reviewImpact = useImpactFor(typeof id === 'string' ? id : null);
+  // 점수 보정용 impact — 가게 상세에서는 lazy fetch한 reviews로 직접 계산해
+  // stats view 캐시(앱 시작 시 1회 load)와의 시차로 인한 불일치를 막는다.
+  // stats view 캐시는 fetch 진행 중인 짧은 순간을 위한 fallback.
+  const reviewsForThis = useReviewsFor(typeof id === 'string' ? id : null);
+  const fallbackImpact = useImpactFor(typeof id === 'string' ? id : null);
+  const reviewImpact = useMemo(
+    () => (reviewsForThis.length > 0 ? computeReviewImpact(reviewsForThis) : fallbackImpact),
+    [reviewsForThis, fallbackImpact],
+  );
 
   // 종합 점수 = 데이터(0~50) + 사장님(0~25) + 사용자(0~25). 지도·좋아요와 동일 산식.
   const dataScore = raw?.dataScore ?? 0;
@@ -751,21 +750,20 @@ function UserReviewCard({
   isOwner: boolean;
 }) {
   const reviews = useReviewsFor(restaurantId);
-  const allReviews = useReviews();
   const impact = useMemo(() => computeReviewImpact(reviews), [reviews]);
   const kakaoUser = useKakaoUser();
   const loggedIn = !!kakaoUser;
   const myNickname = kakaoUser?.nickname ?? '나';
   const myId = kakaoUser?.id != null ? String(kakaoUser.id) : null;
 
-  // 작성자별 누적 리뷰 수
+  // 같은 가게 안의 작성자별 누적 리뷰 수 (lazy fetch 패턴에서 전체 리뷰 캐시는 사라짐)
   const userReviewCount = useMemo(() => {
     const map = new Map<string, number>();
-    for (const r of allReviews) {
+    for (const r of reviews) {
       if (r.userId) map.set(r.userId, (map.get(r.userId) ?? 0) + 1);
     }
     return map;
-  }, [allReviews]);
+  }, [reviews]);
 
   const onComposePress = () => {
     if (loggedIn) {
@@ -922,154 +920,6 @@ function relativeTime(ts: number): string {
   return `${Math.floor(d / 365)}년 전`;
 }
 
-// 사용자 리뷰 카드 + 사장님 답글 wiring 헬퍼
-function ReviewCardWithReply({
-  reviewId,
-  isOwner,
-  ownerUserId,
-  children,
-}: {
-  reviewId: string;
-  isOwner: boolean;
-  ownerUserId: number | null;
-  children: (reply: ReturnType<typeof useReviewReply>, canReply: boolean) => React.ReactElement;
-}) {
-  const reply = useReviewReply(reviewId);
-  const canReply = isOwner && ownerUserId != null;
-  return children(reply, canReply);
-}
-
-// mock review (시연용 하드코딩 리뷰) 카드 — 사장님 답글 지원
-function MockReviewCard({
-  rv,
-  authorCount,
-  isOwner,
-  ownerUserId,
-}: {
-  rv: import('@/constants/MockData').Review;
-  authorCount: number;
-  isOwner: boolean;
-  ownerUserId: number | null;
-}) {
-  const reply = useReviewReply(rv.id);
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState('');
-  const canReply = isOwner && ownerUserId != null;
-
-  return (
-    <View style={styles.reviewCard}>
-      <View style={styles.reviewHeader}>
-        <Text style={styles.reviewAuthor} numberOfLines={1}>{rv.author}</Text>
-        <View style={styles.reviewStarsRow}>
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Icon
-              key={i}
-              name="star"
-              size={11}
-              color={i < rv.rating ? color.brand.secondary : color.border.default}
-            />
-          ))}
-        </View>
-        <Text style={styles.reviewMeta}>리뷰 {authorCount}건</Text>
-        <Text style={styles.reviewDate}>{rv.date}</Text>
-      </View>
-      <Text style={styles.reviewBody}>{rv.body}</Text>
-      {rv.hygieneTags.length > 0 && (
-        <View style={styles.reviewTagsRow}>
-          {rv.hygieneTags.map((t) => (
-            <View key={t} style={styles.reviewTag}>
-              <Text style={styles.reviewTagText}>{t}</Text>
-            </View>
-          ))}
-        </View>
-      )}
-
-      {/* 사장님 답글 영역 */}
-      {editing ? (
-        <View style={styles.replyEditBox}>
-          <View style={styles.replyHeaderRow}>
-            <View style={styles.replyOwnerBadge}>
-              <Icon name="logo" size={10} color={color.text.onBrand} />
-              <Text style={styles.replyOwnerBadgeText}>사장님</Text>
-            </View>
-            <Text style={styles.replyEditHint}>답글 작성</Text>
-          </View>
-          <TextInput
-            value={draft}
-            onChangeText={(t) => setDraft(t.slice(0, 300))}
-            placeholder="고객님께 정중하게 답변해 주세요"
-            placeholderTextColor={color.text.tertiary}
-            multiline
-            style={styles.replyInputArea}
-            accessibilityLabel="사장님 답글 입력"
-          />
-          <View style={styles.replyEditActions}>
-            <Pressable
-              onPress={() => setEditing(false)}
-              accessibilityRole="button"
-              style={({ pressed }) => [styles.replyCancelBtn, pressed && { opacity: 0.6 }]}>
-              <Text style={styles.replyCancelText}>취소</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                if (!ownerUserId || !draft.trim()) return;
-                setReviewReply(rv.id, ownerUserId, draft.trim());
-                setEditing(false);
-              }}
-              disabled={!draft.trim()}
-              accessibilityRole="button"
-              style={({ pressed }) => [
-                styles.replySaveBtn,
-                !draft.trim() && { opacity: 0.4 },
-                pressed && draft.trim() ? { opacity: 0.85 } : null,
-              ]}>
-              <Text style={styles.replySaveText}>{reply ? '수정' : '등록'}</Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : reply ? (
-        <View style={styles.replyShowBox}>
-          <View style={styles.replyHeaderRow}>
-            <View style={styles.replyOwnerBadge}>
-              <Icon name="logo" size={10} color={color.text.onBrand} />
-              <Text style={styles.replyOwnerBadgeText}>사장님 답글</Text>
-            </View>
-            {canReply ? (
-              <View style={styles.replyShowActions}>
-                <Pressable
-                  onPress={() => { setDraft(reply.body); setEditing(true); }}
-                  hitSlop={6}
-                  accessibilityRole="button"
-                  accessibilityLabel="답글 수정"
-                  style={({ pressed }) => [styles.replyMiniBtn, pressed && { opacity: 0.5 }]}>
-                  <Icon name="pencil" size={11} color={color.text.tertiary} />
-                </Pressable>
-                <Pressable
-                  onPress={() => removeReviewReply(rv.id)}
-                  hitSlop={6}
-                  accessibilityRole="button"
-                  accessibilityLabel="답글 삭제"
-                  style={({ pressed }) => [styles.replyMiniBtn, pressed && { opacity: 0.5 }]}>
-                  <Icon name="close" size={11} color={color.text.tertiary} />
-                </Pressable>
-              </View>
-            ) : null}
-          </View>
-          <Text style={styles.replyShowBody}>{reply.body}</Text>
-        </View>
-      ) : canReply ? (
-        <Pressable
-          onPress={() => { setDraft(''); setEditing(true); }}
-          accessibilityRole="button"
-          accessibilityLabel="답글 달기"
-          style={({ pressed }) => [styles.replyPromptBtn, pressed && { opacity: 0.7 }]}>
-          <Icon name="chat" size={12} color={color.brand.primary} />
-          <Text style={styles.replyPromptText}>사장님 답글 달기</Text>
-        </Pressable>
-      ) : null}
-    </View>
-  );
-}
 
 function InfoTab({
   restaurant,
