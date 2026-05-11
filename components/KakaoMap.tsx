@@ -92,7 +92,7 @@ function jitterColocated(list: Restaurant[]): Restaurant[] {
 }
 
 // 픽사 스타일 3D 치즈 PNG 에셋을 base64로 마커 SVG에 임베드. 한 번만 로드.
-type CheeseB64 = { gold: string; silver: string; bronze: string };
+type CheeseB64 = { gold: string; silver: string; bronze: string; rotten: string };
 
 // 등급별 아이콘 종류
 type IconKind = 'cheese' | 'warning' | 'magnify';
@@ -100,7 +100,7 @@ const GRADE_ICON: Record<string, IconKind> = {
   GOLDEN: 'cheese',
   SILVER: 'cheese',
   BRONZE: 'cheese',
-  ROTTEN: 'warning',          // 트랩 치즈 — 빨강 삼각형 + 느낌표
+  ROTTEN: 'cheese',           // 트랩 치즈 PNG (위험 식별)
   WARNING: 'warning',
   NEEDS_DATA: 'magnify',      // 수집중 = 돋보기
   INVESTIGATING: 'magnify',
@@ -125,6 +125,7 @@ function bubbleMarkerSrc(grade: string, fill: string, size: number, opacity = 1,
       // 픽사 3D PNG 에셋을 SVG 안에 base64로 임베드 — 별도 fetch 없이 모두 마커 데이터에 포함
       const b64 = grade === 'GOLDEN' ? cheeseB64.gold
                 : grade === 'SILVER' ? cheeseB64.silver
+                : grade === 'ROTTEN' ? cheeseB64.rotten
                 : cheeseB64.bronze;
       // PNG 521x724 (aspect 0.72:1). 원형 말풍선 r=26 안에 fit하도록 height ~40, width ~29
       const iw = 30, ih = 40;
@@ -293,13 +294,14 @@ const KakaoMap = forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMap(
     };
     (async () => {
       try {
-        const [gold, silver, bronze] = await Promise.all([
+        const [gold, silver, bronze, rotten] = await Promise.all([
           loadAndShrink('/cheese/gold.png'),
           loadAndShrink('/cheese/silver.png'),
           loadAndShrink('/cheese/bronze.png'),
+          loadAndShrink('/cheese/trap.png'),
         ]);
         if (__DEV__) console.log('[KakaoMap] cheese inlined, gold bytes:', gold.length);
-        if (!cancelled) setCheeseB64({ gold, silver, bronze });
+        if (!cancelled) setCheeseB64({ gold, silver, bronze, rotten });
       } catch (e) {
         if (__DEV__) console.warn('[KakaoMap] cheese 로드 실패:', e);
       }

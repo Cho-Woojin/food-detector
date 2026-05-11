@@ -60,21 +60,22 @@ const GRADE_META: Record<GradeKey, { count: number; label: string }> = {
 };
 
 // 시그널 기반 한줄평. 시그널이 없으면 null — phrase 영역 자체 미노출.
-// 우선순위: 부정 시그널 > 복합 긍정 > 단일 긍정 > 평가 등급 > 약한 부정
+// 우선순위: 부정 시그널 > 복합 긍정 > 단일 긍정 > 보조 인증 > 약한 부정
+// (I1540 위생관리 평가는 식품제조·가공업체 데이터로 음식점과 무관 → phrase에서 제거)
 type Phrase = { text: string; tone: 'success' | 'danger' | 'warning' | 'neutral' };
 function buildSignalPhrase(r: DataRestaurant): Phrase | null {
-  if (r.hygieneViolation) return { text: '식약처 위생 직결 위반 이력', tone: 'danger' };
-  if (r.evalGrade === '중점관리업소') return { text: '식약처 중점관리업소', tone: 'danger' };
+  if (r.hygieneViolation) return { text: '위생 직결 위반 이력', tone: 'danger' };
 
   const hyg = r.hyg === 1;
   const mod = r.mod === 1;
-  if (hyg && mod) return { text: '위생등급 지정 + 모범음식점', tone: 'success' };
-  if (hyg) return { text: '식약처 위생등급 지정업소', tone: 'success' };
-  if (mod) return { text: '모범음식점 지정', tone: 'success' };
+  const safe = r.safeRestaurant === true;
+  const goodPrice = r.goodPrice === true;
 
-  if (r.evalGrade === '자율관리업소') return { text: '자율관리업소', tone: 'success' };
-  if (r.evalGrade === '일반관리업소') return { text: '일반관리업소', tone: 'neutral' };
-  if (r.evalGrade === '평가불능업소') return { text: '평가불능업소', tone: 'warning' };
+  if (hyg && mod) return { text: '식품안심업소 + 모범음식점', tone: 'success' };
+  if (hyg) return { text: '식약처 식품안심업소', tone: 'success' };
+  if (mod) return { text: '모범음식점 지정', tone: 'success' };
+  if (safe) return { text: '안심식당 (MAFRA)', tone: 'success' };
+  if (goodPrice) return { text: '착한가격업소', tone: 'success' };
 
   if ((r.pun ?? 0) > 0) {
     const firstPunish = (r.punishTypes ?? '').split('|').filter(Boolean)[0];
@@ -158,9 +159,9 @@ export const RestaurantBottomSheet = forwardRef<RestaurantBottomSheetHandle, Pro
     const risks = restaurant?.riskTags ?? [];
 
     // ROTTEN(트랩 치즈) 사유 — 50점 미만 + 과락 충족 시 노출
+    // (I1540 중점관리업소는 식품제조·가공업체 평가로 음식점과 무관 → 트리거 제거)
     const rottenReasons: string[] = [];
     if (adjustedGrade === 'ROTTEN' && restaurant) {
-      if (restaurant.evalGrade === '중점관리업소') rottenReasons.push('중점관리업소');
       if (restaurant.hygieneViolation) rottenReasons.push('위생 직결 위반');
       if (reviewImpact.reviewCount >= 10 && reviewImpact.userScore <= 10) {
         rottenReasons.push('사용자 평점 낮음');
@@ -275,7 +276,8 @@ export const RestaurantBottomSheet = forwardRef<RestaurantBottomSheetHandle, Pro
                 punishCount: restaurant.pun ?? 0,
                 punishTypes: restaurant.punishTypes,
                 hasModel: restaurant.mod === 1,
-                evalGrade: restaurant.evalGrade,
+                safeRestaurant: restaurant.safeRestaurant,
+                goodPrice: restaurant.goodPrice,
                 ownerDelta: ownerImpact.delta,
                 ownerPostCount: ownerImpact.postCount,
                 reviewCount: reviewImpact.reviewCount,

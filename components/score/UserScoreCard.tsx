@@ -63,10 +63,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: spacing.s,
-    paddingVertical: 4,
-    borderRadius: 999,
-    backgroundColor: color.cheese.GOLDEN.bg,
   },
   starText: {
     ...typography.captionEmphasized,

@@ -162,14 +162,10 @@ function StepSearch({
             r.gr === 'GOLDEN' ? Cheese.gold
               : r.gr === 'SILVER' ? Cheese.silver
               : r.gr === 'BRONZE' ? Cheese.bronze
-              : null;
+              : Cheese.rotten;
           return (
             <View key={r.i} style={styles.searchItem}>
-              {cheeseSrc ? (
-                <Image source={cheeseSrc} style={styles.searchCheese} resizeMode="contain" />
-              ) : (
-                <View style={styles.searchCheese} />
-              )}
+              <Image source={cheeseSrc} style={styles.searchCheese} resizeMode="contain" />
               <View style={{ flex: 1 }}>
                 <Text style={styles.searchName} numberOfLines={1}>{r.n}</Text>
                 <Text style={styles.searchMeta}>{r.c} · {r.g}</Text>

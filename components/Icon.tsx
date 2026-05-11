@@ -52,6 +52,7 @@ const ALIASES = {
   // breakdown
   check: 'checkmark-circle',
   minus: 'remove-circle',
+  add: 'add',
   // 로고용
   logo: 'shield-checkmark',
 } as const;

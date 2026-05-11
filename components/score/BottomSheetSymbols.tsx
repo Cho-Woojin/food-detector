@@ -8,12 +8,13 @@ import { color, spacing, typography } from '@/constants/tokens';
 type SymbolStatus = 'good' | 'ok' | 'warn' | 'none';
 
 export type SymbolInput = {
-  hygieneDesignated: boolean;        // 위생등급 지정
-  hygieneViolation: boolean;          // AI 분류 위생 직결 위반
+  hygieneDesignated: boolean;        // 식품안심업소 (구 위생등급제) 지정
+  hygieneViolation: boolean;          // AI 분류 + 룰 매칭 위생 직결 위반
   punishCount: number;                // 행정처분 건수
   punishTypes?: string;               // pipe-sep, 예: "영업정지|과태료"
-  hasModel: boolean;                  // 모범음식점
-  evalGrade?: string;                 // 자율/일반/중점/평가불능/''
+  hasModel: boolean;                  // 모범음식점 (행안부)
+  safeRestaurant?: boolean;           // 안심식당 (MAFRA)
+  goodPrice?: boolean;                // 착한가격업소 (행안부)
   ownerDelta: number;                 // 사장님 점수 0~25
   ownerPostCount: number;             // 최근 30일 인증 건수
   reviewCount: number;
@@ -56,19 +57,17 @@ function SymbolCell({ sym }: { sym: SymbolItem }) {
 }
 
 function buildSymbols(i: SymbolInput): SymbolItem[] {
-  // 1) 위생등급 (식약처) — 정제 데이터엔 bool만 있음. 세부 등급(매우우수/우수/좋음)은
-  //    원본 C004 GRD_CD_NM이 raw에 빠져있어 노출 불가. 데이터 파이프라인 보강 시 교체.
+  // 1) 식품안심업소 (구 위생등급제) — 2026-03 단일등급 통합, 식약처 100점 만점 평가
   const hygiene: SymbolItem = i.hygieneDesignated
-    ? { key: 'hyg', label: '위생등급', icon: 'logo', status: 'good', badge: '지정업소' }
-    : { key: 'hyg', label: '위생등급', icon: 'logo', status: 'none', badge: '미지정' };
+    ? { key: 'hyg', label: '식품안심업소', icon: 'logo', status: 'good', badge: '지정업소' }
+    : { key: 'hyg', label: '식품안심업소', icon: 'logo', status: 'none', badge: '미지정' };
 
-  // 2) 행정처분 — AI 위생위반이 가장 강한 시그널, 그 외엔 처분 종류 그대로 노출
+  // 2) 행정처분 — AI 위생위반(룰 매칭 포함)이 가장 강한 시그널, 그 외 처분 종류 노출
   const firstPunish = (i.punishTypes ?? '').split('|').filter(Boolean)[0] ?? '';
   let admin: SymbolItem;
   if (i.hygieneViolation) {
     admin = { key: 'adm', label: '행정처분', icon: 'warning', status: 'warn', badge: '위생 위반' };
   } else if (i.punishCount > 0) {
-    // 다중 처분이면 종류 + 건수 (예: "시정명령 외 1건"), 단일이면 종류만
     const badge = i.punishCount > 1 && firstPunish
       ? `${firstPunish} 외 ${i.punishCount - 1}`
       : firstPunish || `${i.punishCount}건`;
@@ -77,20 +76,22 @@ function buildSymbols(i: SymbolInput): SymbolItem[] {
     admin = { key: 'adm', label: '행정처분', icon: 'check', status: 'good', badge: '이력없음' };
   }
 
-  // 3) 공공 인증 — 모범음식점 / 자율관리업소 / 일반관리 / 중점관리 / 평가불능
+  // 3) 공공 인증 — 모범음식점(행안부) + 안심식당(MAFRA) + 착한가격(행안부) 우선순위
+  //    (옛 I1540 평가 등급은 식품제조 데이터로 음식점과 무관 → 제거)
   let cert: SymbolItem;
-  if (i.evalGrade === '중점관리업소') {
-    cert = { key: 'crt', label: '공공 인증', icon: 'star', status: 'warn', badge: '중점관리' };
-  } else if (i.evalGrade === '평가불능업소') {
-    cert = { key: 'crt', label: '공공 인증', icon: 'star', status: 'ok',   badge: '평가불능' };
-  } else if (i.hasModel && i.evalGrade === '자율관리업소') {
-    cert = { key: 'crt', label: '공공 인증', icon: 'star', status: 'good', badge: '모범+자율' };
-  } else if (i.hasModel) {
-    cert = { key: 'crt', label: '공공 인증', icon: 'star', status: 'good', badge: '모범음식점' };
-  } else if (i.evalGrade === '자율관리업소') {
-    cert = { key: 'crt', label: '공공 인증', icon: 'star', status: 'good', badge: '자율관리' };
-  } else if (i.evalGrade === '일반관리업소') {
-    cert = { key: 'crt', label: '공공 인증', icon: 'star', status: 'ok',   badge: '일반관리' };
+  if (i.hasModel) {
+    const extra = i.safeRestaurant ? '+안심' : i.goodPrice ? '+착한' : '';
+    cert = {
+      key: 'crt',
+      label: '공공 인증',
+      icon: 'star',
+      status: 'good',
+      badge: `모범${extra}`,
+    };
+  } else if (i.safeRestaurant) {
+    cert = { key: 'crt', label: '공공 인증', icon: 'star', status: 'good', badge: '안심식당' };
+  } else if (i.goodPrice) {
+    cert = { key: 'crt', label: '공공 인증', icon: 'star', status: 'good', badge: '착한가격' };
   } else {
     cert = { key: 'crt', label: '공공 인증', icon: 'star', status: 'none', badge: '미인증' };
   }
@@ -109,7 +110,7 @@ function buildSymbols(i: SymbolInput): SymbolItem[] {
   if (i.reviewCount === 0) {
     review = { key: 'rev', label: '위생 리뷰', icon: 'chat', status: 'none', badge: '리뷰 없음' };
   } else {
-    const avgBadge = `★${i.reviewAvg.toFixed(1)}`;
+    const avgBadge = `★${i.reviewAvg.toFixed(1)}(${i.reviewCount})`;
     let status: SymbolStatus;
     if (i.foreignTotal > 0 && i.reviewAvg < 3) status = 'warn';
     else if (i.reviewAvg >= 4) status = 'good';

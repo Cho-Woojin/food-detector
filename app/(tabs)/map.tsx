@@ -55,8 +55,9 @@ const CATEGORY_FILTERS: { key: CategoryKey | 'ALL'; label: string }[] = [
 
 export default function MapScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ id?: string }>();
+  const params = useLocalSearchParams<{ id?: string; focus?: string }>();
   const targetId = typeof params.id === 'string' ? params.id : undefined;
+  const focusMe = params.focus === 'me';
   const mapHandleRef = useRef<KakaoMapHandle>(null);
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   // 선택된 마커는 id로만 보관 — 리뷰 보정으로 식당 객체가 새로 생성되어도
@@ -150,16 +151,45 @@ export default function MapScreen() {
   }, [searchQuery, visible]);
 
   // 식당 상세 → 지도 보기로 진입 시 해당 식당으로 자동 이동 + 선택
+  // focus=me 인 경우 (예: 리뷰 작성 완료 후 진입) 중심은 사용자 위치에 맡기고 선택만 적용
   useEffect(() => {
     if (!targetId || adjustedRestaurants.length === 0) return;
     const target = adjustedRestaurants.find((r) => r.id === targetId);
     if (target) {
       setSelectedId(target.id);
-      setCenter({ lat: target.lat, lng: target.lng });
+      if (!focusMe) setCenter({ lat: target.lat, lng: target.lng });
       // 필터로 가려져 있으면 전체로 풀어준다
       if (categoryFilter !== 'ALL' && target.cat !== categoryFilter) setCategoryFilter('ALL');
     }
-  }, [targetId, adjustedRestaurants]);
+  }, [targetId, adjustedRestaurants, focusMe]);
+
+  // focus=me 진입 시 현위치로 자동 센터링. userLoc 도착 즉시 1회 적용.
+  const focusedMeRef = useRef(false);
+  useEffect(() => {
+    if (!focusMe || focusedMeRef.current) return;
+    if (userLoc) {
+      focusedMeRef.current = true;
+      setCenter({ lat: userLoc.lat, lng: userLoc.lng });
+      mapHandleRef.current?.setLevel(4);
+      mapHandleRef.current?.panTo(userLoc.lat, userLoc.lng);
+      return;
+    }
+    // 아직 위치 권한·픽스 없으면 즉시 1회 요청
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          focusedMeRef.current = true;
+          const next = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setUserLoc({ lat: next.lat, lng: next.lng, accuracy: pos.coords.accuracy });
+          setCenter(next);
+          mapHandleRef.current?.setLevel(4);
+          mapHandleRef.current?.panTo(next.lat, next.lng);
+        },
+        () => { focusedMeRef.current = true; },
+        { enableHighAccuracy: false, maximumAge: 30_000, timeout: 8000 },
+      );
+    }
+  }, [focusMe, userLoc]);
 
   const handleLocate = () => {
     // 1) 이미 watchPosition으로 userLoc 있으면 즉시 거기로 이동 (가장 빠름)
@@ -221,7 +251,10 @@ export default function MapScreen() {
   };
 
   const cheeseFor = (g: string) =>
-    g === 'GOLDEN' ? Cheese.gold : g === 'SILVER' ? Cheese.silver : Cheese.bronze;
+    g === 'GOLDEN' ? Cheese.gold
+      : g === 'SILVER' ? Cheese.silver
+      : g === 'ROTTEN' ? Cheese.rotten
+      : Cheese.bronze;
 
   const gradeLabel = (g: string) =>
     g === 'GOLDEN' ? '골든 치즈'

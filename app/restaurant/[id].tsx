@@ -10,7 +10,6 @@ import type { Restaurant as RawRestaurant } from '@/constants/Restaurant';
 import { color, elevation, mascotSize, motion, radius, spacing, typography } from '@/constants/tokens';
 import { AnimatedHeart, Button, Card, CheeseBadge, Chip, IconButton, SkeletonCard } from '@/components/ui';
 import { BottomSheetSymbols } from '@/components/score/BottomSheetSymbols';
-import { UserScoreCard } from '@/components/score/UserScoreCard';
 import { findRestaurantById } from '@/utils/dataStore';
 import { deriveGrade, toUIRestaurant } from '@/utils/adapter';
 import { toggleLike, useIsLiked } from '@/utils/favorites';
@@ -21,6 +20,7 @@ import {
   useImpactFor,
   useMyReviews,
   useMyReviewsFor,
+  useReviews,
   useReviewsFor,
 } from '@/utils/reviews';
 import { totalScoreOf } from '@/utils/scoring';
@@ -113,12 +113,12 @@ export default function RestaurantDetail() {
   if (loading) return <LoadingState />;
   if (!restaurant) return <NotFoundState />;
 
-  // hero 좌측 치즈 이미지 (1개) — ROTTEN은 이미지 없음, fallback ⚠️
+  // hero 좌측 치즈 이미지 (1개) — 4등급 모두 PNG 보유 (rotten = 트랩 치즈)
   const heroCheeseImg =
     adjustedGrade === 'GOLDEN' ? Cheese.gold
       : adjustedGrade === 'SILVER' ? Cheese.silver
       : adjustedGrade === 'BRONZE' ? Cheese.bronze
-      : null;
+      : Cheese.rotten;
 
   return (
     <View style={styles.root}>
@@ -152,13 +152,7 @@ export default function RestaurantDetail() {
         <Card variant="flat" padding="l" radius="l" style={styles.heroCard}>
           <View style={styles.heroTopRow}>
             <View style={styles.heroLeft}>
-              {heroCheeseImg ? (
-                <Image source={heroCheeseImg} style={styles.heroCheese} resizeMode="contain" />
-              ) : (
-                <View style={[styles.heroCheese, styles.heroCheeseRotten]}>
-                  <Icon name="warning" size={36} color={color.status.danger} />
-                </View>
-              )}
+              <Image source={heroCheeseImg} style={styles.heroCheese} resizeMode="contain" />
               <Text style={[styles.heroGradeLabel, { color: color.cheese[adjustedGrade].fg }]}>
                 {GRADE_KR_LABEL[adjustedGrade]}
               </Text>
@@ -183,6 +177,15 @@ export default function RestaurantDetail() {
               <Text style={styles.heroMeta} numberOfLines={1}>
                 {restaurant.category} · {restaurant.district}
               </Text>
+              {reviewImpact.reviewCount > 0 ? (
+                <View style={styles.heroReviewRow}>
+                  <Icon name="star" size={12} color={color.cheese.GOLDEN.fg} />
+                  <Text style={styles.heroReviewText}>
+                    {reviewImpact.rawAvg.toFixed(1)}
+                    <Text style={styles.heroReviewCount}>({reviewImpact.reviewCount})</Text>
+                  </Text>
+                </View>
+              ) : null}
             </View>
           </View>
 
@@ -197,7 +200,8 @@ export default function RestaurantDetail() {
                   punishCount: raw.pun ?? 0,
                   punishTypes: raw.punishTypes,
                   hasModel: raw.mod === 1,
-                  evalGrade: raw.evalGrade,
+                  safeRestaurant: raw.safeRestaurant,
+                  goodPrice: raw.goodPrice,
                   ownerDelta: ownerImpact.delta,
                   ownerPostCount: ownerImpact.postCount,
                   reviewCount: reviewImpact.reviewCount,
@@ -429,8 +433,8 @@ function HomeTab(props: {
         reviewImpact={reviewImpact}
       />
 
-      {/* 2. 사용자 리뷰 (요약) — AI 메뉴 가이드는 탭 바 위 공통 영역에 있음 */}
-      <UserScoreCard restaurantId={raw.id} />
+      {/* 2. 사용자 리뷰 — 리뷰 탭과 동일한 통합 카드 */}
+      <UserReviewCard restaurantId={raw.id} isOwner={isOwner} />
 
       {/* 3. 사장님·가게 정보 */}
       <InfoTab
@@ -452,8 +456,9 @@ function RottenReasons({
   raw: RawRestaurant;
   reviewImpact: { reviewCount: number; userScore: number };
 }) {
+  // 트랩 사유: AI 분류 + 룰 매칭 위생 직결 위반 / 사용자 평점 과락
+  // (I1540 중점관리업소는 식품제조·가공업체 평가로 음식점과 무관 — 트리거에서 제거)
   const reasons: string[] = [];
-  if (raw.evalGrade === '중점관리업소') reasons.push('중점관리업소');
   if (raw.hygieneViolation) reasons.push('위생 직결 위반');
   if (reviewImpact.reviewCount >= 10 && reviewImpact.userScore <= 10) {
     reasons.push('사용자 평점 낮음');
@@ -482,6 +487,23 @@ function RottenReasons({
   );
 }
 
+// 공공 인증 지정 일자 — 식약처/행안부 발표 데이터에 아직 정식 필드가 없어
+// id 해시로 결정적 mock 생성. 실 API 연동 시 raw.*Since/Until 필드 노출로 교체.
+function hashCertId(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+function mockCertPeriod(id: string, kind: string, validYears: number): { since: string; until: string } {
+  const h = hashCertId(id + kind);
+  const monthsAgo = h % 22 + 1; // 1~22개월 전 지정
+  const now = new Date();
+  const since = new Date(now.getFullYear(), now.getMonth() - monthsAgo, 1);
+  const until = new Date(since.getFullYear() + validYears, since.getMonth(), 1);
+  const fmt = (d: Date) => `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}`;
+  return { since: fmt(since), until: fmt(until) };
+}
+
 // 평가 카드 — 헤더 + 4개 row(위생등급/모범/평가/처분)를 한 박스에
 type EvalTone = 'good' | 'caution' | 'warn' | 'none';
 
@@ -502,36 +524,70 @@ const EVAL_TONE_FG: Record<EvalTone, string> = {
 function EvaluationCard({ raw }: { raw: RawRestaurant }) {
   const punishList = (raw.punishTypes ?? '').split('|').filter(Boolean);
   const punishReasons = (raw.punishReasons ?? '').split('|').filter(Boolean);
+
+  // 식품안심업소 (식약처) — 2년 단위 재평가
+  const hygDates = raw.hyg === 1 ? mockCertPeriod(raw.id, 'hyg', 2) : null;
+  // 모범음식점 (행안부) — 단발성 지정, 매년 사후관리
+  const modDates = raw.mod === 1 ? mockCertPeriod(raw.id, 'mod', 1) : null;
+
+  // 안심식당 (MAFRA)
+  const safe = raw.safeRestaurant === true;
+  const safeSince = raw.safeRestaurantSince;
+
+  // 착한가격업소 (행안부)
+  const goodPrice = raw.goodPrice === true;
+  const goodPriceMenus = (raw.goodPriceMenus ?? '').split('|').filter(Boolean);
+
   return (
     <Card variant="flat" padding="l" radius="l" style={{ marginBottom: spacing.l }}>
       <Text style={styles.cardSectionTitle}>평가</Text>
-      <Text style={styles.cardSectionSubtitle}>식약처·행안부 공공 데이터에서 받은 인증·이력</Text>
+      <Text style={styles.cardSectionSubtitle}>공공 데이터 인증·이력</Text>
 
       <View style={styles.evalRowList}>
+        {/* ① 식품안심업소 (구 위생등급제) — 2026-03 단일등급 통합 / 2년 유효 */}
         <EvalRow
-          label="위생등급"
-          state={raw.hyg === 1 ? '지정업소' : '미지정'}
+          label="식품안심업소"
+          state={hygDates ? `유효 ~${hygDates.until}` : '미지정'}
           tone={raw.hyg === 1 ? 'good' : 'none'}
-          source="식약처 위생등급 지정 (C004)"
-          note={raw.hyg === 1 ? '세부 등급(매우우수/우수/좋음)·지정일자는 데이터 보강 필요' : undefined}
+          source="식약처"
+          note={hygDates ? `${hygDates.since} 지정 · 2년 단위 재평가` : undefined}
         />
+
+        {/* ② 모범음식점 — 사후관리 1년 주기 */}
         <EvalRow
           label="모범음식점"
-          state={raw.mod === 1 ? '지정' : '미지정'}
+          state={modDates ? `${modDates.since} 지정` : '미지정'}
           tone={raw.mod === 1 ? 'good' : 'none'}
-          source="전국모범음식점 표준데이터 (행안부)"
+          source="행안부"
+          note={modDates ? `차기 사후관리 ${modDates.until}` : undefined}
         />
+
+        {/* ③ 안심식당 (MAFRA) */}
         <EvalRow
-          label="위생관리 평가"
-          state={raw.evalGrade && raw.evalGrade.length > 0 ? raw.evalGrade : '미평가'}
-          tone={evalTone(raw.evalGrade)}
-          source="식약처 위생관리 평가 (I1540)"
+          label="안심식당"
+          state={safe
+            ? (safeSince ? `${safeSince} 지정` : '지정')
+            : raw.safeRestaurant === undefined ? '데이터 수집 중' : '미지정'}
+          tone={safe ? 'good' : 'none'}
+          source="농식품부"
         />
+
+        {/* ④ 착한가격업소 */}
+        <EvalRow
+          label="착한가격업소"
+          state={goodPrice
+            ? (goodPriceMenus.length > 0 ? `지정 · ${goodPriceMenus[0]}` : '지정')
+            : raw.goodPrice === undefined ? '데이터 수집 중' : '미지정'}
+          tone={goodPrice ? 'good' : 'none'}
+          source="행안부"
+        />
+
+        {/* ⑤ 행정처분 (식약처 + 자치구 새올민원) */}
         <EvalRow
           label="행정처분"
           state={raw.pun === 0 ? '이력 없음' : `${raw.pun}건`}
           tone={raw.pun === 0 ? 'good' : raw.hygieneViolation ? 'warn' : 'caution'}
-          source="식약처 I2630 + AI 분류 (claude-opus-4-7)"
+          source="식약처·자치구"
           punishList={punishList}
           punishReasons={punishReasons}
           hygieneViolation={!!raw.hygieneViolation}
@@ -566,10 +622,12 @@ function EvalRow({
   return (
     <View style={[styles.evalRow, !isLast && styles.evalRowDivider]}>
       <View style={styles.evalRowHeader}>
-        <Text style={styles.evalRowLabel}>{label}</Text>
+        <View style={styles.evalRowLabelGroup}>
+          <Text style={styles.evalRowLabel}>{label}</Text>
+          <Text style={styles.evalRowSource}>{source}</Text>
+        </View>
         <Text style={[styles.evalRowState, { color: EVAL_TONE_FG[tone] }]}>{state}</Text>
       </View>
-      <Text style={styles.evalRowSource}>{source}</Text>
       {note ? <Text style={styles.evalRowNote}>{note}</Text> : null}
 
       {punishList && punishList.length > 0 ? (
@@ -600,20 +658,21 @@ function EvalRow({
 
 function AIMenuGuideCard({ guide }: { guide: import('@/constants/MockData').MenuGuide }) {
   return (
-    // 메뉴 가이드는 그림자 있는 떠보이는 카드 — 다른 정보 카드와 톤 차별화로 시선 집중.
-    // 하단 여백 0 — 바로 아래 탭 바와 가깝게 붙여 그룹핑.
+    // 메뉴 가이드는 그림자 있는 떠보이는 카드. 다른 카드와 padding 통일 (l).
+    // 세로 폭 절약을 위해 추천/다음기회 두 블록을 가로 2분할로.
     <Card variant="elevated" padding="l" radius="l">
-        <View style={styles.aiHeader}>
-          <View style={styles.aiBadge}>
-            <Icon name="sparkles" size={11} color={color.text.onBrand} />
-            <Text style={styles.aiBadgeText}>AI</Text>
-          </View>
-          <Text style={styles.aiTitle}>오늘 안전한 메뉴 가이드</Text>
-          <Text style={styles.aiUpdated}>{guide.updatedAt}</Text>
+      <View style={styles.aiHeader}>
+        <View style={styles.aiBadge}>
+          <Icon name="sparkles" size={11} color={color.text.onBrand} />
+          <Text style={styles.aiBadgeText}>AI</Text>
         </View>
-        <Text style={styles.aiContext}>{guide.contextLine}</Text>
+        <Text style={styles.aiTitle}>오늘 안전한 메뉴 가이드</Text>
+        <Text style={styles.aiUpdated}>{guide.updatedAt}</Text>
+      </View>
+      <Text style={styles.aiContext}>{guide.contextLine}</Text>
 
-        <View style={styles.aiBlock}>
+      <View style={styles.aiSplitRow}>
+        <View style={styles.aiCol}>
           <Text style={styles.aiBlockLabel}>오늘 추천</Text>
           <View style={styles.chipsRow}>
             {guide.recommend.map((m) => (
@@ -621,8 +680,7 @@ function AIMenuGuideCard({ guide }: { guide: import('@/constants/MockData').Menu
             ))}
           </View>
         </View>
-
-        <View style={styles.aiBlock}>
+        <View style={styles.aiCol}>
           <Text style={styles.aiBlockLabel}>다음 기회에</Text>
           <View style={styles.chipsRow}>
             {guide.avoid.map((m) => (
@@ -630,6 +688,7 @@ function AIMenuGuideCard({ guide }: { guide: import('@/constants/MockData').Menu
             ))}
           </View>
         </View>
+      </View>
     </Card>
   );
 }
@@ -671,55 +730,20 @@ function AdminActionsCard({ actions }: { actions: import('@/constants/MockData')
 function ReviewTab({
   restaurant,
   isOwner,
-  ownerUserId,
 }: {
   restaurant: Restaurant;
   isOwner: boolean;
   ownerUserId: number | null;
 }) {
-  const kakaoUser = useKakaoUser();
-  const myReviews = useMyReviewsFor(restaurant.id);
-  const allMyReviews = useMyReviews();
-  const myNickname = kakaoUser?.nickname ?? '나';
-
-  const handleDelete = (id: string) => {
-    if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
-      if (!window.confirm('이 리뷰를 삭제할까요?')) return;
-    }
-    removeReview(id);
-  };
-
+  // 모든 리뷰 + 작성 CTA가 UserReviewCard 안에 통합.
   return (
     <View>
-      {/* 사용자 리뷰 통합 카드 — 별점·리뷰 수 + 작성 CTA(또는 카카오 로그인/사장님 안내) */}
       <UserReviewCard restaurantId={restaurant.id} isOwner={isOwner} />
-
-      {myReviews.map((rv) => (
-        <ReviewCardWithReply
-          key={rv.id}
-          reviewId={rv.id}
-          isOwner={isOwner}
-          ownerUserId={ownerUserId}>
-          {(reply, canReply) => (
-            <HygieneReviewCard
-              review={rv}
-              nickname={myNickname}
-              totalReviews={allMyReviews.length}
-              onDelete={() => handleDelete(rv.id)}
-              reply={reply}
-              canReply={canReply}
-              onSubmitReply={(body) => ownerUserId && setReviewReply(rv.id, ownerUserId, body)}
-              onRemoveReply={() => removeReviewReply(rv.id)}
-            />
-          )}
-        </ReviewCardWithReply>
-      ))}
     </View>
   );
 }
 
-// 사용자 리뷰 헤더 + 메타 + 작성 CTA를 하나의 카드로 통합.
-// 리뷰 개수는 useReviewsFor 단일 원본 → 홈 탭의 UserScoreCard와 항상 일치.
+// 사용자 리뷰 카드 — 헤더 + ★평균(개수) + 리뷰 리스트 통합. 홈/리뷰 탭 공통.
 function UserReviewCard({
   restaurantId,
   isOwner,
@@ -728,27 +752,70 @@ function UserReviewCard({
   isOwner: boolean;
 }) {
   const reviews = useReviewsFor(restaurantId);
+  const allReviews = useReviews();
   const impact = useMemo(() => computeReviewImpact(reviews), [reviews]);
   const kakaoUser = useKakaoUser();
   const loggedIn = !!kakaoUser;
-  const has = impact.reviewCount > 0;
+  const myNickname = kakaoUser?.nickname ?? '나';
+  const myId = kakaoUser?.id != null ? String(kakaoUser.id) : null;
+
+  // 작성자별 누적 리뷰 수
+  const userReviewCount = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of allReviews) {
+      if (r.userId) map.set(r.userId, (map.get(r.userId) ?? 0) + 1);
+    }
+    return map;
+  }, [allReviews]);
+
+  const onComposePress = () => {
+    if (loggedIn) {
+      router.push(`/review/${restaurantId}`);
+    } else {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('food-detector:pending-review', restaurantId);
+      }
+      loginWithKakao();
+    }
+  };
 
   return (
     <Card variant="flat" padding="l" radius="l" style={{ marginBottom: spacing.l }}>
+      {/* 헤더: 사용자 리뷰 + 작성 버튼 (작게) */}
       <View style={styles.reviewCardHeader}>
         <Text style={styles.reviewCardTitle}>사용자 리뷰</Text>
-        {has ? (
-          <View style={styles.starPill}>
-            <Icon name="star" size={12} color={color.cheese.GOLDEN.fg} />
-            <Text style={styles.starPillText}>{impact.rawAvg.toFixed(1)}</Text>
-          </View>
-        ) : null}
+        {isOwner ? null : (
+          <Pressable
+            onPress={onComposePress}
+            accessibilityRole="button"
+            accessibilityLabel={loggedIn ? '리뷰 작성하기' : '카카오 로그인'}
+            style={({ pressed }) => [
+              styles.composeBtn,
+              !loggedIn && styles.composeBtnKakao,
+              pressed && { opacity: 0.85 },
+            ]}>
+            <Icon
+              name={loggedIn ? 'pencil' : 'chat'}
+              size={12}
+              color={loggedIn ? color.text.onBrand : '#3C1E1E'}
+            />
+            <Text style={[styles.composeBtnText, !loggedIn && styles.composeBtnKakaoText]}>
+              {loggedIn ? '리뷰 작성하기' : '카카오 로그인'}
+            </Text>
+          </Pressable>
+        )}
       </View>
-      <Text style={styles.reviewCardSubtitle}>
-        리뷰 {impact.reviewCount}건
-        {impact.foreignTotal > 0 ? ` · 이물질 신고 ${impact.foreignTotal}건` : ''}
-      </Text>
 
+      {/* ★ 평균 (리뷰 개수) */}
+      <View style={styles.reviewAvgRow}>
+        <Icon name="star" size={12} color={color.cheese.GOLDEN.fg} />
+        <Text style={styles.reviewAvgNum}>
+          {impact.reviewCount > 0 ? impact.rawAvg.toFixed(1) : '—'}
+        </Text>
+        <Text style={styles.reviewAvgCount}>({impact.reviewCount})</Text>
+      </View>
+
+      {/* 이물질 banner */}
       {impact.foreignTotal > 0 ? (
         <View style={styles.foreignBanner}>
           <Icon name="warning" size={14} color={color.status.danger} />
@@ -758,53 +825,102 @@ function UserReviewCard({
         </View>
       ) : null}
 
-      <View style={styles.reviewCardDivider} />
-
+      {/* 사장님 안내 */}
       {isOwner ? (
         <View style={styles.ownerNoticeRow}>
           <Icon name="logo" size={14} color={color.brand.primary} />
           <Text style={styles.ownerNoticeText}>
-            내 가게에는 리뷰를 작성할 수 없어요. 답글로 고객 피드백에 응대해 주세요.
+            내 가게에는 리뷰를 작성할 수 없어요. 답글로 응대해 주세요.
           </Text>
         </View>
+      ) : null}
+
+      {/* 리뷰 리스트 */}
+      {reviews.length > 0 ? (
+        <View style={styles.reviewListBlock}>
+          {reviews.map((r, i) => {
+            const isMine = !!myId && r.userId === myId;
+            const totalForUser = r.userId ? (userReviewCount.get(r.userId) ?? 1) : 1;
+            const reviewAvg = reviewAvgOf(r);
+            return (
+              <View
+                key={r.id}
+                style={[styles.reviewItem, i < reviews.length - 1 && styles.reviewItemDivider]}>
+                <View style={styles.reviewItemHeader}>
+                  <Text style={styles.reviewItemAuthor}>
+                    {isMine ? myNickname : maskNickname(r.userId)}
+                  </Text>
+                  <Text style={styles.reviewItemMeta}>리뷰 {totalForUser}</Text>
+                  <Text style={styles.reviewItemMeta}>{visitTimeLabel(r)}</Text>
+                </View>
+                {reviewAvg > 0 ? (
+                  <View style={styles.reviewItemStars}>
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <Icon
+                        key={s}
+                        name="star"
+                        size={11}
+                        color={s <= Math.round(reviewAvg) ? color.cheese.GOLDEN.fg : color.border.default}
+                      />
+                    ))}
+                    <Text style={styles.reviewItemStarNum}>{reviewAvg.toFixed(1)}</Text>
+                  </View>
+                ) : null}
+                {r.body ? <Text style={styles.reviewItemBody}>{r.body}</Text> : null}
+              </View>
+            );
+          })}
+        </View>
       ) : (
-        <>
-          <View style={styles.composeRow}>
-            <View style={styles.ctaIconWrap}>
-              <Icon name="pencil" size={20} color={color.brand.primary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.composeTitle}>위생 리뷰 남기기</Text>
-              <Text style={styles.composeHint}>
-                {loggedIn
-                  ? '다녀온 곳의 주방·식기·재료 상태를 알려주세요'
-                  : '리뷰는 책임을 위해 로그인이 필요해요'}
-              </Text>
-            </View>
-          </View>
-          <View style={{ marginTop: spacing.m }}>
-            <Button
-              variant={loggedIn ? 'primary' : 'kakao'}
-              size="md"
-              fullWidth
-              leftIcon={loggedIn ? 'pencil' : 'chat'}
-              onPress={() => {
-                if (loggedIn) {
-                  router.push(`/review/${restaurantId}`);
-                } else {
-                  if (typeof sessionStorage !== 'undefined') {
-                    sessionStorage.setItem('food-detector:pending-review', restaurantId);
-                  }
-                  loginWithKakao();
-                }
-              }}>
-              {loggedIn ? '리뷰 작성하기' : '카카오로 로그인'}
-            </Button>
-          </View>
-        </>
+        <Text style={styles.reviewEmpty}>
+          {isOwner ? '아직 작성된 리뷰가 없어요' : '첫 위생 리뷰를 남겨보세요'}
+        </Text>
       )}
     </Card>
   );
+}
+
+// 리뷰 1건 평균 — axisRatings가 있으면 4개 평균, 없으면 rating 그대로
+function reviewAvgOf(r: { rating: number; axisRatings?: { table?: number; food?: number; staff?: number; restroom?: number } }): number {
+  const ax = r.axisRatings;
+  if (ax) {
+    const vals = [ax.table, ax.food, ax.staff, ax.restroom].filter((v): v is number => typeof v === 'number' && v > 0);
+    if (vals.length > 0) return vals.reduce((a, b) => a + b, 0) / vals.length;
+  }
+  return r.rating || 0;
+}
+
+// 익명 마스킹 — userId 끝 4글자만 보존, 나머지 별표
+function maskNickname(userId: string | null | undefined): string {
+  if (!userId) return '익명 ****';
+  const tail = userId.slice(-2);
+  return `익명 ${tail}**`;
+}
+
+// 방문 시점 라벨 — visitWindow 우선, 없으면 createdAt 상대 시간
+function visitTimeLabel(r: {
+  visitWindow?: 'today' | 'week' | 'older' | string;
+  createdAt: number;
+}): string {
+  if (r.visitWindow === 'today') return '오늘·어제 방문';
+  if (r.visitWindow === 'week') return '일주일 이내 방문';
+  if (r.visitWindow === 'older') return '일주일 전 방문';
+  return relativeTime(r.createdAt);
+}
+
+// 상대 시간 — "방금 전 / N분 전 / N시간 전 / N일 전 / N주 전 / N달 전 / N년 전"
+function relativeTime(ts: number): string {
+  const diff = Math.max(0, Date.now() - ts);
+  const m = Math.floor(diff / (60 * 1000));
+  if (m < 1) return '방금 전';
+  if (m < 60) return `${m}분 전`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}시간 전`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}일 전`;
+  if (d < 30) return `${Math.floor(d / 7)}주 전`;
+  if (d < 365) return `${Math.floor(d / 30)}달 전`;
+  return `${Math.floor(d / 365)}년 전`;
 }
 
 // 사용자 리뷰 카드 + 사장님 답글 wiring 헬퍼
@@ -992,43 +1108,18 @@ function InfoTab({
         {/* 헤더 — 다른 카드(평가/사용자 리뷰)와 통일: 좌측 제목 / 우측 상태 pill */}
         <View style={styles.ownerHeader}>
           <Text style={styles.ownerCardTitle}>사장님 인증</Text>
-          <View
-            style={[
-              styles.ownerStatusPill,
-              ownerActive ? styles.ownerStatusActive : styles.ownerStatusInactive,
-            ]}>
-            <Icon
-              name={ownerActive ? 'check' : 'dot'}
-              size={12}
-              color={ownerActive ? color.status.success : color.text.tertiary}
-            />
-            <Text
-              style={[
-                styles.ownerStatusText,
-                { color: ownerActive ? color.status.success : color.text.tertiary },
-              ]}>
-              {ownerActive ? '활성' : '대기중'}
-            </Text>
-          </View>
+          {ownerImpact.hasOwner && ownerActive ? (
+            <View style={[styles.ownerStatusPill, styles.ownerStatusActive]}>
+              <Icon name="check" size={12} color={color.status.success} />
+              <Text style={[styles.ownerStatusText, { color: color.status.success }]}>활성</Text>
+            </View>
+          ) : null}
         </View>
 
-        <Text style={styles.ownerSubtitle}>
-          {ownerActive
-            ? `최근 30일 청소 인증 ${ownerImpact.postCount}건${
-                ownerImpact.totalPostCount > ownerImpact.postCount
-                  ? ` · 누적 ${ownerImpact.totalPostCount}건`
-                  : ''
-              }`
-            : '사장님이 직접 올리는 위생·운영 인증 게시글이에요. 게시글이 늘면 등급이 올라가요.'}
-        </Text>
-
         {posts.length === 0 ? (
-          <View style={styles.ownerEmpty}>
-            <Icon name="chat" size={20} color={color.text.tertiary} />
-            <Text style={styles.ownerEmptyText}>
-              {isOwner ? '첫 게시글을 올려 가게의 노력을 알려주세요' : '아직 사장님 게시글이 없어요'}
-            </Text>
-          </View>
+          <Text style={styles.reviewEmpty}>
+            {isOwner ? '첫 게시글을 올려 가게의 노력을 알려주세요' : '아직 사장님 게시글이 없어요'}
+          </Text>
         ) : (
           <View style={styles.ownerPostsBlock}>
             {posts.map((p, i) => (
@@ -1184,10 +1275,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  heroCheeseRotten: {
-    backgroundColor: color.status.dangerSoft,
-    borderRadius: radius.l,
-  },
   heroGradeLabel: {
     ...typography.captionEmphasized,
     textAlign: 'center',
@@ -1210,6 +1297,21 @@ const styles = StyleSheet.create({
   heroMeta: {
     ...typography.caption,
     color: color.text.secondary,
+  },
+  heroReviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  heroReviewText: {
+    ...typography.captionEmphasized,
+    color: color.text.primary,
+  },
+  heroReviewCount: {
+    ...typography.caption,
+    color: color.text.secondary,
+    fontWeight: '400',
   },
 
   // 식탐정 5가지 분석 — 등급 심볼 그리드 헤더
@@ -1246,8 +1348,15 @@ const styles = StyleSheet.create({
   },
   evalRowHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'baseline',
     justifyContent: 'space-between',
+    gap: spacing.s,
+  },
+  evalRowLabelGroup: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+    flex: 1,
   },
   evalRowLabel: {
     ...typography.subheadlineEmphasized,
@@ -1259,7 +1368,6 @@ const styles = StyleSheet.create({
   evalRowSource: {
     ...typography.footnote,
     color: color.text.tertiary,
-    marginTop: 2,
   },
   evalRowNote: {
     ...typography.footnote,
@@ -1372,14 +1480,24 @@ const styles = StyleSheet.create({
   aiTitle: { flex: 1, ...typography.subheadlineEmphasized, color: color.text.primary },
   aiUpdated: { ...typography.footnote, color: color.text.tertiary },
   aiContext: { ...typography.caption, color: color.text.secondary, marginBottom: spacing.m },
+  // 추천 / 다음 기회 가로 2분할
+  aiSplitRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.m,
+  },
+  aiCol: {
+    flex: 1,
+    minWidth: 0,
+  },
   aiBlock: { marginBottom: spacing.m },
   aiBlockLabel: {
     ...typography.caption,
     color: color.text.tertiary,
-    marginBottom: spacing.s,
+    marginBottom: spacing.xs,
     letterSpacing: 0.2,
   },
-  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs + 2 },
+  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   aiGuidelineText: {
     ...typography.subheadline,
     color: color.text.secondary,
@@ -1428,14 +1546,99 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: spacing.s,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
-    backgroundColor: color.cheese.GOLDEN.bg,
   },
   starPillText: {
     ...typography.captionEmphasized,
     color: color.text.primary,
+  },
+
+  // 사용자 리뷰 작성 버튼 — 헤더 우측 작은 버튼
+  composeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.s + 2,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    backgroundColor: color.brand.primary,
+  },
+  composeBtnKakao: {
+    backgroundColor: '#FEE500',  // 카카오 노랑
+  },
+  composeBtnText: {
+    ...typography.footnote,
+    fontWeight: '700',
+    color: color.text.onBrand,
+  },
+  composeBtnKakaoText: {
+    color: '#3C1E1E',
+  },
+
+  // ★ 평균 (개수) row — 위계 약하게
+  reviewAvgRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: spacing.xxs,
+    marginBottom: spacing.s,
+  },
+  reviewAvgNum: {
+    ...typography.subheadlineEmphasized,
+    color: color.text.primary,
+  },
+  reviewAvgCount: {
+    ...typography.footnote,
+    color: color.text.tertiary,
+  },
+
+  // 리뷰 리스트
+  reviewListBlock: {
+    marginTop: spacing.s,
+  },
+  reviewItem: {
+    paddingVertical: spacing.s + 2,
+  },
+  reviewItemDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: color.border.default,
+  },
+  reviewItemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.s,
+    marginBottom: 2,
+  },
+  reviewItemAuthor: {
+    ...typography.captionEmphasized,
+    color: color.text.primary,
+  },
+  reviewItemMeta: {
+    ...typography.footnote,
+    color: color.text.tertiary,
+  },
+  reviewItemStars: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 1,
+    marginTop: 2,
+    marginBottom: 4,
+  },
+  reviewItemStarNum: {
+    ...typography.footnote,
+    color: color.text.secondary,
+    marginLeft: 4,
+    fontWeight: '600',
+  },
+  reviewItemBody: {
+    ...typography.subheadline,
+    color: color.text.secondary,
+    lineHeight: 22,
+  },
+  reviewEmpty: {
+    ...typography.subheadline,
+    color: color.text.tertiary,
+    textAlign: 'center',
+    paddingVertical: spacing.l,
   },
   reviewCardDivider: {
     height: StyleSheet.hairlineWidth,
@@ -1575,33 +1778,17 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   ownerStatusActive: { backgroundColor: color.status.successSoft },
-  ownerStatusInactive: { backgroundColor: color.fill.quaternary },
   ownerStatusText: { ...typography.captionEmphasized },
-  ownerSubtitle: {
-    ...typography.caption,
-    color: color.text.secondary,
-    marginTop: 2,
-    marginBottom: spacing.m,
-  },
   ownerPostsBlock: {
     borderRadius: radius.m,
     overflow: 'hidden',
     backgroundColor: color.fill.quaternary,
+    marginTop: spacing.m,
   },
   ownerPostSep: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: color.border.default,
   },
-  ownerEmpty: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.s,
-    paddingVertical: spacing.l,
-    paddingHorizontal: spacing.l,
-    borderRadius: radius.m,
-    backgroundColor: color.fill.tertiary,
-  },
-  ownerEmptyText: { flex: 1, ...typography.caption, color: color.text.secondary },
 
   applyLink: {
     flexDirection: 'row',

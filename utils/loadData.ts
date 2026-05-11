@@ -45,7 +45,9 @@ interface RawRestaurant {
   lng: number;
   // 새 스키마: score = 데이터 점수(0~50). 종합 점수는 클라이언트에서 계산.
   score: number;
-  breakdown: { data: number; hygiene: number; evalDelta: number; punish: number; model: number };
+  // 옛 스키마(evalDelta)와 새 스키마(bonus) 둘 다 호환. 다른 브랜치에서 안심식당·착한가격
+  // 데이터 머지되면 새 스키마(bonus)만 채워짐.
+  breakdown: { data: number; hygiene: number; model: number; punish: number; bonus?: number; evalDelta?: number };
   flags: {
     hygieneDesignated: boolean;
     hasModel: boolean;
@@ -54,6 +56,12 @@ interface RawRestaurant {
     evalGrade: string;
     hygieneViolation?: boolean;
     punishReasons?: string;
+    // 추가 인증 — 데이터 파이프라인 보강 후에만 채워짐 (옵셔널)
+    hygieneGrade?: '매우우수' | '우수' | '좋음' | '';
+    safeRestaurant?: boolean;
+    safeRestaurantSince?: string;
+    goodPrice?: boolean;
+    goodPriceMenus?: string;
   };
   riskTags: RiskTag[];
   menuHints: string[];
@@ -111,14 +119,21 @@ function adapt(r: RawRestaurant): Restaurant {
 
     dataBreakdown: {
       hygiene: r.breakdown.hygiene,
-      evalDelta: r.breakdown.evalDelta,
-      punish: r.breakdown.punish,
       model: r.breakdown.model,
+      // bonus 우선, 없으면 옛 evalDelta로 폴백 (호환)
+      bonus: r.breakdown.bonus ?? r.breakdown.evalDelta ?? 0,
+      punish: r.breakdown.punish,
     },
     evalGrade: r.flags.evalGrade,
     punishTypes: r.flags.punishTypes,
     hygieneViolation: r.flags.hygieneViolation ?? false,
     punishReasons: r.flags.punishReasons ?? '',
+    // 추가 인증 — 데이터 파이프라인 보강 후에만 값이 있음
+    hygieneGrade: r.flags.hygieneGrade,
+    safeRestaurant: r.flags.safeRestaurant,
+    safeRestaurantSince: r.flags.safeRestaurantSince,
+    goodPrice: r.flags.goodPrice,
+    goodPriceMenus: r.flags.goodPriceMenus,
   };
 }
 

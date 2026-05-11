@@ -52,12 +52,23 @@ export interface Restaurant {
   // 트랩 치즈 과락 평가용 (런타임)
   userReviewCount?: number;
   // 데이터 점수 세부 (UI breakdown 표시용)
-  dataBreakdown?: { hygiene: number; evalDelta: number; punish: number; model: number };
+  // - hygiene: 식품안심업소 (구 위생등급) 가산
+  // - model: 모범음식점 가산
+  // - bonus: 보조 인증 (안심식당·착한가격업소 등) 가산
+  // - punish: 행정처분 차감
+  // (I1540 위생관리 평가는 식품제조 데이터로 음식점과 무관 → evalDelta 제거)
+  dataBreakdown?: { hygiene: number; model: number; bonus: number; punish: number };
   // 행정처분/평가 플래그 (deriveGrade에서 사용)
   evalGrade?: string;
   punishTypes?: string;
   hygieneViolation?: boolean;   // AI 분류 위생 직결 위반 — ROTTEN 트리거
   punishReasons?: string;       // AI 분류 위반사유 요약 pipe-separated (UI 표시용)
+  // 추가 인증 (대시보드 §3~§4) — 매칭 스크립트로 데이터 파이프라인에 적용 후 채워짐
+  hygieneGrade?: '매우우수' | '우수' | '좋음' | '';  // 식약처 위생등급 3단계 세부 (Excel 매칭)
+  safeRestaurant?: boolean;        // 안심식당 (MAFRA) 지정 여부
+  safeRestaurantSince?: string;    // 안심식당 지정일 (YYYY-MM-DD)
+  goodPrice?: boolean;             // 착한가격업소 (행안부) 지정 여부
+  goodPriceMenus?: string;         // 착한가격 대표 메뉴 (pipe-separated)
 }
 
 export interface RestaurantIndex {

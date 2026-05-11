@@ -106,7 +106,10 @@ export default function MyStoresScreen() {
 
 function StoreRowCard({ row }: { row: StoreRow }) {
   const cheeseSrc =
-    row.gr === 'GOLDEN' ? Cheese.gold : row.gr === 'SILVER' ? Cheese.silver : Cheese.bronze;
+    row.gr === 'GOLDEN' ? Cheese.gold
+      : row.gr === 'SILVER' ? Cheese.silver
+      : row.gr === 'ROTTEN' ? Cheese.rotten
+      : Cheese.bronze;
   const cheeseFg = color.cheese[row.gr]?.fg ?? color.text.primary;
   const posts = useOwnerPostsFor(row.i);
 
