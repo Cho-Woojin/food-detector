@@ -3,7 +3,8 @@ import { Mascots, type MascotKey } from '@/constants/Assets';
 import { Icon, type IconName } from '@/components/Icon';
 import { color, motion, radius, spacing, typography } from '@/constants/tokens';
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'owner' | 'kakao';
+// 카카오 로그인은 공식 PNG 자산을 쓰는 KakaoLoginButton 컴포넌트로 분리 — Button.variant=kakao 제거
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'owner';
 type Size = 'sm' | 'md' | 'lg';
 
 const SIZE: Record<Size, { h: number; px: number; gap: number; r: number; font: any; iconSize: number; mascotSize: number }> = {
@@ -20,8 +21,6 @@ const VARIANT: Record<Variant, Palette> = {
   ghost:     { bg: 'transparent',               bgPressed: color.fill.tertiary,         fg: color.brand.primary },
   danger:    { bg: color.status.danger,         bgPressed: '#D70015',                   fg: color.text.onDanger },
   owner:     { bg: color.owner.primary,         bgPressed: color.owner.primaryHover,    fg: color.text.onBrand },
-  // 카카오 가이드 컬러: bg #FEE500, label #181600 / press 더 짙은 노랑
-  kakao:     { bg: '#FEE500',                    bgPressed: '#FACE00',                   fg: '#181600' },
 };
 
 export type ButtonProps = {

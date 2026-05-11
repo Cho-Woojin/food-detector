@@ -780,19 +780,15 @@ function UserReviewCard({
           <Pressable
             onPress={onComposePress}
             accessibilityRole="button"
-            accessibilityLabel={loggedIn ? '리뷰 작성하기' : '카카오 로그인'}
-            style={({ pressed }) => [
-              styles.composeBtn,
-              !loggedIn && styles.composeBtnKakao,
-              pressed && { opacity: 0.85 },
-            ]}>
+            accessibilityLabel={loggedIn ? '리뷰 작성하기' : '로그인하고 작성'}
+            style={({ pressed }) => [styles.composeBtn, pressed && { opacity: 0.85 }]}>
             <Icon
               name={loggedIn ? 'pencil' : 'chat'}
               size={12}
-              color={loggedIn ? color.text.onBrand : '#3C1E1E'}
+              color={color.text.onBrand}
             />
-            <Text style={[styles.composeBtnText, !loggedIn && styles.composeBtnKakaoText]}>
-              {loggedIn ? '리뷰 작성하기' : '카카오 로그인'}
+            <Text style={styles.composeBtnText}>
+              {loggedIn ? '리뷰 작성하기' : '로그인하고 작성'}
             </Text>
           </Pressable>
         )}
@@ -1451,16 +1447,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: color.brand.primary,
   },
-  composeBtnKakao: {
-    backgroundColor: '#FEE500',  // 카카오 노랑
-  },
   composeBtnText: {
     ...typography.footnote,
     fontWeight: '700',
     color: color.text.onBrand,
-  },
-  composeBtnKakaoText: {
-    color: '#3C1E1E',
   },
 
   // ★ 평균 (개수) row — 위계 약하게

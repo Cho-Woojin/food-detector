@@ -1,24 +1,25 @@
 // 첫 앱 진입 시 표시되는 5단계 온보딩.
-// 1) 문제 공감 → 2) 검색 경험 → 3) 데이터 신뢰 → 4) 사용자 제보 가치 → 5) 소셜 로그인
+// 1) 문제 공감 → 2) 위치 기반 안전 정보(권한 요청 포함) → 3) 데이터 신뢰 → 4) 별점·리뷰 → 5) 소셜 로그인
 //
+// 위치 권한은 진입 즉시 X — Step 2에서 컨텍스트와 함께 요청.
 // 각 단계 진입 시 image + text가 동시에 fade-in down (Reanimated FadeInDown).
 
+import { Stack, router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View,
+  Image, Pressable, StyleSheet, Text, View,
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { Stack, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Cheese, Logos, Mascots, Onboarding } from '@/constants/Assets';
+import { Icon, IconName } from '@/components/Icon';
+import { KakaoLoginButton } from '@/components/ui';
+import { Logos, Mascots, Onboarding } from '@/constants/Assets';
 import { color, mascotSize, radius, spacing, typography } from '@/constants/tokens';
 import { loginWithKakao } from '@/utils/kakaoAuth';
 import { markLandingSkipped } from '@/utils/landing';
-import { ensureRecomputedIndex, RecomputedRow } from '@/utils/dataStore';
-
-const KAKAO_YELLOW = '#FEE500';
-const KAKAO_TEXT = '#191919';
+import { loadIndex } from '@/utils/loadData';
+import { requestUserLocation } from '@/utils/location';
 
 type Step = 1 | 2 | 3 | 4 | 5;
 const TOTAL_STEPS = 5;
@@ -29,14 +30,15 @@ const ENTER = FadeInDown.duration(500).springify().damping(18);
 export default function LandingScreen() {
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState<Step>(1);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [allRows, setAllRows] = useState<RecomputedRow[]>([]);
+  const [locationRequested, setLocationRequested] = useState(false);
+  // 식당 총 개수 — restaurants-index.json meta.totalCount (데이터 갱신 시 자동 반영)
+  const [totalCount, setTotalCount] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    ensureRecomputedIndex().then((rows) => {
-      if (!cancelled) setAllRows(rows);
-    });
+    loadIndex()
+      .then((idx) => { if (!cancelled) setTotalCount(idx.meta.totalCount); })
+      .catch(() => { /* silently fall back to '152,238개' fallback in display */ });
     return () => { cancelled = true; };
   }, []);
 
@@ -45,6 +47,21 @@ export default function LandingScreen() {
   const goEnter = () => {
     markLandingSkipped();
     router.replace('/(tabs)' as any);
+  };
+
+  // Step 2 — 위치 권한 요청 후 다음 단계로. 권한 거부 시에도 진행 (기본 지역 fallback).
+  const requestLocationAndNext = async () => {
+    if (locationRequested) {
+      next();
+      return;
+    }
+    setLocationRequested(true);
+    try {
+      await requestUserLocation();
+    } catch {
+      // 거부·실패 시에도 다음 단계로 — 비서울/캐시 fallback이 이미 동작
+    }
+    next();
   };
 
   return (
@@ -68,14 +85,9 @@ export default function LandingScreen() {
 
       {/* 단계 변경 시 key로 remount → entering 애니메이션 재실행 */}
       <Animated.View key={step} entering={ENTER} style={styles.body}>
-        {step === 1 && <StepProblem onNext={next} />}
-        {step === 2 && <StepSearch
-          rows={allRows}
-          query={searchQuery}
-          setQuery={setSearchQuery}
-          onNext={next}
-        />}
-        {step === 3 && <StepTrust onNext={next} />}
+        {step === 1 && <StepProblem onNext={next} totalCount={totalCount} />}
+        {step === 2 && <StepLocation onAllow={requestLocationAndNext} />}
+        {step === 3 && <StepTrust onNext={next} totalCount={totalCount} />}
         {step === 4 && <StepReport onNext={next} />}
         {step === 5 && <StepSignup onSkip={goEnter} />}
       </Animated.View>
@@ -100,8 +112,14 @@ function ProgressBar({ step, total }: { step: number; total: number }) {
   );
 }
 
+// 식당 수 — 데이터에서 로드된 수치 우선, 로딩 전이면 fallback 텍스트
+function formatCount(n: number | null): string {
+  if (n == null) return '15만';
+  return n.toLocaleString('ko-KR');
+}
+
 // ===== Step 1: 문제 공감 =====
-function StepProblem({ onNext }: { onNext: () => void }) {
+function StepProblem({ onNext, totalCount }: { onNext: () => void; totalCount: number | null }) {
   return (
     <>
       <View style={styles.textTop}>
@@ -110,101 +128,67 @@ function StepProblem({ onNext }: { onNext: () => void }) {
           <Text style={styles.brand}>식탐정</Text>
         </View>
         <Text style={styles.bigQuote2}>
-          오늘 먹는 음식,{'\n'}정말 안전할까요?
+          오늘 방문할 음식점,{'\n'}안전할까요?
         </Text>
         <Text style={styles.subBodyLeft}>
-          식약처 위생등급·행정처분 데이터로 서울 12만 식당의 위생을 알려드려요.
+          서울 25개 자치구 {formatCount(totalCount)}개 음식점의 위생 안전을 조사해요.
+          식탐정이 안전한 식당을 골라드릴게요.
         </Text>
       </View>
       <View style={styles.imageBelow}>
-        <Image source={Mascots.warning} style={styles.heroMascot} resizeMode="contain" />
+        <Image source={Onboarding.investigate} style={styles.illustration} resizeMode="contain" />
       </View>
       <PrimaryNext label="시작하기" onPress={onNext} />
     </>
   );
 }
 
-// ===== Step 2: 검색 경험 =====
-function StepSearch({
-  rows, query, setQuery, onNext,
-}: {
-  rows: RecomputedRow[];
-  query: string;
-  setQuery: (s: string) => void;
-  onNext: () => void;
-}) {
-  const q = query.trim();
-  const hits = q.length === 0 ? [] : rows.filter((r) => r.n.includes(q)).slice(0, 3);
-
+// ===== Step 2: 위치 기반 안전 정보 — 권한 요청 + 미리보기 =====
+function StepLocation({ onAllow }: { onAllow: () => void }) {
   return (
     <>
       <View style={styles.textTop}>
-        <Text style={styles.bigQuote2}>안전한 식당을 한눈에</Text>
+        <Text style={styles.bigQuote2}>내 주변 환경에 맞춰{'\n'}오늘의 메뉴를 추천해요</Text>
         <Text style={styles.subBodyLeft}>
-          식당명을 입력하면 식탐정의 위생 등급을 바로 확인할 수 있어요.
+          현재 위치의 기상·식중독 위험 단계 예측을 기반으로
+          메뉴를 추천해요.
         </Text>
       </View>
 
-      <View style={{ gap: spacing.s }}>
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="식당 이름을 입력해보세요"
-          placeholderTextColor={color.text.tertiary}
-          style={styles.searchInput}
-          returnKeyType="search"
-        />
-        {q.length > 0 && hits.length === 0 && (
-          <Text style={styles.searchEmpty}>매칭되는 식당이 없어요</Text>
-        )}
-        {hits.map((r) => {
-          const cheeseSrc =
-            r.gr === 'GOLDEN' ? Cheese.gold
-              : r.gr === 'SILVER' ? Cheese.silver
-              : r.gr === 'BRONZE' ? Cheese.bronze
-              : Cheese.rotten;
-          return (
-            <View key={r.i} style={styles.searchItem}>
-              <Image source={cheeseSrc} style={styles.searchCheese} resizeMode="contain" />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.searchName} numberOfLines={1}>{r.n}</Text>
-                <Text style={styles.searchMeta}>{r.c} · {r.g}</Text>
-              </View>
-              <Text style={styles.searchScore}>
-                {r.gr === 'GOLDEN' ? '골든'
-                  : r.gr === 'SILVER' ? '실버'
-                  : r.gr === 'BRONZE' ? '브론즈'
-                  : '트랩'}
-              </Text>
-            </View>
-          );
-        })}
+      {/* 위치 허용 후 보게 될 콘텐츠 3가지 — 텍스트 리스트로 단순화 */}
+      <View style={styles.bullets}>
+        <Text style={styles.bulletLine}>· 기온·습도·미세먼지</Text>
+        <Text style={styles.bulletLine}>· 오늘의 식중독 위험 단계</Text>
+        <Text style={styles.bulletLine}>· 오늘의 식탐정 메뉴 가이드</Text>
       </View>
 
       <View style={styles.imageBelow}>
-        <Image source={Onboarding.investigate} style={styles.illustration} resizeMode="contain" />
+        <Image source={Mascots.weather} style={styles.heroMascot} resizeMode="contain" />
       </View>
-      <PrimaryNext label="다음" onPress={onNext} />
+      <PrimaryNext label="위치 정보 허용하기" onPress={onAllow} />
     </>
   );
 }
 
 // ===== Step 3: 데이터 신뢰 =====
-function StepTrust({ onNext }: { onNext: () => void }) {
+function StepTrust({ onNext, totalCount }: { onNext: () => void; totalCount: number | null }) {
   return (
     <>
       <View style={styles.textTop}>
-        <Text style={styles.bigQuote2}>식약처 공식 데이터 기반</Text>
+        <Text style={styles.bigQuote2}>
+          공공데이터를 종합해{'\n'}식탐정 치즈 등급으로 알려드려요
+        </Text>
         <Text style={styles.subBodyLeft}>
-          12만 식당의 위생등급·행정처분·모범음식점 인증 정보를 모두 검증해 평가해요.
+          식약처·자치구 공식 데이터를 한 번에 분석해서{'\n'}
+          {formatCount(totalCount)}개 식당에 치즈 등급을 매겨요.
         </Text>
       </View>
 
       <View style={styles.trustGrid}>
-        <TrustCard emoji="🛡️" title="위생등급제" sub="식약처 공식 인증" />
-        <TrustCard emoji="⚖️" title="행정처분 이력" sub="자치구·식약처" />
-        <TrustCard emoji="🏆" title="모범음식점" sub="자치구 인증" />
-        <TrustCard emoji="🤝" title="사장님 인증" sub="직접 등록" />
+        <TrustCard icon="logo" tint={color.brand.primary} title="식품안심업소" />
+        <TrustCard icon="alert" tint={color.status.danger} title="행정처분 이력" />
+        <TrustCard icon="star" tint={'#F1C40F'} title="모범·안심·착한"  />
+        <TrustCard icon="storefront" tint={'#8B5CF6'} title="사장님 신뢰 인증" />
       </View>
 
       <View style={styles.imageBelow}>
@@ -215,12 +199,21 @@ function StepTrust({ onNext }: { onNext: () => void }) {
   );
 }
 
-function TrustCard({ emoji, title, sub }: { emoji: string; title: string; sub: string }) {
+function TrustCard({
+  icon, tint, title, sub,
+}: {
+  icon: IconName;
+  tint: string;
+  title: string;
+  sub?: string;
+}) {
   return (
     <View style={styles.trustCard}>
-      <Text style={styles.trustEmoji}>{emoji}</Text>
+      <View style={[styles.trustIconBox, { backgroundColor: tint + '22' }]}>
+        <Icon name={icon} size={20} color={tint} />
+      </View>
       <Text style={styles.trustTitle}>{title}</Text>
-      <Text style={styles.trustSub}>{sub}</Text>
+      {sub ? <Text style={styles.trustSub}>{sub}</Text> : null}
     </View>
   );
 }
@@ -234,20 +227,20 @@ function StepReport({ onNext }: { onNext: () => void }) {
           사용자들의 위생 제보가{'\n'}더 안전한 선택을 만들어요
         </Text>
         <Text style={styles.subBodyLeft}>
-          직접 방문한 식당, 위생 상태를 알려주세요.{'\n'}
-          3초 체크만으로도 다른 사람에게 도움이 돼요.
+          다녀온 식당의 위생 상태를 별점으로 남겨주세요.
+          생생한 경험이 치즈 등급에 반영돼요.
         </Text>
       </View>
 
       <View style={{ gap: spacing.s }}>
         <View style={styles.starDemo}>
-          <StarRow rating={5} size={32} />
-          <Text style={styles.starDemoLabel}>5점 만점 — 매우 위생적</Text>
+          <StarRow rating={5} size={24} />
+          <Text style={styles.starDemoLabel}>매우 위생적</Text>
         </View>
         <View style={styles.reviewSampleList}>
           <ReviewSample stars={5} text="주방이 깨끗했어요" />
           <ReviewSample stars={4} text="식기가 위생적이었어요" />
-          <ReviewSample stars={2} text="식기에 음식 자국" />
+          <ReviewSample stars={2} text="화장실이 지저분해요" />
         </View>
       </View>
 
@@ -287,37 +280,33 @@ function ReviewSample({ stars, text }: { stars: number; text: string }) {
 }
 
 // ===== Step 5: 소셜 로그인 =====
+// 레이아웃: 상단 텍스트 + 마스코트 — 중앙(카카오 + 약관) — 하단(비회원).
 function StepSignup({ onSkip }: { onSkip: () => void }) {
   return (
     <>
       <View style={styles.textTop}>
-        <Text style={styles.brand}>준비 완료!</Text>
-        <Text style={styles.subBodyLeft}>이제 식탐정과 함께 안전한 식사를 시작해보세요.</Text>
+        <Text style={styles.bigQuote2}>식탐정과 안전한 식사를 시작해보세요</Text>
+        <Text style={styles.subBodyLeft}>
+          로그인하면 좋아요·리뷰가 모든 기기에서 동기화돼요.
+        </Text>
       </View>
 
       <View style={styles.imageBelow}>
         <Image source={Mascots.thanks} style={styles.heroMascot} resizeMode="contain" />
       </View>
-
-      <View style={styles.signupCta}>
-        <Pressable
-          onPress={() => loginWithKakao()}
-          accessibilityRole="button"
-          accessibilityLabel="카카오로 시작하기"
-          style={({ pressed }) => [styles.kakaoBtn, pressed && { opacity: 0.85 }]}>
-          <Text style={styles.kakaoIcon}>💬</Text>
-          <Text style={styles.kakaoText}>카카오로 시작하기</Text>
-        </Pressable>
-
-        <Pressable onPress={onSkip} style={({ pressed }) => [styles.guestBtn, pressed && { opacity: 0.6 }]}>
-          <Text style={styles.guestText}>비회원으로 사용하기</Text>
-        </Pressable>
-
+      {/* 중앙 — 카카오 버튼 + 약관 */}
+      <View style={styles.signupCenter}>
+        <KakaoLoginButton onPress={() => loginWithKakao()} />
         <Text style={styles.terms}>
           시작 시 <Text style={styles.termsLink}>약관</Text> 및{' '}
-          <Text style={styles.termsLink}>개인정보 처리방침</Text>에 동의하게 돼요.
+          <Text style={styles.termsLink}>개인정보 처리방침</Text>에 동의해요.
         </Text>
       </View>
+
+      {/* 하단 — 비회원으로 사용하기 (약관과 동일한 caption 사이즈) */}
+      <Pressable onPress={onSkip} style={({ pressed }) => [styles.guestBtn, pressed && { opacity: 0.6 }]}>
+        <Text style={styles.guestText}>비회원으로 사용하기</Text>
+      </Pressable>
     </>
   );
 }
@@ -368,28 +357,9 @@ const styles = StyleSheet.create({
   subBody: { ...typography.body, color: color.text.secondary, textAlign: 'center', lineHeight: 22 },
   subBodyLeft: { ...typography.body, color: color.text.secondary, lineHeight: 24, marginBottom: spacing.l },
 
-  // Step 2 검색
-  searchInput: {
-    height: 52,
-    borderRadius: radius.l,
-    borderWidth: 0,
-    backgroundColor: color.surface.subtle,
-    paddingHorizontal: spacing.m,
-    fontSize: 16,
-    color: color.text.primary,
-    marginBottom: spacing.m,
-  },
-  searchResults: { gap: spacing.xs },
-  searchEmpty: { ...typography.subheadline, color: color.text.tertiary, textAlign: 'center', paddingVertical: spacing.m },
-  searchItem: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing.m,
-    paddingVertical: spacing.s + 2, paddingHorizontal: spacing.m,
-    backgroundColor: color.surface.subtle, borderRadius: radius.m,
-  },
-  searchCheese: { width: 32, height: 32 },
-  searchName: { ...typography.bodyEmphasized, color: color.text.primary, marginBottom: 2 },
-  searchMeta: { ...typography.caption, color: color.text.secondary },
-  searchScore: { ...typography.bodyEmphasized, color: color.brand.primary },
+  // Step 2 위치 기반 안전 정보 — 텍스트 리스트 (카드 없이 간결)
+  bullets: { gap: 4, marginTop: spacing.xs },
+  bulletLine: { ...typography.body, color: color.text.secondary, lineHeight: 24 },
 
   // Step 3 데이터 신뢰
   trustGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.s },
@@ -401,7 +371,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: spacing.xs,
   },
-  trustEmoji: { fontSize: 28, marginBottom: spacing.xs },
+  trustIconBox: {
+    width: 36, height: 36, borderRadius: radius.m,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: spacing.xs,
+  },
   trustTitle: { ...typography.bodyEmphasized, color: color.text.primary },
   trustSub: { ...typography.caption, color: color.text.secondary },
 
@@ -424,17 +398,12 @@ const styles = StyleSheet.create({
   reviewSampleText: { ...typography.subheadline, color: color.text.primary, flex: 1 },
 
   // Step 5 가입
-  signupCta: { gap: spacing.m, alignItems: 'center' },
-  kakaoBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: spacing.s, width: '100%', height: 52,
-    borderRadius: radius.l, backgroundColor: KAKAO_YELLOW,
-  },
-  kakaoIcon: { fontSize: 18 },
-  kakaoText: { ...typography.bodyEmphasized, color: KAKAO_TEXT, fontSize: 16 },
-  guestBtn: { paddingVertical: spacing.m, paddingHorizontal: spacing.l },
-  guestText: { ...typography.subheadline, color: color.text.secondary, textDecorationLine: 'underline' },
-  terms: { ...typography.caption, color: color.text.tertiary, textAlign: 'center', marginTop: spacing.s },
+  // 중앙 묶음 — 카카오 버튼 + 약관. body의 space-between으로 자연스럽게 화면 중앙에 자리잡음.
+  signupCenter: { alignItems: 'center', gap: spacing.s },
+  // 하단 — 비회원으로 사용하기 (약관과 동일한 caption 사이즈)
+  guestBtn: { paddingVertical: spacing.xs, alignItems: 'center' },
+  guestText: { ...typography.caption, color: color.text.tertiary, textDecorationLine: 'underline' },
+  terms: { ...typography.caption, color: color.text.tertiary, textAlign: 'center' },
   termsLink: { color: color.text.secondary, textDecorationLine: 'underline' },
 
   // 공통 버튼

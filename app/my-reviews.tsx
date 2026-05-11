@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/Icon';
 import { HygieneReviewCard } from '@/components/HygieneReviewCard';
-import { Button, IconButton } from '@/components/ui';
+import { Button, IconButton, KakaoLoginButton } from '@/components/ui';
 import { color, spacing, typography } from '@/constants/tokens';
 import { loginWithKakao, useKakaoUser } from '@/utils/kakaoAuth';
 import { removeReview, useMyReviews } from '@/utils/reviews';
@@ -31,10 +31,8 @@ export default function MyReviewsScreen() {
           <Text style={styles.emptyBody}>
             카카오 로그인하면 내가 작성한 위생 리뷰를 한 곳에서 볼 수 있어요
           </Text>
-          <View style={{ width: 240, marginTop: spacing.l }}>
-            <Button variant="primary" size="md" fullWidth leftIcon="chat" onPress={() => loginWithKakao()}>
-              카카오 로그인
-            </Button>
+          <View style={{ width: 280, marginTop: spacing.l }}>
+            <KakaoLoginButton onPress={() => loginWithKakao()} />
           </View>
         </View>
       </View>
