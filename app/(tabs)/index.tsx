@@ -20,8 +20,6 @@ import { getCachedLocation, requestUserLocation } from '@/utils/location';
 import type { GuKey } from '@/constants/Restaurant';
 import {
   calculateRiskLevel,
-  foodPoisonLabel,
-  foodPoisonTone,
   humidityLabel,
   humidityTone,
   pm10Label,
@@ -30,9 +28,6 @@ import {
   tempTone,
   type Tone,
 } from '@/utils/riskCalculator';
-
-// 자외선만 더미 유지 — Vercel 환경변수에 키 등록되면 별도 API로 교체
-const UV_DUMMY = { value: 'UV 7', label: '강함', tone: 'warning' as const };
 
 // "2026-05-091700" → "17시" — RiskCard 갱신 시각 표시용
 function formatRegDatetime(s: string): string {
@@ -167,7 +162,7 @@ export default function HomeScreen() {
           updatedAt={env ? formatRegDatetime(env.foodPoison.regDatetime) : '갱신 중'}
         />
 
-        {/* 환경 카드 — 5개 가로 스크롤. 비서울이면 미지원 표시 */}
+        {/* 환경 카드 — 기온·습도·대기질 3개 균등 배치. 비서울이면 미지원 표시 */}
         <EnvCardsRow env={env} seoulSupported={!!seoulGu} />
 
         {/* 1. Today's menu guide — 위험 단계 기반 추천 (액션 가이드) */}
@@ -308,7 +303,8 @@ function RiskCard(props: {
   );
 }
 
-// ===== 환경 카드 row — 5개 가로 스크롤 =====
+// ===== 환경 카드 row — 기온·습도·대기질 3개 균등 배치 =====
+// 식중독은 위 RiskCard에 이미 점수로 표시되어 제외. 자외선은 데이터 소스 없어 제외.
 
 type EnvCardItem = { icon: string; value: string; label: string; sub: string; tone: Tone };
 
@@ -321,34 +317,24 @@ function buildEnvCardItems(env: EnvData | null, seoulSupported: boolean): EnvCar
     return [
       { icon: '🌡️', label: '기온', ...placeholder },
       { icon: '💧', label: '습도', ...placeholder },
-      { icon: '🦠', label: '식중독', ...placeholder },
       { icon: '🌫️', label: '대기질', ...placeholder },
-      { icon: '☀️', value: UV_DUMMY.value, label: '자외선', sub: UV_DUMMY.label, tone: UV_DUMMY.tone },
     ];
   }
-  const { weather, foodPoison } = env;
+  const { weather } = env;
   return [
     { icon: '🌡️', value: `${weather.temperature.toFixed(1)}°C`, label: '기온',
       sub: tempLabel(weather.temperature), tone: tempTone(weather.temperature) },
     { icon: '💧', value: `${weather.humidity}%`, label: '습도',
       sub: humidityLabel(weather.humidity), tone: humidityTone(weather.humidity) },
-    { icon: '🦠', value: foodPoisonLabel(foodPoison.today), label: '식중독',
-      sub: `${Math.round(foodPoison.today)}점`, tone: foodPoisonTone(foodPoison.today) },
     { icon: '🌫️', value: pm10Label(weather.pm10), label: '대기질',
       sub: `PM10 ${weather.pm10}`, tone: pm10Tone(weather.pm10) },
-    { icon: '☀️', value: UV_DUMMY.value, label: '자외선',
-      sub: UV_DUMMY.label, tone: UV_DUMMY.tone },
   ];
 }
 
 function EnvCardsRow({ env, seoulSupported }: { env: EnvData | null; seoulSupported: boolean }) {
   const items = buildEnvCardItems(env, seoulSupported);
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.envRow}
-      style={{ marginTop: spacing.m, marginHorizontal: -spacing.l }}>
+    <View style={styles.envRow}>
       {items.map((it) => (
         <View key={it.label} style={[styles.envCard, { backgroundColor: TONE_BG[it.tone] }]}>
           <Text style={styles.envEmoji}>{it.icon}</Text>
@@ -357,7 +343,7 @@ function EnvCardsRow({ env, seoulSupported }: { env: EnvData | null; seoulSuppor
           <Text style={styles.envSub}>{it.sub}</Text>
         </View>
       ))}
-    </ScrollView>
+    </View>
   );
 }
 
@@ -514,10 +500,10 @@ const styles = StyleSheet.create({
   },
   guidanceText: { ...typography.captionEmphasized, flex: 1, color: color.text.primary },
 
-  // 환경 카드 row
-  envRow: { gap: spacing.s, paddingHorizontal: spacing.l },
+  // 환경 카드 row — 3개 균등 배치
+  envRow: { flexDirection: 'row', gap: spacing.s, marginTop: spacing.m },
   envCard: {
-    width: 100,
+    flex: 1,
     paddingVertical: spacing.m,
     paddingHorizontal: spacing.s,
     borderRadius: radius.l,
