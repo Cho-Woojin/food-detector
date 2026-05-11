@@ -1,11 +1,11 @@
 // utils/scoring.ts
 // 식탐정 점수 체계 단일 원본. 자세한 명세는 data/SCORING_AND_SCHEMA.md.
 //
-// 종합 점수(0~100) = 데이터(0~50) + 사장님(0~25) + 사용자(0~25)
+// 종합 점수(0~100) = 데이터(0~70) + 사장님(0~15) + 사용자(0~15)
 //
 // - 데이터 점수: data/by-gu/*.json의 score 필드 (정적, scripts/split-restaurants.js에서 계산)
-// - 사장님 점수: utils/owner.ts에서 최근 30일 청소 인증 건수 × 2.5
-// - 사용자 점수: utils/reviews.ts에서 별점 평균 × 5
+// - 사장님 점수: utils/owner.ts에서 최근 30일 청소 인증 건수 × 1.5
+// - 사용자 점수: utils/reviews.ts에서 별점 평균 × 3
 //
 // 등급(GOLDEN/SILVER/BRONZE/ROTTEN)은 종합 점수 + 과락 조건으로 결정.
 
@@ -13,17 +13,19 @@ import type { GradeKey } from '@/constants/Restaurant';
 
 // ===== 점수 만점 =====
 export const SCORE_MAX = {
-  DATA: 50,
-  OWNER: 25,
-  USER: 25,
+  DATA: 70,
+  OWNER: 15,
+  USER: 15,
   TOTAL: 100,
 } as const;
 
 // ===== 등급 임계값 =====
 // SILVER 임계값은 "트랩 치즈 면제 라인"도 겸함 — 이 값 이상이면 과락 있어도 BRONZE 이상.
+// SILVER 40: 인증 1개라도 받으면 SILVER (안심 단독 40 / 착한 단독 40 진입).
+// GOLDEN 65: 위생등급 + 추가 인증 1개+ 받은 식당이 launch 시점에도 GOLDEN 진입 가능.
 export const GRADE_THRESHOLDS = {
-  GOLDEN: 80,
-  SILVER: 50,
+  GOLDEN: 65,
+  SILVER: 40,
 } as const;
 
 // ===== 트랩 치즈 과락 조건 =====
@@ -35,17 +37,20 @@ export const GRADE_THRESHOLDS = {
 // → 처분 종류만으로 ROTTEN 판단하면 식탐정의 본질(위생·식중독)과 어긋남.
 //   대신 by-gu의 flags.hygieneViolation (AI 분류 + 새올민원 위생 키워드 룰) 사용.
 //   자세한 분석은 data/violations-classified.json + data/SCORING_AND_SCHEMA.md.
-// (2026-05) 위생관리 평가(I1540)는 음식점이 아니라 식품제조·가공업체 평가로 판명 → 트리거 제거.
+//
+// 위생관리평가(I1540) 트리거는 제거됨 (2026-05-10) — I1540은 식품제조·가공업체 평가라
+// 음식점에 부적절. 자세한 건 data/SCORING_AND_SCHEMA.md.
 export const ROTTEN_TRIGGER = {
-  // 과락 1: 사용자 리뷰 ≥ N개 AND 사용자 점수 ≤ M/25
+  // 과락 1: 사용자 리뷰 ≥ N개 AND 사용자 점수 ≤ M/15
   USER_MIN_REVIEWS: 10,
-  USER_MAX_SCORE: 10,
-  // 과락 2: AI 분류 + 룰 매칭으로 hygieneViolation=true (이물·유통기한·식중독·세균 등)
-  //   → flags.hygieneViolation 직접 체크 (별도 상수 불필요)
+  USER_MAX_SCORE: 6,  // 별점 평균 ≤ 2.0 (2.0 × 3 = 6/15)
+  // 과락 2: AI 분류로 hygieneViolation=true (이물·유통기한·무등록 식품 등)
+  // → flags.hygieneViolation 직접 체크
 } as const;
 
 // ===== 사장님 점수 =====
-const OWNER_PER_VERIFICATION = 2.5;
+// 최근 30일 인증 건수 × 1.5, max 15 (= 10건 만점)
+const OWNER_PER_VERIFICATION = 1.5;
 const OWNER_WINDOW_MS = 30 * 24 * 60 * 60 * 1000; // 30일
 
 export function ownerScoreFromCount(count30d: number): number {
@@ -57,11 +62,11 @@ export function countWithinWindow(timestamps: number[], now = Date.now()): numbe
 }
 
 // ===== 사용자 점수 =====
+// 별점 1~5 → 점수 3~15 (avg × 3)
 export function userScoreFromRatings(ratings: number[]): number {
   if (ratings.length === 0) return 0;
   const avg = ratings.reduce((a, b) => a + b, 0) / ratings.length;
-  // 별점 1~5 → 점수 5~25. 만점 25 클램프.
-  return Math.max(0, Math.min(SCORE_MAX.USER, avg * 5));
+  return Math.max(0, Math.min(SCORE_MAX.USER, avg * 3));
 }
 
 // ===== 종합 점수 =====
@@ -79,7 +84,7 @@ export type DeriveGradeInput = {
     punishTypes?: string;      // 보존 (UI 표시·통계용). ROTTEN 트리거에는 사용 안 함.
     hygieneViolation?: boolean; // AI 분류 + 새올민원 위생 키워드 룰 — ROTTEN 트리거
   };
-  userScore?: number;       // 0~25, default 0
+  userScore?: number;       // 0~15, default 0
   userReviewCount?: number; // default 0
 };
 
@@ -89,7 +94,7 @@ export function deriveGrade(input: DeriveGradeInput | number): GradeKey {
 
   const { score, flags = {}, userScore = 0, userReviewCount = 0 } = input;
 
-  if (score >= GRADE_THRESHOLDS.GOLDEN) return 'GOLDEN';   // 80+
+  if (score >= GRADE_THRESHOLDS.GOLDEN) return 'GOLDEN';   // 65+
   if (score >= GRADE_THRESHOLDS.SILVER) return 'SILVER';   // 50+
 
   // score < SILVER 임계값 — 트랩 치즈 조건 평가

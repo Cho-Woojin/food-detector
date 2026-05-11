@@ -59,7 +59,6 @@ export interface Restaurant {
   // (I1540 위생관리 평가는 식품제조 데이터로 음식점과 무관 → evalDelta 제거)
   dataBreakdown?: { hygiene: number; model: number; bonus: number; punish: number };
   // 행정처분/평가 플래그 (deriveGrade에서 사용)
-  evalGrade?: string;
   punishTypes?: string;
   hygieneViolation?: boolean;   // AI 분류 위생 직결 위반 — ROTTEN 트리거
   punishReasons?: string;       // AI 분류 위반사유 요약 pipe-separated (UI 표시용)

@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/Card';
 import { Icon, IconName } from '@/components/Icon';
 import { color, spacing, typography } from '@/constants/tokens';
 
-type Breakdown = { hygiene: number; evalDelta: number; punish: number; model: number };
+type Breakdown = { hygiene: number; model: number; bonus: number; punish: number };
 type Flags = {
   hygieneDesignated?: boolean;
   hasModel?: boolean;

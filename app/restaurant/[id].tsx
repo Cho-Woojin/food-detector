@@ -99,14 +99,13 @@ export default function RestaurantDetail() {
       deriveGrade({
         score: adjustedScore,
         flags: {
-          evalGrade: raw?.evalGrade,
           punishTypes: raw?.punishTypes,
           hygieneViolation: raw?.hygieneViolation,
         },
         userScore: reviewImpact.userScore,
         userReviewCount: reviewImpact.reviewCount,
       }),
-    [adjustedScore, raw?.evalGrade, raw?.punishTypes, raw?.hygieneViolation, reviewImpact.userScore, reviewImpact.reviewCount],
+    [adjustedScore, raw?.punishTypes, raw?.hygieneViolation, reviewImpact.userScore, reviewImpact.reviewCount],
   );
   const impactDelta = adjustedScore - dataScore;
 

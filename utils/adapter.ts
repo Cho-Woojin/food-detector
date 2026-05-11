@@ -227,7 +227,7 @@ export function recomputeFromRaw(r: Restaurant): { score: number; grade: Grade }
     score: r.score,
     grade: deriveGradeCore({
       score: r.score,
-      flags: { evalGrade: r.evalGrade, punishTypes: r.punishTypes },
+      flags: { punishTypes: r.punishTypes },
       userScore: r.userScore,
       userReviewCount: r.userReviewCount,
     }) as Grade,
@@ -240,7 +240,7 @@ export function toUIRestaurant(r: Restaurant): UIRestaurant {
   const score = r.score;
   const grade = deriveGradeCore({
     score,
-    flags: { evalGrade: r.evalGrade, punishTypes: r.punishTypes },
+    flags: { punishTypes: r.punishTypes },
     userScore: r.userScore,
     userReviewCount: r.userReviewCount,
   }) as Grade;

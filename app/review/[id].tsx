@@ -160,26 +160,34 @@ export default function ReviewComposeScreen() {
     setPhotos((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
-    setTimeout(() => {
-      addReview({
-        userId: kakaoUser?.id != null ? String(kakaoUser.id) : null,
-        restaurantId: String(id ?? ''),
-        restaurantName,
-        rating: Math.round(ratingAvg),
-        tags: [],
-        foreignObjects: [],
-        body: body.trim(),
-        photos,
-        visitDate: visitDateFromWindow(visitWindow),
-        axisRatings,
-        visitWindow,
-      });
-      setSubmitting(false);
-      setSubmitted(true);
-    }, 300);
+    const result = await addReview({
+      userId: kakaoUser?.id != null ? String(kakaoUser.id) : null,
+      userNickname: kakaoUser?.nickname ?? null,
+      userProfileImage: kakaoUser?.profileImage ?? null,
+      restaurantId: String(id ?? ''),
+      restaurantName,
+      rating: Math.round(ratingAvg),
+      tags: [],
+      foreignObjects: [],
+      body: body.trim(),
+      photos,
+      visitDate: visitDateFromWindow(visitWindow),
+      axisRatings,
+      visitWindow,
+    });
+    setSubmitting(false);
+    if (!result) {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert('리뷰 등록에 실패했어요. 잠시 후 다시 시도해주세요.');
+      } else {
+        Alert.alert('실패', '리뷰 등록에 실패했어요. 잠시 후 다시 시도해주세요.');
+      }
+      return;
+    }
+    setSubmitted(true);
   };
 
   if (!kakaoUser) {
