@@ -58,17 +58,12 @@ const GRADE_META: Record<GradeKey, { count: number; label: string }> = {
 type Phrase = { text: string; tone: 'success' | 'danger' | 'warning' | 'neutral' };
 function buildSignalPhrase(r: DataRestaurant): Phrase | null {
   if (r.hygieneViolation) return { text: '식약처 위생 직결 위반 이력', tone: 'danger' };
-  if (r.evalGrade === '중점관리업소') return { text: '식약처 중점관리업소', tone: 'danger' };
 
   const hyg = r.hyg === 1;
   const mod = r.mod === 1;
   if (hyg && mod) return { text: '위생등급 지정 + 모범음식점', tone: 'success' };
   if (hyg) return { text: '식약처 위생등급 지정업소', tone: 'success' };
   if (mod) return { text: '모범음식점 지정', tone: 'success' };
-
-  if (r.evalGrade === '자율관리업소') return { text: '자율관리업소', tone: 'success' };
-  if (r.evalGrade === '일반관리업소') return { text: '일반관리업소', tone: 'neutral' };
-  if (r.evalGrade === '평가불능업소') return { text: '평가불능업소', tone: 'warning' };
 
   if ((r.pun ?? 0) > 0) {
     const firstPunish = (r.punishTypes ?? '').split('|').filter(Boolean)[0];
@@ -123,7 +118,6 @@ export const RestaurantBottomSheet = forwardRef<RestaurantBottomSheetHandle, Pro
       ? deriveGrade({
           score: adjustedScore,
           flags: {
-            evalGrade: restaurant.evalGrade,
             punishTypes: restaurant.punishTypes,
             hygieneViolation: restaurant.hygieneViolation,
           },
@@ -148,7 +142,6 @@ export const RestaurantBottomSheet = forwardRef<RestaurantBottomSheetHandle, Pro
     // ROTTEN(트랩 치즈) 사유 — 50점 미만 + 과락 충족 시 노출
     const rottenReasons: string[] = [];
     if (adjustedGrade === 'ROTTEN' && restaurant) {
-      if (restaurant.evalGrade === '중점관리업소') rottenReasons.push('중점관리업소');
       if (restaurant.hygieneViolation) rottenReasons.push('위생 직결 위반');
       if (reviewImpact.reviewCount >= 10 && reviewImpact.userScore <= 10) {
         rottenReasons.push('사용자 평점 낮음');
@@ -226,7 +219,6 @@ export const RestaurantBottomSheet = forwardRef<RestaurantBottomSheetHandle, Pro
                 punishCount: restaurant.pun ?? 0,
                 punishTypes: restaurant.punishTypes,
                 hasModel: restaurant.mod === 1,
-                evalGrade: restaurant.evalGrade,
                 ownerDelta: ownerImpact.delta,
                 ownerPostCount: ownerImpact.postCount,
                 reviewCount: reviewImpact.reviewCount,

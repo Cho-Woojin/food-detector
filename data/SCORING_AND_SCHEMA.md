@@ -187,10 +187,10 @@ function ownerScore(verifications: Verification[], now = Date.now()): number {
 }
 ```
 
-### 구현 메모 (현재 단계)
+### 구현 메모
 
-- 사장님 청소 인증 기능은 **현재 개발 중** (별도 화면). 인증 데이터는 백엔드 부재 동안 클라이언트 storage(또는 향후 백엔드)에서 식당별로 누적.
-- MVP 시점에서는 **모든 식당의 사장님 점수 = 0**이 정상. 점수 산식·UI 노출은 미리 셋업해 두고 인증 기능 완성과 함께 자동 반영.
+- **PR #7 (2026-05-10)**: 사장님 모드 4개 도메인 구현 — 소유권(ownership) · 인증 게시글(ownerPosts) · 정보 수정(ownerEdits) · 리뷰 답글(reviewReplies). 별도 산식: 인증 게시글 N건 → +3(1건)/+5(2건)/+6(3건+) 가산 (`utils/owner.ts`의 `computeOwnerImpact`). 본 §의 "최근 30일 × 2.5" 공식은 `utils/scoring.ts`의 `ownerScoreFromCount`로 보존돼 있지만 PR #7 이후 호출 X (legacy).
+- **PR `feat/db-supabase` (2026-05-10)**: 4개 도메인 모두 Supabase Postgres 백엔드 도입. 멀티 기기·멀티 사용자 동기화 가능. 사진은 Supabase Storage(`photos` bucket의 `verifications/` 폴더). 자세한 스키마는 [docs/05_DATA.md §4](../docs/05_DATA.md#4️⃣-사용자-데이터-supabase-백엔드).
 
 ---
 
@@ -222,6 +222,13 @@ function userScore(reviews: Review[]): number {
 - 별점은 1~5 정수. 평균은 소수점 가능.
 - 리뷰 작성 시 부가 입력(긍정/부정 태그·이물질·사진·한줄평)은 점수에 직접 반영하지 않음. **별점 평균만 점수 산식에 사용**.
 - 이물질 신고는 UI에 강조 표시(빨간 배너 등)하지만 점수 차감 X. 운영진/사장님이 보고 대응할 시그널 역할.
+
+### 의미 변화 (PR `feat/db-supabase`, 2026-05-10)
+
+- 이전엔 사용자 리뷰가 본인 폰 localStorage에만 영속 → 사용자 점수가 사실상 **"본인 별점 평균"**.
+- Supabase Postgres 도입 후 모든 사용자 리뷰가 한 DB에 모이므로 자동으로 **"전체 사용자 평균"**으로 의미 전환.
+- 코드 변경 X — `useImpactFor()` 호출 시그니처 그대로. cache가 모든 사용자 리뷰를 가져오는 게 차이.
+- 멀티 사용자 시연 시 "여러 사용자가 같은 식당에 별점 매기면 평균이 합쳐진다"가 진짜로 동작. 사진은 Supabase Storage(`photos` bucket의 `reviews/` 폴더).
 
 ---
 

@@ -105,30 +105,39 @@ export default function ReviewComposeScreen() {
     setPhotos((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
-    setTimeout(() => {
-      addReview({
-        userId: kakaoUser?.id != null ? String(kakaoUser.id) : null,
-        restaurantId: String(id ?? ''),
-        restaurantName,
-        rating,
-        tags: [...tags],
-        foreignObjects: [...foreign],
-        body: body.trim(),
-        photos,
-        visitDate,
-      });
-      setSubmitting(false);
-      // web의 Alert.alert는 버튼 콜백을 지원 안 함 → 직접 분기
+    const result = await addReview({
+      userId: kakaoUser?.id != null ? String(kakaoUser.id) : null,
+      userNickname: kakaoUser?.nickname ?? null,
+      userProfileImage: kakaoUser?.profileImage ?? null,
+      restaurantId: String(id ?? ''),
+      restaurantName,
+      rating,
+      tags: [...tags],
+      foreignObjects: [...foreign],
+      body: body.trim(),
+      photos,
+      visitDate,
+    });
+    setSubmitting(false);
+    if (!result) {
+      // Supabase insert 또는 사진 업로드 실패
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        window.alert('리뷰가 등록됐어요. 식탐정이 검토 후 반영해요.');
+        window.alert('리뷰 등록에 실패했어요. 잠시 후 다시 시도해주세요.');
       } else {
-        Alert.alert('리뷰가 등록됐어요', '식탐정이 검토 후 반영해요.');
+        Alert.alert('실패', '리뷰 등록에 실패했어요. 잠시 후 다시 시도해주세요.');
       }
-      router.back();
-    }, 300);
+      return;
+    }
+    // web의 Alert.alert는 버튼 콜백을 지원 안 함 → 직접 분기
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.alert('리뷰가 등록됐어요. 식탐정이 검토 후 반영해요.');
+    } else {
+      Alert.alert('리뷰가 등록됐어요', '식탐정이 검토 후 반영해요.');
+    }
+    router.back();
   };
 
   const ratingHint = rating > 0 ? RATING_LABEL[rating] : '별점을 먼저 선택해주세요';

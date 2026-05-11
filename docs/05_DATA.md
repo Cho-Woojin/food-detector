@@ -95,6 +95,57 @@ GPS → 자치구 매핑, 로드할 chunk 결정에 사용.
 
 ---
 
+## 4️⃣ 사용자 데이터 (Supabase 백엔드)
+
+PR `feat/db-supabase`로 도입. **식당 마스터 데이터(`data/by-gu/`)는 정적 JSON 유지**, 사용자 생성 데이터만 Supabase Postgres + Storage. Hybrid 구조.
+
+### 테이블 (`supabase/migrations/`)
+
+| 테이블 | 용도 | 키 |
+|---|---|---|
+| `reviews` | 위생 리뷰 (별점·태그·이물질·사진·한줄평) | uuid id |
+| `favorites` | 즐겨찾기 | (user_id, restaurant_id) PK |
+| `restaurant_ownership` | 식당 → 사장님 (1:1) | restaurant_id PK |
+| `owner_posts` | 사장님 인증 게시글 | uuid id |
+| `owner_edits` | 가게 정보 수정 (영업시간 등) (1:1) | restaurant_id PK |
+| `review_replies` | 리뷰 답글 (1리뷰 1답글) | review_id PK (→ reviews FK CASCADE) |
+
+모든 테이블 RLS 활성, 시연용 정책은 anon/authenticated CRUD 모두 허용.
+
+### Storage
+
+| Bucket | 용도 | 폴더 |
+|---|---|---|
+| `photos` | 리뷰·사장님 인증 사진 | `reviews/`, `verifications/` |
+
+5MB 제한, jpeg/png/webp만 허용. public bucket — URL로 누구나 조회.
+
+### Auth 전략
+
+커스텀 카카오 OAuth (`utils/kakaoAuth.ts`)는 그대로 유지. Supabase는 anon key로 직접 호출. user_id 컬럼은 카카오 user.id(number)를 클라가 String 변환해 박음. **RLS 보안은 시연용으로 관대** — production은 향후 Supabase Auth 통일 시 강화 예정.
+
+### Client
+
+| 파일 | 역할 |
+|---|---|
+| `utils/supabase.ts` | Supabase 클라이언트 (createClient + 헬퍼) |
+| `utils/upload.ts` | base64 → Storage path 변환 헬퍼 |
+| `utils/reviews.ts` | 리뷰 store — 함수 시그니처 유지, 내부 Supabase |
+| `utils/favorites.ts` | 즐겨찾기 store — 카카오 로그인 사용자 단위 |
+| `utils/owner.ts` | 사장님 모드 4개 도메인 통합 store |
+
+모듈 레벨 in-memory cache + `useSyncExternalStore` 패턴. mount 시 fetch, mutation은 optimistic update + rollback on error.
+
+자세한 셋업·MCP 연동·로컬 개발은 [supabase/README.md](../supabase/README.md).
+
+### 점수 산식 의미 변화 (중요)
+
+이전엔 사용자 리뷰가 본인 폰 localStorage에 갇혀서 "사용자 점수 = 본인 별점 평균"이었음. Supabase 도입 후 모든 사용자 리뷰가 한 DB에 모이므로 자동으로 **"전체 사용자 평균"**으로 의미 전환. 코드 변경 X — `useImpactFor()` 호출은 동일하지만 cache가 모든 사용자 리뷰를 가져옴.
+
+→ 시연 시 "여러 사용자 같은 식당에 별점 매기면 평균이 진짜로 합쳐진다"가 가능. 공모전 어필 포인트.
+
+---
+
 ## 🛠 갱신 절차
 
 데이터 점수 룰 또는 분류 로직이 바뀌면:
@@ -222,13 +273,14 @@ node scripts/apply-good-price.js
 
 ## ⚠️ 한계
 
-- **사장님 청소 인증 시스템은 개발 중** — `utils/owner.ts`에 구조만 있고 실제 인증 데이터는 아직 0. 기능 완성 시 자동 반영.
-- **사용자 리뷰는 로컬 storage** — 백엔드 부재 동안 `localStorage`에 영속. 디바이스 간 동기화 X.
+- **사용자 데이터 백엔드** — PR `feat/db-supabase`부터 Supabase Postgres + Storage. 멀티 기기·멀티 사용자 동기화 가능 (자세한 스키마는 [§4 사용자 데이터](#4️⃣-사용자-데이터-supabase-백엔드)).
+- **사장님 모드** — PR #7로 4개 도메인 구현, PR `feat/db-supabase`로 백엔드 도입.
 - **정적 스냅샷** — 신규 식당·신규 행정처분 즉시 반영 X (재빌드 필요)
 - **GOLDEN은 귀함 (2.6%)** (2026-05-10) — 위생등급 + 가산 인증(모범/안심/착한) 받은 식당만 데이터만으로 GOLDEN 진입. 위생등급 단독 식당은 SILVER, 활동 점수가 더해지면 GOLDEN으로 격상 가능.
 - **위생등급 3단계 미반영(점수)** — `flags.hygieneGrade`로 매우우수/우수/좋음을 저장만 하고 점수 산식은 동일하게 +20점. 점수 차등화는 향후 별도 작업.
 - **안심식당 미반영(점수)** — `flags.safeRestaurant`로 표시만 하고 점수 산식 미반영. 점수 가산(예: +3 또는 +5) 여부는 향후 결정.
 - **착한가격업소 미반영(점수)** — `flags.goodPrice` + 메뉴/가격 정보를 표시만 하고 점수 미반영. 위생·청결 30점 평가를 통과한 식당이라는 점에서 위생 보조 시그널로 활용 여지.
 - **메인 hero 위험지수는 별개** — 환경·식중독은 추후 외부 API 예정
+- **RLS 보안 약함 (시연용)** — anon key + 클라가 박은 user_id 신뢰. 악의적 사용자가 다른 user_id로 위변조 가능. production은 Supabase Auth 통일 + auth.uid() 기반 RLS로 강화 필요.
 
-본래 계획은 FastAPI + PostgreSQL + PostGIS 백엔드. 현재는 MVP용 정적 데이터 + 클라이언트 storage.
+본래 계획은 FastAPI + PostgreSQL + PostGIS 백엔드. 현재는 **Supabase Postgres + Storage (사용자 생성 데이터) + 정적 JSON (식당 마스터)** hybrid.
