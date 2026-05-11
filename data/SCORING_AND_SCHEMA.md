@@ -222,6 +222,7 @@ function userScore(reviews: Review[]): number {
 - 별점은 1~5 정수. 평균은 소수점 가능.
 - 리뷰 작성 시 부가 입력(긍정/부정 태그·이물질·사진·한줄평)은 점수에 직접 반영하지 않음. **별점 평균만 점수 산식에 사용**.
 - 이물질 신고는 UI에 강조 표시(빨간 배너 등)하지만 점수 차감 X. 운영진/사장님이 보고 대응할 시그널 역할.
+- **4축 모델 (2026-05, 마이그레이션 0004)**: 작성 UI는 테이블·식기 / 음식 / 직원 / 화장실 4축 별점 + 방문 시점 칩(`today`·`week`·`older`)을 입력받음. DB는 `axis_table`/`axis_food`/`axis_staff`/`axis_restroom`(int, nullable, 1~5) + `visit_window`(text, nullable) 컬럼에 그대로 저장. 점수 산식엔 영향 없음 — 4축 평균을 반올림한 값이 기존 `rating` 컬럼에도 같이 들어가서, 산식과 카드 표시는 그대로 `rating` 사용.
 
 ### 의미 변화 (PR `feat/db-supabase`, 2026-05-10)
 
