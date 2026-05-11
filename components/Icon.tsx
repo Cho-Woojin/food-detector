@@ -40,6 +40,11 @@ const ALIASES = {
   // 환경
   thermometer: 'thermometer-outline',
   bug: 'bug-outline',
+  cloud: 'cloud-outline',          // 대기질
+  sunny: 'sunny-outline',           // 자외선
+  rainy: 'rainy-outline',           // 강수 (예비)
+  happy: 'happy-outline',           // 좋음 (표정)
+  sad: 'sad-outline',               // 나쁨 (표정)
   // 5축
   water: 'water-outline',
   leaf: 'leaf-outline',

@@ -32,6 +32,16 @@ const ALL_GUS: GuKey[] = [
   '구로구', '금천구', '영등포구', '동작구', '관악구', '서초구', '강남구', '송파구', '강동구',
 ];
 
+// 등급 필터 — 치즈 색과 매칭. ROTTEN은 위험 식당이라 색 강조.
+type GradeFilter = 'ALL' | 'GOLDEN' | 'SILVER' | 'BRONZE' | 'ROTTEN';
+const GRADE_FILTERS: { key: GradeFilter; label: string }[] = [
+  { key: 'ALL', label: '전체' },
+  { key: 'GOLDEN', label: '골드' },
+  { key: 'SILVER', label: '실버' },
+  { key: 'BRONZE', label: '브론즈' },
+  { key: 'ROTTEN', label: '트랩' },
+];
+
 // 지도 카테고리 필터 옵션
 const CATEGORY_FILTERS: { key: CategoryKey | 'ALL'; label: string }[] = [
   { key: 'ALL', label: '전체' },
@@ -70,6 +80,7 @@ export default function MapScreen() {
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<CategoryKey | 'ALL'>('ALL');
+  const [gradeFilter, setGradeFilter] = useState<GradeFilter>('ALL');
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null);
   const likedIds = useLikedIds();
 
@@ -127,11 +138,13 @@ export default function MapScreen() {
     });
   }, [restaurants, impactMap, ownerImpactMap]);
 
-  // 카테고리 필터 적용된 결과
+  // 카테고리 + 등급 필터 적용된 결과
   const visible = useMemo(() => {
-    if (categoryFilter === 'ALL') return adjustedRestaurants;
-    return adjustedRestaurants.filter((r) => r.cat === categoryFilter);
-  }, [adjustedRestaurants, categoryFilter]);
+    let list = adjustedRestaurants;
+    if (categoryFilter !== 'ALL') list = list.filter((r) => r.cat === categoryFilter);
+    if (gradeFilter !== 'ALL') list = list.filter((r) => r.grade === gradeFilter);
+    return list;
+  }, [adjustedRestaurants, categoryFilter, gradeFilter]);
 
   // selected 객체는 매 렌더마다 adjustedRestaurants에서 lookup — 리뷰 보정 즉시 반영
   const selected = useMemo<Restaurant | null>(() => {
@@ -349,6 +362,31 @@ export default function MapScreen() {
             </View>
           ) : null}
 
+          {/* 등급 필터 칩 — 위쪽: 시각적 위계상 카테고리보다 상위 결정 */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipsRow}
+            style={styles.chipsScroll}>
+            {GRADE_FILTERS.map((g) => {
+              const active = gradeFilter === g.key;
+              return (
+                <Pressable
+                  key={g.key}
+                  onPress={() => setGradeFilter(g.key)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  style={({ pressed }) => [
+                    styles.chip,
+                    active && styles.chipActive,
+                    pressed && { opacity: 0.85 },
+                  ]}>
+                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{g.label}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+
           {/* 카테고리 필터 칩 */}
           <ScrollView
             horizontal
@@ -454,13 +492,21 @@ const styles = StyleSheet.create({
   },
   searchEmptyText: { ...typography.caption, color: color.text.tertiary },
 
-  // 카테고리 필터 칩
-  chipsScroll: { marginTop: spacing.s, flexGrow: 0 },
+  // 카테고리 필터 칩 — 우측 끝 페이드(웹) + 칩 그림자 제거로 잘림 방지
+  chipsScroll: {
+    marginTop: spacing.s,
+    flexGrow: 0,
+    // 웹: 우측 16px만 부드럽게 페이드 (좌측은 깔끔히 시작)
+    ...({
+      WebkitMaskImage: 'linear-gradient(to right, black 0, black calc(100% - 24px), transparent 100%)',
+      maskImage: 'linear-gradient(to right, black 0, black calc(100% - 24px), transparent 100%)',
+    } as any),
+  },
   chipsRow: {
     flexDirection: 'row',
     flexWrap: 'nowrap',
     alignItems: 'center',
-    paddingRight: spacing.m,
+    paddingRight: spacing.xl,
   },
   chip: {
     paddingHorizontal: spacing.m,
@@ -471,7 +517,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: color.border.default,
     flexShrink: 0,
-    ...(elevation.raised as ViewStyle),
   },
   chipActive: {
     backgroundColor: color.brand.primary,

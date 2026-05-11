@@ -7,6 +7,7 @@ import { AnimatedHeart, AppHeader, Card, Chip, EmptyState, IconButton, Screen } 
 import type { Restaurant as RawRestaurant } from '@/constants/Restaurant';
 import { ensureRawById, ensureRecomputedIndex } from '@/utils/dataStore';
 import { toggleLike as toggleLikeStore, useLikedIds } from '@/utils/favorites';
+import { gateAction } from '@/utils/loginGate';
 import { adjustedScoreAndGrade, EMPTY_REVIEW_IMPACT, useReviewImpactMap } from '@/utils/reviews';
 import { useOwnerImpactMap } from '@/utils/owner';
 import { router } from 'expo-router';
@@ -124,7 +125,9 @@ export default function FavoritesScreen() {
     setSort(next);
   };
 
-  const toggleLike = (id: string) => { toggleLikeStore(id); };
+  const toggleLike = (id: string) => {
+    gateAction(() => toggleLikeStore(id), '로그인하면 좋아요로 가게를 모아 볼 수 있어요');
+  };
 
   return (
     <Screen variant="surface" edges={['top']} paddingHorizontal="none">

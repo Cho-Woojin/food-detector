@@ -73,6 +73,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.l,
     borderWidth: 1,
     borderColor: color.border.default,
+    // 웹 브라우저 기본 focus outline이 둥근 모서리 밖으로 삐져나가는 이슈 — overflow 차단
+    overflow: 'hidden',
     ...(elevation.subtle as ViewStyle),
   },
   placeholder: {
@@ -85,5 +87,7 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: color.text.primary,
     paddingVertical: 0,
+    // RN-Web: input focus 시 노랑 outline 제거. 시각 강조는 placeholder→텍스트 색 전환으로 충분.
+    ...({ outlineStyle: 'none', outlineWidth: 0 } as any),
   },
 });

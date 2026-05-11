@@ -14,6 +14,7 @@ import { Restaurant as DataRestaurant, GradeKey, RiskTag } from '@/constants/Res
 import { color, radius, spacing, typography } from '@/constants/tokens';
 import { deriveGrade, toUIRestaurant } from '@/utils/adapter';
 import { useIsLiked, toggleLike } from '@/utils/favorites';
+import { gateAction } from '@/utils/loginGate';
 import { AnimatedHeart, Chip } from '@/components/ui';
 import { BottomSheetSymbols } from '@/components/score/BottomSheetSymbols';
 import { useOwnerImpactFor } from '@/utils/owner';
@@ -53,10 +54,10 @@ const RISK_LABEL: Partial<Record<RiskTag, string>> = {
 
 // 등급별 표시 메타. 치즈 갯수 + 라벨. (한줄평은 buildSignalPhrase로 동적 생성)
 const GRADE_META: Record<GradeKey, { count: number; label: string }> = {
-  GOLDEN: { count: 3, label: '골드 치즈' },
-  SILVER: { count: 2, label: '실버 치즈' },
-  BRONZE: { count: 1, label: '브론즈 치즈' },
-  ROTTEN: { count: 0, label: '트랩 치즈' },
+  GOLDEN: { count: 3, label: '골드 치즈 등급' },
+  SILVER: { count: 2, label: '실버 치즈 등급' },
+  BRONZE: { count: 1, label: '브론즈 치즈 등급' },
+  ROTTEN: { count: 0, label: '트랩 치즈 등급' },
 };
 
 // 시그널 기반 한줄평. 시그널이 없으면 null — phrase 영역 자체 미노출.
@@ -231,7 +232,9 @@ export const RestaurantBottomSheet = forwardRef<RestaurantBottomSheetHandle, Pro
                 active={liked}
                 size={22}
                 hitSize={36}
-                onPress={() => toggleLike(restaurant.id)}
+                onPress={() =>
+                  gateAction(() => toggleLike(restaurant.id), '로그인하면 좋아요로 가게를 모아 볼 수 있어요')
+                }
               />
             </View>
 

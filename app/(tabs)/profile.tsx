@@ -86,7 +86,6 @@ export default function ProfileScreen() {
         value: String(reviewCount),
         onPress: () => router.push('/my-reviews' as any),
       },
-      { icon: 'camera', label: '업로드한 사진', comingSoon: true, disabled: true },
     ],
   };
 
@@ -104,20 +103,12 @@ export default function ProfileScreen() {
       ],
     },
     {
-      title: '설정',
-      items: [
-        { icon: 'location', label: '지역 설정', value: '서울 전체', comingSoon: true, disabled: true },
-        { icon: 'bell', label: '알림 설정', comingSoon: true, disabled: true },
-        { icon: 'moon', label: '다크 모드', comingSoon: true, disabled: true },
-      ],
-    },
-    {
       title: '식탐정',
       items: [
-        { icon: 'doc', label: '서비스 약관', onPress: () => {} },
-        { icon: 'doc', label: '개인정보 처리방침', onPress: () => {} },
-        { icon: 'chat', label: '문의하기', onPress: () => {} },
-        { icon: 'sparkles', label: '데이터 출처', value: '식약처·카카오', onPress: () => {} },
+        { icon: 'doc', label: '서비스 약관', onPress: () => router.push('/legal/terms' as any) },
+        { icon: 'doc', label: '개인정보 처리방침', onPress: () => router.push('/legal/privacy' as any) },
+        { icon: 'chat', label: '문의하기', onPress: () => router.push('/legal/contact' as any) },
+        { icon: 'sparkles', label: '데이터 출처', onPress: () => router.push('/legal/data-sources' as any) },
       ],
     },
   ];

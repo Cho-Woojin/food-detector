@@ -41,8 +41,8 @@ const GRADE_STYLE: Record<string, { color: string; size: number; border: number;
   GOLDEN:        { color: '#FACC15', size: 36, border: 1, zIndex: 50, minLevel: 14 }, // 노랑 치즈
   SILVER:        { color: '#A3B8C2', size: 36, border: 1, zIndex: 40, minLevel: 5  }, // 실버 치즈
   BRONZE:        { color: '#CD7F32', size: 36, border: 1, zIndex: 30, minLevel: 4  }, // 브론즈 치즈
-  ROTTEN:        { color: '#FF3B30', size: 36, border: 1, zIndex: 60, minLevel: 8  }, // 트랩 치즈 — 위험 식별
-  WARNING:       { color: '#EF4444', size: 36, border: 1, zIndex: 35, minLevel: 4  }, // 빨강 경고 (legacy)
+  ROTTEN:        { color: '#EF5B4C', size: 36, border: 1, zIndex: 60, minLevel: 8  }, // 트랩 치즈 — 위험 식별 (따뜻한 코랄)
+  WARNING:       { color: '#EF5B4C', size: 36, border: 1, zIndex: 35, minLevel: 4  }, // 빨강 경고 (legacy)
   NEEDS_DATA:    { color: '#D1D5DB', size: 28, border: 1, zIndex: 10, minLevel: -1 }, // 회색 — 검색/좋아요만
   INVESTIGATING: { color: '#D1D5DB', size: 28, border: 1, zIndex: 10, minLevel: -1 },
 };
@@ -56,10 +56,17 @@ const SHADOW_PAD = 6;
 
 // 같은 좌표(같은 건물·다층 입주)에 식당이 N개 있으면 모두 같은 픽셀에 쌓여
 // 최상위 1개만 보이는 문제. 가장 점수 높은 마커는 원래 좌표 유지, 나머지를
-// 작은 ring(반경 ~25m)으로 균등 분포해서 모두 보이도록.
+// 반경 20m 내 결정적 랜덤 위치로 분산해서 모두 보이도록.
 // 좌표는 5소수점(약 1m) 기준으로 그룹핑 — 거의 같은 건물 입주가 대상.
-const COLOCATED_JITTER_RADIUS_M = 25; // ring 반경(m)
+// id 해시 기반이라 같은 식당은 항상 같은 위치로 떨어짐 (재렌더 흔들림 없음).
+const COLOCATED_JITTER_RADIUS_M = 20; // 분산 반경(m)
 const ONE_DEG_LAT_M = 111_111;        // 1° 위도 ≈ 111,111m
+function hashIdToUnit(id: string, salt: number): number {
+  let h = salt;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
+  // 0~1 정규화
+  return ((h >>> 0) % 10000) / 10000;
+}
 function jitterColocated(list: Restaurant[]): Restaurant[] {
   const groups = new Map<string, Restaurant[]>();
   for (const r of list) {
@@ -72,15 +79,18 @@ function jitterColocated(list: Restaurant[]): Restaurant[] {
   const offsetById = new Map<string, { dLat: number; dLng: number }>();
   for (const [, group] of groups) {
     if (group.length <= 1) continue;
-    // 입력이 score desc 정렬 상태 → 첫 항목(최고점)은 원좌표 유지, 1번부터 ring 분배
-    const others = group.length - 1;
+    // 입력이 score desc 정렬 상태 → 첫 항목(최고점)은 원좌표 유지, 1번부터 디스크 내 랜덤 위치
     for (let i = 1; i < group.length; i++) {
-      const angle = (2 * Math.PI * (i - 1)) / others;
-      const dLat = (COLOCATED_JITTER_RADIUS_M * Math.cos(angle)) / ONE_DEG_LAT_M;
-      const cosLat = Math.cos((group[i].lat * Math.PI) / 180);
-      const dLng =
-        (COLOCATED_JITTER_RADIUS_M * Math.sin(angle)) / (ONE_DEG_LAT_M * Math.max(cosLat, 0.1));
-      offsetById.set(group[i].id, { dLat, dLng });
+      const r = group[i];
+      // 균일 디스크 분포: r = R·√u, θ = 2π·v. id 해시로 결정적.
+      const u = hashIdToUnit(r.id, 0x9e3779b9);
+      const v = hashIdToUnit(r.id, 0x85ebca6b);
+      const radius = COLOCATED_JITTER_RADIUS_M * Math.sqrt(u);
+      const angle = 2 * Math.PI * v;
+      const dLat = (radius * Math.cos(angle)) / ONE_DEG_LAT_M;
+      const cosLat = Math.cos((r.lat * Math.PI) / 180);
+      const dLng = (radius * Math.sin(angle)) / (ONE_DEG_LAT_M * Math.max(cosLat, 0.1));
+      offsetById.set(r.id, { dLat, dLng });
     }
   }
   if (offsetById.size === 0) return list;
@@ -100,7 +110,7 @@ const GRADE_ICON: Record<string, IconKind> = {
   GOLDEN: 'cheese',
   SILVER: 'cheese',
   BRONZE: 'cheese',
-  ROTTEN: 'cheese',           // 트랩 치즈 PNG (위험 식별)
+  ROTTEN: 'warning',          // 트랩 치즈 — 빨강 삼각 경고 (트랩 PNG는 마커에 사용 X)
   WARNING: 'warning',
   NEEDS_DATA: 'magnify',      // 수집중 = 돋보기
   INVESTIGATING: 'magnify',
@@ -144,7 +154,7 @@ function bubbleMarkerSrc(grade: string, fill: string, size: number, opacity = 1,
   } else if (iconKind === 'warning') {
     icon =
       `<g transform="translate(32 28)">` +
-        `<path d="M0 -20 L20 16 L-20 16 Z" fill="#EF4444" stroke="white" stroke-width="1.4" stroke-linejoin="round"/>` +
+        `<path d="M0 -20 L20 16 L-20 16 Z" fill="#EF5B4C" stroke="white" stroke-width="1.4" stroke-linejoin="round"/>` +
         `<rect x="-2" y="-9" width="4" height="14" rx="2" fill="white"/>` +
         `<circle cx="0" cy="11" r="2.4" fill="white"/>` +
       `</g>`;

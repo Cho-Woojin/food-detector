@@ -44,3 +44,5 @@ export { useTokens } from './useTokens';
 
 export { SearchBar } from './SearchBar';
 export type { SearchBarProps } from './SearchBar';
+
+export { LegalScreen, LegalSection, LegalParagraph, LegalBullet } from './LegalScreen';
