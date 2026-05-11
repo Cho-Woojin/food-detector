@@ -82,6 +82,12 @@ function computeDataScore(flags) {
 
   data += hygiene + bonus;
 
+  // 점수 순서 (2026-05-12 수정): 가산 → cap 70 먼저 → 페널티 차감 → 0 클램프.
+  // 이전엔 모든 계산 후 마지막에 cap 70 적용해서 페널티가 cap에 묻히는 경우 발생.
+  // 예: 위생+모범+안심 = 25+35+25+15 = 100 → 영업정지 -25 → 75 → cap 70 (페널티 실효 없음).
+  // 새 순서: 100 → cap 70 → -25 → 45. 페널티가 항상 살아남음.
+  data = Math.min(70, data);
+
   let punish = 0;
   const types = (flags.punishTypes || '').split('|').filter(Boolean);
   for (const t of types) {
@@ -89,7 +95,7 @@ function computeDataScore(flags) {
   }
   data += punish;
 
-  data = Math.max(0, Math.min(70, data));
+  data = Math.max(0, data);
   return { data, hygiene, model, safe, good, bonus, punish };
 }
 
@@ -368,11 +374,22 @@ for (const r of rows) {
   }
   if (lat !== null) stats.geoOk++; else stats.geoFail++;
 
+  // 영업 의심 가드: 식약처 행정처분 영업소폐쇄/영업허가취소 받았는데
+  // LOCALDATA에선 "영업"으로 등록된 식당 = 두 출처 불일치, 영업 여부 불확실.
+  // utils/scoring.ts deriveGrade()에서 BRONZE 이상 등급 차단용.
+  // dedup: 외부 통합 CSV 빌더에서 "영업소폐쇄|영업소폐쇄" 같은 동일 처분 중복이 다수 발생 (2026-05-11 송파 분석).
+  // 한 식당이 같은 처분을 두 번 받았다고 표시하면 페널티가 2배로 잘못 부과되므로 Set으로 정규화.
+  const punishTypesArr = [...new Set((r.punish_types || '').split('|').filter(Boolean))];
+  const suspectedClosed =
+    punishTypesArr.includes('영업소폐쇄') ||
+    punishTypesArr.includes('영업허가·등록취소');
+
   const flags = {
     hygieneDesignated: bool(r.hygiene_designated),
     hasModel: bool(r.has_model),
-    punishCount: num(r.punish_count) ?? 0,
-    punishTypes: r.punish_types || '',
+    punishCount: punishTypesArr.length,
+    punishTypes: punishTypesArr.join('|'),
+    suspectedClosed,
     // 위생관리평가(I1540)는 제거됨 (2026-05-10) — 식품제조·가공업체 평가라 음식점에 부적절.
     // hygieneGrade(매우우수/우수/좋음)는 split 단계에서 채우지 않음.
     // CSV 파이프라인 통합 후, scripts/apply-hygiene-grades.js를 별도로 실행해

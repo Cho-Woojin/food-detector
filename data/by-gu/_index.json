@@ -1,137 +1,141 @@
 {
-  "generatedAt": "2026-05-10T14:49:57.711Z",
-  "total": 152238,
+  "generatedAt": "2026-05-11T16:05:03.128Z",
+  "total": 151592,
+  "geo": {
+    "ok": 149421,
+    "fail": 2171
+  },
   "files": [
     {
       "gu": "강남구",
       "slug": "gangnam",
-      "count": 15507,
+      "count": 15553,
       "file": "restaurants-gangnam.json"
     },
     {
       "gu": "강동구",
       "slug": "gangdong",
-      "count": 5024,
+      "count": 4981,
       "file": "restaurants-gangdong.json"
     },
     {
       "gu": "강북구",
       "slug": "gangbuk",
-      "count": 3900,
+      "count": 3877,
       "file": "restaurants-gangbuk.json"
     },
     {
       "gu": "강서구",
       "slug": "gangseo",
-      "count": 6954,
+      "count": 6926,
       "file": "restaurants-gangseo.json"
     },
     {
       "gu": "관악구",
       "slug": "gwanak",
-      "count": 5819,
+      "count": 5786,
       "file": "restaurants-gwanak.json"
     },
     {
       "gu": "광진구",
       "slug": "gwangjin",
-      "count": 5357,
+      "count": 5339,
       "file": "restaurants-gwangjin.json"
     },
     {
       "gu": "구로구",
       "slug": "guro",
-      "count": 4902,
+      "count": 4857,
       "file": "restaurants-guro.json"
     },
     {
       "gu": "금천구",
       "slug": "geumcheon",
-      "count": 3900,
+      "count": 3888,
       "file": "restaurants-geumcheon.json"
     },
     {
       "gu": "노원구",
       "slug": "nowon",
-      "count": 4804,
+      "count": 4752,
       "file": "restaurants-nowon.json"
     },
     {
       "gu": "도봉구",
       "slug": "dobong",
-      "count": 2768,
+      "count": 2719,
       "file": "restaurants-dobong.json"
     },
     {
       "gu": "동대문구",
       "slug": "dongdaemun",
-      "count": 5004,
+      "count": 4967,
       "file": "restaurants-dongdaemun.json"
     },
     {
       "gu": "동작구",
       "slug": "dongjak",
-      "count": 3999,
+      "count": 3955,
       "file": "restaurants-dongjak.json"
     },
     {
       "gu": "마포구",
       "slug": "mapo",
-      "count": 9533,
+      "count": 9501,
       "file": "restaurants-mapo.json"
     },
     {
       "gu": "서대문구",
       "slug": "seodaemun",
-      "count": 4581,
+      "count": 4541,
       "file": "restaurants-seodaemun.json"
     },
     {
       "gu": "서초구",
       "slug": "seocho",
-      "count": 7457,
+      "count": 7432,
       "file": "restaurants-seocho.json"
     },
     {
       "gu": "성동구",
       "slug": "seongdong",
-      "count": 4847,
+      "count": 4827,
       "file": "restaurants-seongdong.json"
     },
     {
       "gu": "성북구",
       "slug": "seongbuk",
-      "count": 4827,
+      "count": 4768,
       "file": "restaurants-seongbuk.json"
     },
     {
       "gu": "송파구",
       "slug": "songpa",
-      "count": 9310,
+      "count": 9288,
       "file": "restaurants-songpa.json"
     },
     {
       "gu": "양천구",
       "slug": "yangcheon",
-      "count": 3853,
+      "count": 3810,
       "file": "restaurants-yangcheon.json"
     },
     {
       "gu": "영등포구",
       "slug": "yeongdeungpo",
-      "count": 8397,
+      "count": 8376,
       "file": "restaurants-yeongdeungpo.json"
     },
     {
       "gu": "용산구",
       "slug": "yongsan",
-      "count": 6088,
+      "count": 6091,
       "file": "restaurants-yongsan.json"
     },
     {
       "gu": "은평구",
       "slug": "eunpyeong",
-      "count": 4716,
+      "count": 4669,
       "file": "restaurants-eunpyeong.json"
     },
     {
@@ -143,50 +147,46 @@
     {
       "gu": "중구",
       "slug": "junggu",
-      "count": 8215,
+      "count": 8247,
       "file": "restaurants-junggu.json"
     },
     {
       "gu": "중랑구",
       "slug": "jungnang",
-      "count": 4230,
+      "count": 4196,
       "file": "restaurants-jungnang.json"
     }
   ],
   "byCategory": {
-    "한식": 40041,
-    "아시안": 3561,
-    "치킨": 8980,
-    "카페디저트": 25595,
-    "분식": 9481,
-    "도시락": 671,
-    "술집": 6867,
-    "고기": 5689,
-    "중식": 3824,
-    "일식": 9093,
-    "기타": 22466,
-    "양식": 9848,
-    "찜탕": 2751,
-    "패스트푸드": 2125,
-    "뷔페": 410,
+    "일식": 8542,
+    "한식": 40034,
+    "카페디저트": 23212,
+    "기타": 34988,
+    "분식": 9470,
+    "양식": 9801,
+    "치킨": 3692,
+    "샌드위치": 430,
+    "중식": 3830,
+    "찜탕": 2674,
     "샐러드": 404,
-    "샌드위치": 432
+    "술집": 5371,
+    "고기": 4445,
+    "패스트푸드": 2126,
+    "도시락": 491,
+    "아시안": 2082
   },
   "byDataScore": {
-    "70": 3956,
-    "60-69": 28869,
-    "50-59": 5858,
-    "40-49": 1960,
-    "20-29": 109110,
-    "10-19": 869,
-    "0-9": 1455,
-    "30-39": 161
+    "50": 38357,
+    "20-29": 110917,
+    "0-9": 970,
+    "10-19": 1327,
+    "30-39": 21
   },
   "byRisk": {
-    "raw_fish": 2866,
+    "raw_fish": 2391,
+    "raw_meat": 672,
     "shellfish_raw": 146,
-    "raw_meat": 673,
-    "fugu": 91,
+    "fugu": 46,
     "egg_raw": 2
   }
 }

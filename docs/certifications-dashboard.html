@@ -112,14 +112,14 @@
 
 <header>
   <h1>🔐 식탐정 인증 데이터 대시보드</h1>
-  <div class="meta">2026-05-10 기준 · 서울 25개 자치구 · 152,238개 식당</div>
+  <div class="meta">2026-05-11 기준 · 서울 25개 자치구 · 151,592개 식당 (LOCALDATA 영업·정상만)</div>
 </header>
 
 <!-- ============ 요약 통계 ============ -->
 <section class="summary">
   <div class="stat">
-    <div class="num">152,238</div>
-    <div class="label">전체 식당 (서울)</div>
+    <div class="num">151,592</div>
+    <div class="label">전체 식당 (LOCALDATA 영업·정상만, 2026-05-11)</div>
   </div>
   <div class="stat">
     <div class="num">6 종</div>
@@ -127,11 +127,11 @@
   </div>
   <div class="stat">
     <div class="num">42,287</div>
-    <div class="label">인증 보유 식당 (27.8%)</div>
+    <div class="label">인증 보유 식당 (27.9%)</div>
   </div>
   <div class="stat">
-    <div class="num">4,981</div>
-    <div class="label">2개 이상 인증 보유 (3.3%)</div>
+    <div class="num" style="color: var(--punish)">2,225</div>
+    <div class="label">영업의심(suspectedClosed) — 자동 BRONZE</div>
   </div>
 </section>
 
@@ -259,16 +259,19 @@
       <div class="bar-wrap"><div class="bar-fill" style="width: 1.64%; min-width: 60px; background: var(--punish)">1.64%</div><span class="bar-label">2,493건</span></div>
 
       <table class="matrix">
-        <tr><th>처분 종류</th><th class="num">건수</th><th>점수 영향</th></tr>
-        <tr><td>영업소폐쇄</td><td class="num">2,853</td><td style="color: var(--punish)"><b>-50</b> (안전망)</td></tr>
-        <tr><td>영업정지</td><td class="num">282</td><td style="color: var(--punish)"><b>-25</b></td></tr>
-        <tr><td>영업허가취소</td><td class="num">67</td><td style="color: var(--punish)"><b>-50</b></td></tr>
-        <tr><td>위생직결 위반 (룰)</td><td class="num">23</td><td style="color: var(--punish)">ROTTEN 트리거</td></tr>
+        <tr><th>처분 종류</th><th class="num">건수 (dedup 후)</th><th>점수 영향</th></tr>
+        <tr><td>영업소폐쇄</td><td class="num">2,162</td><td style="color: var(--punish)"><b>-50</b> + <b>영업의심 가드</b></td></tr>
+        <tr><td>영업정지</td><td class="num">271</td><td style="color: var(--punish)"><b>-25</b></td></tr>
+        <tr><td>영업허가·등록취소</td><td class="num">63</td><td style="color: var(--punish)"><b>-50</b> + <b>영업의심 가드</b></td></tr>
+        <tr><td>과징금부과</td><td class="num">0</td><td style="color: var(--punish)"><b>-10</b> (정의됨, 미관측)</td></tr>
+        <tr><td>그 외 처분 (기본값)</td><td class="num">—</td><td style="color: var(--punish)"><b>-3</b></td></tr>
+        <tr><td>위생직결 위반 (AI 분류 + 새올민원)</td><td class="num">29</td><td style="color: var(--punish)">ROTTEN 트리거</td></tr>
       </table>
 
       <div class="impact">
-        <div class="lbl">⚠️ 영업소폐쇄 처분의 진실</div>
-        실제론 거의 다 폐업 행정정리(시설철거·사업자등록 말소). 위생 위험 시그널 X. ROTTEN 트리거에는 위반사유 텍스트의 위생 키워드 매칭만 사용.
+        <div class="lbl">⚠️ 두 가지 보정 (2026-05-11)</div>
+        ① <b>dedup</b>: 외부 통합 CSV 빌더에서 "영업소폐쇄|영업소폐쇄" 동일 처분 중복이 다수 발생 (송파만 387건). split 단계에서 <code>Set</code>으로 정규화 — 영업소폐쇄 2,853 → 2,162.<br>
+        ② <b>영업의심 가드</b>: LOCALDATA에선 "영업"인데 식약처에선 "영업소폐쇄/허가취소"인 식당은 <code>flags.suspectedClosed=true</code>로 마킹 → 자동 BRONZE 강등. 본도시락 100건 케이스 등 해결.
       </div>
     </div>
   </div>
@@ -305,6 +308,265 @@
     </div>
   </div>
 
+</div>
+
+<!-- ============ 행정처분 기술통계 ============ -->
+<h2>📊 행정처분 기술통계 (분포 분석)</h2>
+
+<p style="font-size: 13px; color: var(--muted); margin-bottom: 16px;">
+  서울 152,238개 식당 중 행정처분 이력이 있는 식당 분포. 데이터 출처: 식약처 I2630 + 25개 자치구 새올민원.
+  <b>처분 종류별 감점은 <code>scripts/split-restaurants.js</code> <code>PUNISH_DELTAS</code> 상수로 정의되어 데이터 점수에 누적 차감됨.</b>
+</p>
+
+<!-- 1. 요약 stat -->
+<section class="summary" style="margin-bottom: 20px;">
+  <div class="stat">
+    <div class="num" style="color: var(--punish)">2,493</div>
+    <div class="label">행정처분 이력 식당 (1.64%)</div>
+  </div>
+  <div class="stat">
+    <div class="num" style="color: var(--punish)">2,225</div>
+    <div class="label">영업의심 — 자동 BRONZE (89.2% of 처분)</div>
+  </div>
+  <div class="stat">
+    <div class="num">0</div>
+    <div class="label">처분 후 GOLDEN/SILVER (가드로 차단)</div>
+  </div>
+  <div class="stat">
+    <div class="num" style="color: var(--punish)">29</div>
+    <div class="label">위생직결 ROTTEN 트리거</div>
+  </div>
+</section>
+
+<!-- 2. 처분 종류별 감점표 (강조) -->
+<h3 style="font-size: 16px; margin: 24px 0 12px; font-weight: 600;">▍ 처분 종류별 감점 룰 (dedup + 영업의심 가드 적용 후, 2026-05-11)</h3>
+<table class="matrix">
+  <tr>
+    <th>처분 종류</th>
+    <th class="num">서울 건수</th>
+    <th class="num">전체 처분 중 비율</th>
+    <th class="num">감점</th>
+    <th>실제 의미 / 비고</th>
+  </tr>
+  <tr>
+    <td><b>영업소폐쇄</b></td>
+    <td class="num">2,162</td>
+    <td class="num">86.6%</td>
+    <td class="num" style="color: var(--punish)"><b>-50</b> + 가드</td>
+    <td>폐업 행정정리. <code>flags.suspectedClosed=true</code> 마킹 → 자동 BRONZE 강등</td>
+  </tr>
+  <tr>
+    <td>영업정지</td>
+    <td class="num">271</td>
+    <td class="num">10.9%</td>
+    <td class="num" style="color: var(--punish)"><b>-25</b></td>
+    <td>위반사유 다양 (청소년 주류, 음향·춤 등 사회 위반 비중 큼). 영업 의심 가드는 적용 안 함 (영업중 가정)</td>
+  </tr>
+  <tr>
+    <td>영업허가·등록취소</td>
+    <td class="num">63</td>
+    <td class="num">2.5%</td>
+    <td class="num" style="color: var(--punish)"><b>-50</b> + 가드</td>
+    <td>희소, 폐업 행정정리에 가까움. 가드 적용 (BRONZE 강등)</td>
+  </tr>
+  <tr>
+    <td>과징금부과</td>
+    <td class="num">0</td>
+    <td class="num">0%</td>
+    <td class="num" style="color: var(--punish)"><b>-10</b></td>
+    <td><code>PUNISH_DELTAS</code>에 정의돼 있으나 현재 수집된 데이터엔 미관측</td>
+  </tr>
+  <tr>
+    <td>그 외 처분</td>
+    <td class="num">—</td>
+    <td class="num">—</td>
+    <td class="num" style="color: var(--punish)"><b>-3</b></td>
+    <td>미분류 처분의 기본 감점 (<code>?? -3</code>)</td>
+  </tr>
+  <tr style="background: #fff8e7;">
+    <td><b>위생직결 위반</b> (AI 분류 + 새올민원)</td>
+    <td class="num">29</td>
+    <td class="num">1.2%</td>
+    <td class="num" style="color: var(--punish)"><b>ROTTEN 트리거</b></td>
+    <td>점수 감점이 아닌 별도 등급 강등 — <code>flags.hygieneViolation=true</code>일 때 BRONZE→ROTTEN. apply-eminwon 부착 후 3 → 29건</td>
+  </tr>
+</table>
+<p style="font-size: 12px; color: var(--muted); margin-top: 8px;">
+  ※ 종류별 합계(2,496) ≠ 처분 식당 수(2,493) — 한 식당이 다른 종류 처분 동시 받는 경우는 3건만 존재 (이전 489건 → dedup으로 3건).
+</p>
+
+<!-- 3. 처분 건수 분포 + 인증 동시 보유 (2 cols) -->
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 24px;">
+
+  <div>
+    <h3 style="font-size: 16px; margin: 0 0 12px; font-weight: 600;">▍ 식당당 처분 건수 분포 (dedup 후)</h3>
+    <table class="matrix">
+      <tr><th>처분 건수</th><th class="num">식당 수 (현재)</th><th class="num">비율</th><th class="num">이전 (dedup 전)</th></tr>
+      <tr><td>1건</td><td class="num"><b>2,490</b></td><td class="num">99.9%</td><td class="num" style="color: var(--muted)">1,959</td></tr>
+      <tr><td>2건 (서로 다른 종류)</td><td class="num">3</td><td class="num">0.12%</td><td class="num" style="color: var(--muted)">487</td></tr>
+      <tr><td>3건+</td><td class="num">0</td><td class="num">0%</td><td class="num" style="color: var(--muted)">47</td></tr>
+    </table>
+    <p style="font-size: 12px; color: var(--muted); margin-top: 8px;">
+      이전엔 "영업소폐쇄|영업소폐쇄" 같은 동일 처분 중복이 다수(특히 송파 387건). 2026-05-11 split 단계 <code>Set</code> dedup으로 1건 식당 ↑.
+    </p>
+  </div>
+
+  <div>
+    <h3 style="font-size: 16px; margin: 0 0 12px; font-weight: 600;">▍ 처분 식당의 인증 동시 보유</h3>
+    <table class="matrix">
+      <tr><th>인증</th><th class="num">처분 + 인증 보유</th><th class="num">처분 식당 중 비율</th></tr>
+      <tr><td><span style="color: #b88d00;">위생등급</span></td><td class="num">1,521</td><td class="num"><b>61.0%</b></td></tr>
+      <tr><td><span style="color: #ff9500;">모범음식점</span></td><td class="num">300</td><td class="num">12.0%</td></tr>
+      <tr><td><span style="color: #5ac8fa;">안심식당</span></td><td class="num">15</td><td class="num">0.6%</td></tr>
+      <tr><td><span style="color: #af52de;">착한가격업소</span></td><td class="num">7</td><td class="num">0.3%</td></tr>
+      <tr style="background: #fff8e7;"><td><b>1개 이상 인증 보유</b></td><td class="num"><b>1,651</b></td><td class="num"><b>66.2%</b></td></tr>
+    </table>
+    <p style="font-size: 12px; color: var(--muted); margin-top: 8px;">
+      ⚠️ 처분 받은 식당의 66%가 인증을 동시 보유 — 인증과 처분이 독립 시그널임을 시사.
+    </p>
+  </div>
+
+</div>
+
+<!-- 4. 처분 후 등급 분포 -->
+<h3 style="font-size: 16px; margin: 28px 0 12px; font-weight: 600;">▍ 처분 받은 식당의 최종 등급 분포 (영업의심 가드 적용 후, 활동 점수 0 가정)</h3>
+<table class="matrix">
+  <tr>
+    <th>등급</th>
+    <th class="num">식당 수</th>
+    <th class="num">비율</th>
+    <th>해석</th>
+  </tr>
+  <tr>
+    <td><span class="grade-pill grade-GOLDEN">🧀 GOLDEN</span></td>
+    <td class="num"><b>0</b></td>
+    <td class="num">0.0%</td>
+    <td>✅ 영업의심 가드로 차단. <code>suspectedClosed=true</code>인 식당은 score=39로 클램프됨.</td>
+  </tr>
+  <tr>
+    <td><span class="grade-pill grade-SILVER">🧀 SILVER</span></td>
+    <td class="num"><b>0</b></td>
+    <td class="num">0.0%</td>
+    <td>✅ 이전 7곳(본도시락 프랜차이즈 등) → 가드 도입으로 모두 BRONZE 강등. ↓ 케이스 참고.</td>
+  </tr>
+  <tr>
+    <td><span class="grade-pill grade-BRONZE">🧀 BRONZE</span></td>
+    <td class="num">2,491</td>
+    <td class="num">99.9%</td>
+    <td>대다수. 영업의심 2,225 + 일반 BRONZE 266.</td>
+  </tr>
+  <tr>
+    <td><span style="font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 100px; background: #ffe5e3; color: var(--punish);">🚨 ROTTEN</span></td>
+    <td class="num" style="color: var(--punish)">2</td>
+    <td class="num">0.1%</td>
+    <td><code>flags.hygieneViolation=true</code> 트리거 + 영업의심 미해당. ↓ 케이스 참고.</td>
+  </tr>
+</table>
+
+<!-- 5. SILVER 7 케이스 (해결됨) + ROTTEN 케이스 -->
+<h3 style="font-size: 16px; margin: 28px 0 12px; font-weight: 600;">▍ 처분 + SILVER 7곳 — 이전 케이스 (영업의심 가드로 모두 해결, 2026-05-11)</h3>
+<table class="matrix">
+  <tr>
+    <th>식당명</th>
+    <th>자치구</th>
+    <th>처분</th>
+    <th>보유 인증</th>
+    <th>점수 계산</th>
+    <th class="num">이전 → 지금</th>
+  </tr>
+  <tr><td>본도시락</td><td>마포</td><td>영업소폐쇄</td><td>위생+모범+안심</td><td>35+25+15−50 = <b>50</b> → 가드 clamp <b>39</b></td><td class="num"><span style="color:#5e6266">SILVER</span> → <b style="color:#8b5a25">BRONZE</b></td></tr>
+  <tr><td>본도시락 은평뉴타운점</td><td>은평</td><td>영업소폐쇄</td><td>위생+모범+안심</td><td>50 → <b>39</b></td><td class="num">SILVER → <b>BRONZE</b></td></tr>
+  <tr><td>본도시락 신림점</td><td>관악</td><td>영업소폐쇄</td><td>위생+모범+안심</td><td>50 → <b>39</b></td><td class="num">SILVER → <b>BRONZE</b></td></tr>
+  <tr><td>청해진</td><td>동작</td><td>영업소폐쇄</td><td>위생+모범+안심</td><td>50 → <b>39</b></td><td class="num">SILVER → <b>BRONZE</b></td></tr>
+  <tr><td>감촌</td><td>종로</td><td>영업소폐쇄</td><td>위생+모범+안심</td><td>50 → <b>39</b></td><td class="num">SILVER → <b>BRONZE</b></td></tr>
+  <tr><td>명가</td><td>성동</td><td>영업소폐쇄</td><td>위생+모범+착한</td><td>50 → <b>39</b></td><td class="num">SILVER → <b>BRONZE</b></td></tr>
+  <tr><td>엄마밥상</td><td>송파</td><td>영업소폐쇄</td><td>위생+모범+착한</td><td>50 → <b>39</b></td><td class="num">SILVER → <b>BRONZE</b></td></tr>
+</table>
+<div class="impact" style="border-left-color: #34c759;">
+  <div class="lbl">✅ 해결 (2026-05-11)</div>
+  <code>utils/scoring.ts deriveGrade()</code>에 가드 추가: <code>if (flags.suspectedClosed) score = min(score, 39)</code>. 본도시락 100건 같은 폐점 프랜차이즈가 SILVER 뱃지를 달고 표시되는 UX 문제 해결. 데이터는 그대로 보존 (플래그만 끄면 원상복구 가능).
+</div>
+
+<h3 style="font-size: 16px; margin: 28px 0 12px; font-weight: 600;">▍ ROTTEN 트리거 3곳 — 위생직결 위반</h3>
+<table class="matrix">
+  <tr>
+    <th>식당명</th>
+    <th>자치구</th>
+    <th>처분</th>
+    <th>위반사유 (AI 분류)</th>
+  </tr>
+  <tr><td>하얀집 2호점</td><td>중구</td><td>영업정지</td><td>소비기한 경과제품 조리판매 목적으로 진열보관 (1차)</td></tr>
+  <tr><td>악토버 베이커리</td><td>서대문</td><td>영업정지</td><td>무등록 식품 사용·조리</td></tr>
+  <tr><td>하얀집</td><td>송파</td><td>영업정지</td><td>유통기한 지난 막걸리 판매 | 유통기한 경과 막걸리</td></tr>
+</table>
+
+<!-- 6. 위반사유 분류 (AI) -->
+<h3 style="font-size: 16px; margin: 28px 0 12px; font-weight: 600;">▍ 위반사유 분류 분포 (AI 분류 punishReasons, 상위 15)</h3>
+<table class="matrix">
+  <tr>
+    <th>위반사유</th>
+    <th class="num">건수</th>
+    <th>카테고리</th>
+  </tr>
+  <tr><td>손님 춤 허용</td><td class="num">5</td><td style="color: var(--muted)">사회·도덕 (위생 무관)</td></tr>
+  <tr><td>영업시설 철거</td><td class="num">5</td><td style="color: var(--muted)">폐업 행정정리</td></tr>
+  <tr><td>청소년 주류 제공</td><td class="num">4</td><td style="color: var(--muted)">사회·도덕</td></tr>
+  <tr><td>시설물 멸실</td><td class="num">3</td><td style="color: var(--muted)">폐업 행정정리</td></tr>
+  <tr><td>청소년 주류 판매</td><td class="num">2</td><td style="color: var(--muted)">사회·도덕</td></tr>
+  <tr><td>폐업신고 미이행</td><td class="num">2</td><td style="color: var(--muted)">행정</td></tr>
+  <tr><td>음향·춤 허용 (2차+추가)</td><td class="num">2</td><td style="color: var(--muted)">사회·도덕</td></tr>
+  <tr style="background: #fff8e7;"><td>소비기한 경과제품 진열보관</td><td class="num">1</td><td style="color: var(--punish)"><b>위생 직결 → ROTTEN</b></td></tr>
+  <tr><td>청소년유해업소 고용</td><td class="num">1</td><td style="color: var(--muted)">사회·도덕</td></tr>
+  <tr><td>유흥접객행위 알선</td><td class="num">1</td><td style="color: var(--muted)">사회·도덕</td></tr>
+  <tr><td>음향·노래 허용 (2차)</td><td class="num">1</td><td style="color: var(--muted)">사회·도덕</td></tr>
+  <tr><td>영업장외 영업</td><td class="num">1</td><td style="color: var(--muted)">행정</td></tr>
+  <tr><td>직권폐업·현장 멸실</td><td class="num">1</td><td style="color: var(--muted)">폐업 행정정리</td></tr>
+  <tr><td>폐업·시설철거 행정정리</td><td class="num">1</td><td style="color: var(--muted)">폐업 행정정리</td></tr>
+</table>
+<p style="font-size: 12px; color: var(--muted); margin-top: 8px;">
+  AI 분류된 309건 중 다수는 청소년 주류·음향춤 같은 <b>사회·도덕 위반</b>이거나 <b>폐업 행정정리</b>. 위생 직결은 매우 희소. 대부분 위반사유 텍스트가 비어 있어 분류 불가 (영업소폐쇄 통보엔 사유가 안 적힘).
+</p>
+
+<!-- 7. 자치구별 처분 분포 -->
+<h3 style="font-size: 16px; margin: 28px 0 12px; font-weight: 600;">▍ 자치구별 처분/영업의심 분포 (상위 10, 2026-05-11)</h3>
+<table class="matrix">
+  <tr>
+    <th>자치구</th>
+    <th class="num">처분 식당</th>
+    <th class="num">영업의심</th>
+    <th class="num">자치구 총 식당</th>
+    <th class="num">처분 비율</th>
+    <th>비고</th>
+  </tr>
+  <tr style="background: #ffe5e3;">
+    <td><b>송파구</b></td>
+    <td class="num"><b>766</b></td>
+    <td class="num">738</td>
+    <td class="num">9,288</td>
+    <td class="num" style="color: var(--punish);"><b>8.25%</b></td>
+    <td>⚠️ 평균 1.7% 대비 4~5배. <b>원인 분석 완료</b>: I2630 송파 raw 23건이 통합 CSV 빌더의 사업장명 fuzzy 매칭으로 광범위 적용된 듯 (본도시락 등 프랜차이즈에 false positive). dedup 후에도 잔존.</td>
+  </tr>
+  <tr><td>강남구</td><td class="num">288</td><td class="num">274</td><td class="num">15,553</td><td class="num">1.85%</td><td></td></tr>
+  <tr><td>서초구</td><td class="num">196</td><td class="num">189</td><td class="num">7,432</td><td class="num">2.64%</td><td></td></tr>
+  <tr><td>종로구</td><td class="num">179</td><td class="num">175</td><td class="num">8,246</td><td class="num">2.17%</td><td></td></tr>
+  <tr><td>동작구</td><td class="num">86</td><td class="num">82</td><td class="num">3,955</td><td class="num">2.17%</td><td></td></tr>
+  <tr><td>용산구</td><td class="num">80</td><td class="num">54</td><td class="num">6,091</td><td class="num">1.31%</td><td></td></tr>
+  <tr><td>중구</td><td class="num">79</td><td class="num">73</td><td class="num">8,247</td><td class="num">0.96%</td><td></td></tr>
+  <tr><td>은평구</td><td class="num">76</td><td class="num">59</td><td class="num">4,669</td><td class="num">1.63%</td><td></td></tr>
+  <tr><td>강동구</td><td class="num">68</td><td class="num">57</td><td class="num">4,981</td><td class="num">1.37%</td><td></td></tr>
+  <tr><td>중랑구</td><td class="num">67</td><td class="num">62</td><td class="num">4,196</td><td class="num">1.60%</td><td></td></tr>
+</table>
+
+<div class="impact" style="background: #fff8e7; border-left-color: #ff9500;">
+  <div class="lbl">🚦 구조적 시사점 (2026-05-12 갱신)</div>
+  ① <b>영업의심 가드</b>: <code>flags.suspectedClosed=true</code>인 식당 2,225개 자동 BRONZE.<br>
+  ② <b>위생직결 가드 (NEW)</b>: <code>flags.hygieneViolation=true</code>인 식당 29개 자동 BRONZE/ROTTEN. 메가MGC 성신여대점(아사이볼 금속이물) GOLDEN → ROTTEN 강등.<br>
+  ③ <b>점수 순서 변경 (NEW)</b>: 가산 → cap 70 먼저 → 페널티 차감 → 0 클램프. 이전엔 인증 3관왕이면 페널티 -25가 cap 70에 묻혀 무력화. 이제 처분 식당 2,493개 모두 페널티 실효.<br>
+  ④ <b>punishTypes dedup</b>: "영업소폐쇄|영업소폐쇄" 동일 처분 중복 정규화. 송파 영업소폐쇄 1,124 → 734.<br>
+  ⑤ <b>LOCALDATA 재빌드</b>: 152,238 → 151,592. 폐업 식당 646건 제거.<br>
+  ⑥ <b>가벼운 행정처분 통합 (NEW)</b>: <code>data/violations.json</code> 단일 SoT 생성 (I2630 304 + eminwon 음식점 675 = 979건, id hash dedup). 카테고리 매트릭스 차등 감점은 다음 라운드.<br>
+  ⑦ <b>잔존 과제</b>: 송파 8.25% (I2630 정확 매칭 필요), 생활회관 같은 누락 (새올민원 raw 재수집 필요).<br>
+  ⑧ <b>🔑 정확 매칭 다리 발견 (NEW)</b>: 새올민원 페이지의 <code>인허가번호</code>(20자리) ↔ LOCALDATA <code>mgtno</code> 1:1 변환 가능 검증 완료. 다음 수집 시 필드 추가하면 fuzzy 매칭 없이 정확 매칭 가능 (본도시락 false positive 해결의 열쇠).
 </div>
 
 <!-- ============ 데이터 매칭 흐름 ============ -->

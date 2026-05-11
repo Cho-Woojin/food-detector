@@ -8,7 +8,7 @@
 ```
 data/
 ├── by-gu/                            # 자치구별 식당 (82MB)
-│   ├── restaurants-{slug}.json × 25  # 152,238개 식당
+│   ├── restaurants-{slug}.json × 25  # 151,592개 식당
 │   └── _index.json                   # split 빌드 메타
 ├── restaurants-index.json            # 자치구 인덱스 (3KB)
 ├── hygiene-guides.json               # 위생 가이드 콘텐츠 (5KB)
@@ -16,6 +16,7 @@ data/
 ├── safe-restaurants-mafra.json       # MAFRA 안심식당 매칭 원본 (760KB, 서울 3,035건)
 ├── good-price-restaurants.json       # 행안부 착한가격업소 매칭 원본 (~440KB, 서울 1,989건)
 ├── violations-eminwon.json           # 자치구 새올민원 행정처분 raw (2MB, 25개구 3,734건)
+├── violations.json                   # 행정처분 통합본 (418KB, 979건 — I2630 + eminwon 음식점만, id hash dedup, 2026-05-12)
 ├── DATA_SOURCES.md                   # 출처 명세 (10KB)
 └── SCORING_AND_SCHEMA.md             # 점수 + 스키마 명세 (19KB)
 ```
@@ -35,7 +36,7 @@ data/
 | 신원 | `id`, `name`, `category`, `categoryRaw` | 검색·카드·필터 |
 | 위치 | `gu`, `addr`, `roadAddr`, `lat`, `lng`, `phone` | 지도 마커·상세 |
 | 데이터 점수 | `score` (0~70), `breakdown.{data, hygiene, model, bonus, punish}` | 종합 점수 계산용 base |
-| 인증/제재 | `flags.{hygieneDesignated, hygieneGrade, hasModel, safeRestaurant, safeRestaurantSince, goodPrice, goodPriceMenus, punishCount, punishTypes, punishReasons, hygieneViolation}` | 뱃지·경고·치즈 등급 분기 |
+| 인증/제재 | `flags.{hygieneDesignated, hygieneGrade, hasModel, safeRestaurant, safeRestaurantSince, goodPrice, goodPriceMenus, punishCount, punishTypes, punishReasons, hygieneViolation, suspectedClosed}` | 뱃지·경고·치즈 등급 분기 |
 | 위험 가이드 | `riskTags`, `menuHints` | 메뉴 카테고리 경고·시즌 가이드 |
 
 > JSON의 `score`는 **데이터 점수(0~70)** — 사장님·사용자 점수가 0인 초기값. 앱이 매 렌더 시 `score + ownerScore + userScore = 종합점수(0~100)`를 계산. 종합 점수와 등급은 JSON에 저장 X.
@@ -150,6 +151,11 @@ PR `feat/db-supabase`로 도입. **식당 마스터 데이터(`data/by-gu/`)는 
 
 데이터 점수 룰 또는 분류 로직이 바뀌면:
 
+0. **(LOCALDATA 마스터 재빌드)** 인허가 상태(영업/폐업)를 갱신하려면:
+   - raw 다운로드: `curl -o _archive/raw/07_24_04_P_CSV.zip "https://www.localdata.go.kr/datafile/each/07_24_04_P_CSV.zip"` (일반음식점 ~221MB) + `07_24_05_P_CSV.zip` (휴게음식점 ~64MB)
+   - 압축 해제 (한글 파일명 우회): `ditto -V -x -k _archive/raw/07_24_04_P_CSV.zip _archive/raw/extract/`
+   - CP949 → UTF-8: `iconv -f CP949 -t UTF-8 <input> > <output>.utf8.csv`
+   - 통합 CSV 생성: `node scripts/rebuild-master-from-raw.js` — 서울 + "영업"만 필터 + 휴게음식점 편의점 제외 + 기존 통합 CSV의 인증/처분 정보를 mgtno 기준 머지
 1. (필요 시) 새 CSV 받음 → `_archive/restaurants_with_scores.csv`로 저장
 2. `node scripts/split-restaurants.js` 실행 (CSV → 자치구별 JSON 재생성)
    - 또는 CSV 없이 점수만 재계산: `node scripts/recompute-scores.js`
@@ -276,6 +282,8 @@ node scripts/apply-good-price.js
 - **사용자 데이터 백엔드** — PR `feat/db-supabase`부터 Supabase Postgres + Storage. 멀티 기기·멀티 사용자 동기화 가능 (자세한 스키마는 [§4 사용자 데이터](#4️⃣-사용자-데이터-supabase-백엔드)).
 - **사장님 모드** — PR #7로 4개 도메인 구현, PR `feat/db-supabase`로 백엔드 도입.
 - **정적 스냅샷** — 신규 식당·신규 행정처분 즉시 반영 X (재빌드 필요)
+- **LOCALDATA 갱신 시차** — 인허가 raw의 "영업/폐업" 컬럼이 식약처 처분 시점보다 수개월~수년 늦게 반영됨. 영업소폐쇄/허가취소 처분 받은 식당이 LOCALDATA에선 "영업"으로 남아있는 케이스 다수 (본도시락 100건 등). 이를 보완하기 위해 `flags.suspectedClosed=true` 마킹 + scoring.ts에서 BRONZE 강등.
+- **새올민원 수집 시차 + 일부 자치구 누락** — 현재 raw는 2026-05-10 수집 기준. 처분 게시까지 며칠~일주일 시차 있음(예: 생활회관 4-21 위반 → 5-11 확정공시 → 5-12 발견). 또 강서·도봉·노원 등 일부 자치구는 음식점 raw 1건 이하로 비정상 — 수집 스크립트 페이지네이션 점검 필요. **다음 수집 시 `인허가번호` 필드 추가 필수** (LOCALDATA mgtno와 1:1 매칭 가능, 변환 공식은 [data/DATA_SOURCES.md ⑦](../data/DATA_SOURCES.md) 참조).
 - **GOLDEN은 귀함 (2.6%)** (2026-05-10) — 위생등급 + 가산 인증(모범/안심/착한) 받은 식당만 데이터만으로 GOLDEN 진입. 위생등급 단독 식당은 SILVER, 활동 점수가 더해지면 GOLDEN으로 격상 가능.
 - **위생등급 3단계 미반영(점수)** — `flags.hygieneGrade`로 매우우수/우수/좋음을 저장만 하고 점수 산식은 동일하게 +20점. 점수 차등화는 향후 별도 작업.
 - **안심식당 미반영(점수)** — `flags.safeRestaurant`로 표시만 하고 점수 산식 미반영. 점수 가산(예: +3 또는 +5) 여부는 향후 결정.

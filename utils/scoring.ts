@@ -83,6 +83,9 @@ export type DeriveGradeInput = {
     evalGrade?: string;
     punishTypes?: string;      // 보존 (UI 표시·통계용). ROTTEN 트리거에는 사용 안 함.
     hygieneViolation?: boolean; // AI 분류 + 새올민원 위생 키워드 룰 — ROTTEN 트리거
+    // 식약처 행정처분(영업소폐쇄/영업허가취소)을 받았는데 LOCALDATA에선 "영업"으로 등록된 식당.
+    // 두 출처 불일치 → 영업 여부 불확실. 사용자 안전을 위해 BRONZE 이상 등급 차단.
+    suspectedClosed?: boolean;
   };
   userScore?: number;       // 0~15, default 0
   userReviewCount?: number; // default 0
@@ -92,7 +95,20 @@ export function deriveGrade(input: DeriveGradeInput | number): GradeKey {
   // 숫자만 넘기면 score-only fallback (flags 없음 → 트랩 평가 불가, BRONZE로 떨어짐)
   if (typeof input === 'number') return deriveGrade({ score: input });
 
-  const { score, flags = {}, userScore = 0, userReviewCount = 0 } = input;
+  let { score, flags = {}, userScore = 0, userReviewCount = 0 } = input;
+
+  // 영업 의심 가드: LOCALDATA "영업" + 식약처 "영업소폐쇄/허가취소" 동시 보유 식당은
+  // 영업 여부 불확실 → BRONZE로 강등 (사용자 안전 우선).
+  if (flags.suspectedClosed) {
+    score = Math.min(score, GRADE_THRESHOLDS.SILVER - 1);
+  }
+
+  // 위생직결 위반 가드 (2026-05-12): AI 분류 + 새올민원 키워드 룰에서 위생 직결 위반 잡힌 식당은
+  // 인증 보유와 무관하게 GOLDEN/SILVER 진입 차단. 메가MGC 성신여대점(아사이볼 금속이물) 같은 케이스 해결.
+  // 처분이 by-gu의 punishCount/Types에 부착 안 됐어도 hygieneViolation flag만으로 등급 강등.
+  if (flags.hygieneViolation) {
+    score = Math.min(score, GRADE_THRESHOLDS.SILVER - 1);
+  }
 
   if (score >= GRADE_THRESHOLDS.GOLDEN) return 'GOLDEN';   // 65+
   if (score >= GRADE_THRESHOLDS.SILVER) return 'SILVER';   // 50+
