@@ -14,10 +14,15 @@ type Source = {
 
 const SECTIONS: { heading: string; sources: Source[] }[] = [
   {
+    heading: '서울 열린데이터광장 (data.seoul.go.kr)',
+    sources: [
+      { name: '서울시 일반음식점 인허가 정보', detail: '식당 마스터 (OA-16094, 약 12만 건)', url: 'https://data.seoul.go.kr/dataList/OA-16094/S/1/datasetView.do' },
+      { name: '서울시 휴게음식점 인허가 정보', detail: '커피숍·분식·디저트 등 (OA-16095, 약 3만 건)', url: 'https://data.seoul.go.kr/dataList/OA-16095/S/1/datasetView.do' },
+    ],
+  },
+  {
     heading: '공공데이터포털 (data.go.kr)',
     sources: [
-      { name: '전국일반음식점표준데이터', detail: '식당 마스터 (행안부, 약 12만 건)', url: 'https://www.data.go.kr/data/15096283/standard.do' },
-      { name: '전국휴게음식점', detail: '커피숍·분식·디저트 등 (약 3만 건)', url: 'https://www.data.go.kr/data/15006730/fileData.do' },
       { name: '전국모범음식점표준데이터', detail: '모범음식점 지정 (식약처 식중독예방과)', url: 'https://www.data.go.kr/data/15096282/standard.do' },
       { name: '농식품부 안심식당', detail: 'MAFRA 안심식당 지정', url: 'https://www.data.go.kr/data/15140017/fileData.do' },
       { name: '행안부 착한가격업소', detail: '착한가격업소 + 대표 메뉴/가격', url: 'https://www.data.go.kr/data/15083033/fileData.do' },
