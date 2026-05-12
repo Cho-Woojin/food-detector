@@ -13,11 +13,14 @@ export type KakaoLoginButtonProps = {
 
 export function KakaoLoginButton({
   onPress,
+  accessibilityLabel,
   style,
 }: KakaoLoginButtonProps) {
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? '카카오로 로그인'}
       style={({ pressed }) => [styles.btn, style, pressed && { opacity: 0.85 }]}>
       <Image source={Kakao.loginMediumWide} style={styles.image} resizeMode="contain" />
     </Pressable>
