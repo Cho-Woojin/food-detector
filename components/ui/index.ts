@@ -46,3 +46,6 @@ export { SearchBar } from './SearchBar';
 export type { SearchBarProps } from './SearchBar';
 
 export { LegalScreen, LegalSection, LegalParagraph, LegalBullet } from './LegalScreen';
+
+export { KakaoLoginButton } from './KakaoLoginButton';
+export type { KakaoLoginButtonProps } from './KakaoLoginButton';

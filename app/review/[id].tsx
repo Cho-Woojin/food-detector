@@ -18,7 +18,7 @@ import {
 } from 'lucide-react-native';
 
 import { Icon } from '@/components/Icon';
-import { Button, Card, IconButton } from '@/components/ui';
+import { Button, Card, IconButton, KakaoLoginButton } from '@/components/ui';
 import { Cheese, Mascots } from '@/constants/Assets';
 import type { Restaurant as RawRestaurant, GradeKey } from '@/constants/Restaurant';
 import { color, radius, spacing, typography } from '@/constants/tokens';
@@ -457,19 +457,15 @@ function Gate({ id, insets }: { id?: string; insets: ReturnType<typeof useSafeAr
           리뷰는 다른 사용자의 식당 선택에 영향을 줘요. 책임 있는 리뷰를 위해 카카오 로그인이 필요해요.
         </Text>
         <View style={{ width: '100%', marginTop: spacing.l }}>
-          <Button
-            variant="kakao"
-            size="lg"
-            fullWidth
-            leftIcon="chat"
+          <KakaoLoginButton
+            accessibilityLabel="카카오로 로그인"
             onPress={() => {
               if (typeof sessionStorage !== 'undefined' && id) {
                 sessionStorage.setItem('food-detector:pending-review', String(id));
               }
               loginWithKakao();
-            }}>
-            카카오로 로그인
-          </Button>
+            }}
+          />
         </View>
       </View>
     </View>

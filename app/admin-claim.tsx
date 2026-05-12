@@ -9,7 +9,7 @@ import { Stack, router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button } from '@/components/ui';
+import { Button, KakaoLoginButton } from '@/components/ui';
 import { Mascots } from '@/constants/Assets';
 import { color, mascotSize, radius, spacing, typography } from '@/constants/tokens';
 import { claimAdmin, isAdmin } from '@/utils/admin';
@@ -42,14 +42,7 @@ export default function AdminClaim() {
           <Text style={styles.body}>
             먼저 카카오로 로그인하면{'\n'}이 기기를 관리자로 등록할게요.
           </Text>
-          <Button
-            variant="kakao"
-            size="md"
-            leftIcon="chat"
-            fullWidth
-            onPress={() => loginWithKakao()}>
-            카카오로 로그인
-          </Button>
+          <KakaoLoginButton onPress={() => loginWithKakao()} accessibilityLabel="카카오로 로그인" />
         </>
       ) : done ? (
         <>

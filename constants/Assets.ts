@@ -45,3 +45,17 @@ export const Onboarding = {
   investigate: require('@/assets/onboarding/investigate.png'),
   celebrate: require('@/assets/onboarding/celebrate.png'),
 } as const;
+
+// Kakao 공식 로그인 버튼 — Kakao Developers 가이드라인 자산.
+// wide: 텍스트 포함 버튼 (가로 6.67:1, "카카오 로그인" 텍스트 임베드)
+// narrow: 텍스트 없는 길쭉형
+// 정사각형: 심볼만 (large/medium/small)
+export const Kakao = {
+  loginLargeWide:    require('@/assets/kakao/kakao_login_large_wide.png'),
+  loginMediumWide:   require('@/assets/kakao/kakao_login_medium_wide.png'),
+  loginLargeNarrow:  require('@/assets/kakao/kakao_login_large_narrow.png'),
+  loginMediumNarrow: require('@/assets/kakao/kakao_login_medium_narrow.png'),
+  loginLarge:        require('@/assets/kakao/kakao_login_large.png'),
+  loginMedium:       require('@/assets/kakao/kakao_login_medium.png'),
+  loginSmall:        require('@/assets/kakao/kakao_login_small.png'),
+} as const;

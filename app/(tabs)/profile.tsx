@@ -1,9 +1,8 @@
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useEffect, useState } from 'react';
 import { Icon, IconName } from '@/components/Icon';
-import { Mascots } from '@/constants/Assets';
 import { color, mascotSize, radius, spacing, typography } from '@/constants/tokens';
-import { AppHeader, Button, Card, Screen } from '@/components/ui';
+import { AppHeader, Card, KakaoLoginButton, Screen } from '@/components/ui';
 import { HygieneGuideListModal } from '@/components/HygieneGuideListModal';
 import { router } from 'expo-router';
 import { useLikedIds } from '@/utils/favorites';
@@ -117,9 +116,10 @@ export default function ProfileScreen() {
     <Screen variant="canvas" edges={['top']} scroll paddingHorizontal="l">
       <AppHeader
         title="내정보"
-        variant="large"
+        variant="default"
         leading="none"
         withSafeArea={false}
+        transparent
       />
 
       {/* Guest / logged-in profile card */}
@@ -136,11 +136,11 @@ export default function ProfileScreen() {
         />
       )}
 
-      {/* Menu sections */}
-      {sections.map((section, sIdx) => (
-        <View key={section.title} style={[styles.section, sIdx === 0 && { marginTop: spacing.xxl }]}>
+      {/* Menu sections — 모든 카드를 elevated로 통일 (로그인 카드와 동일) */}
+      {sections.map((section) => (
+        <View key={section.title} style={styles.section}>
           <Text style={styles.sectionTitle}>{section.title}</Text>
-          <Card variant="outlined" padding="none" radius="l" style={{ overflow: 'hidden' }}>
+          <Card variant="elevated" padding="none" radius="l" style={{ overflow: 'hidden' }}>
             {section.items.map((item, i) => (
               <MenuRow
                 key={item.label}
@@ -176,19 +176,11 @@ function GuestCard({ likedCount, onLogin }: { likedCount: number; onLogin: () =>
     ? `이 기기에 좋아요 ${likedCount}곳이 저장돼있어요. 로그인하면 다른 기기에서도 볼 수 있어요.`
     : '카카오로 로그인하면 좋아요·리뷰가 모든 기기에서 동기화돼요.';
   return (
-    <Card variant="elevated" padding="l" style={{ marginTop: spacing.l }}>
-      <View style={styles.guestRow}>
-        <Image source={Mascots.search} style={styles.guestMascot} resizeMode="contain" />
-        <View style={{ flex: 1 }}>
-          <Text style={styles.guestName}>식탐정 게스트</Text>
-          <Text style={styles.guestBody}>{sub}</Text>
-        </View>
-      </View>
-      <View style={{ marginTop: spacing.m }}>
-        <Button variant="kakao" size="md" fullWidth leftIcon="chat" onPress={onLogin}>
-          카카오로 시작하기
-        </Button>
-      </View>
+    <Card variant="elevated" padding="l" radius="l" style={styles.firstCardSpacing}>
+      <Text style={styles.guestName}>식탐정 게스트</Text>
+      <Text style={styles.guestBody}>{sub}</Text>
+      {/* 카카오 공식 버튼 — 카드 폭에 맞춘 풀 너비 */}
+      <KakaoLoginButton onPress={onLogin} />
     </Card>
   );
 }
@@ -202,7 +194,7 @@ function LoggedInCard({
 }) {
   const isOwner = ownedCount > 0;
   return (
-    <Card variant="elevated" padding="l" style={{ marginTop: spacing.l }}>
+    <Card variant="elevated" padding="l" radius="l" style={styles.firstCardSpacing}>
       <View style={styles.guestRow}>
         {profileImage ? (
           <Image source={{ uri: profileImage }} style={[styles.avatar, { backgroundColor: 'transparent' }]} />
@@ -276,11 +268,12 @@ function MenuRow({ item, showDivider }: { item: MenuItem; showDivider: boolean }
 }
 
 const styles = StyleSheet.create({
+  // 로그인 카드 — section 카드와 동일한 outer margin (spacing.l)
+  firstCardSpacing: { marginTop: spacing.l },
   // Guest / logged in
   guestRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.m },
-  guestMascot: { width: mascotSize.inline, height: mascotSize.inline },
   guestName: { ...typography.bodyEmphasized, color: color.text.primary, marginBottom: spacing.xxs },
-  guestBody: { ...typography.caption, color: color.text.secondary },
+  guestBody: { ...typography.caption, color: color.text.secondary, marginBottom: spacing.m },
   emailText: { ...typography.caption, color: color.text.secondary },
 
   // 프로필 카드 — 닉네임 옆 사장님 뱃지
@@ -349,13 +342,13 @@ const styles = StyleSheet.create({
   },
   soonBadgeText: { ...typography.footnote, color: color.text.tertiary, fontWeight: '600' },
 
-  // Menu sections
-  section: { marginTop: spacing.xl },
+  // Menu sections — 모든 카드 사이 동일한 outer margin (spacing.l)
+  section: { marginTop: spacing.l },
   sectionTitle: {
     ...typography.captionEmphasized,
     color: color.text.secondary,
     marginBottom: spacing.s,
-    paddingHorizontal: spacing.xs,
+    // 카드 좌측 가장자리에 맞춤 (이전 paddingHorizontal: xs 4px 제거)
   },
 
   menuItem: {
