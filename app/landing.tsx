@@ -38,7 +38,7 @@ export default function LandingScreen() {
     let cancelled = false;
     loadIndex()
       .then((idx) => { if (!cancelled) setTotalCount(idx.meta.totalCount); })
-      .catch(() => { /* silently fall back to '152,238개' fallback in display */ });
+      .catch(() => { /* silently fall back to '15만' fallback in display */ });
     return () => { cancelled = true; };
   }, []);
 
