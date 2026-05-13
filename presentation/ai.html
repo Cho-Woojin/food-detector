@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>식탐정 — AI 활용</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<style>
+  :root {
+    --primary: #22C55E;
+    --primary-soft: #DCFCE7;
+    --primary-deep: #15803D;
+    --accent: #FBBF24;
+    --accent-deep: #D97706;
+    --gemini-blue: #4285F4;
+    --claude-coral: #CC785C;
+    --text-900: #0F172A;
+    --text-700: #334155;
+    --text-500: #64748B;
+    --text-400: #94A3B8;
+    --border: #E2E8F0;
+    --bg: #F1F5F9;
+    --soft-bg: #F8FAFC;
+    --white: #FFFFFF;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    background: var(--bg);
+    font-family: 'Pretendard Variable', Pretendard, -apple-system, system-ui, sans-serif;
+    color: var(--text-900);
+    -webkit-font-smoothing: antialiased;
+  }
+  .deck {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 32px; padding: 48px 24px;
+  }
+  .slide {
+    position: relative;
+    width: 1280px; height: 720px;
+    background: var(--white);
+    border-radius: 20px;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06), 0 2px 6px rgba(15, 23, 42, 0.04);
+    overflow: hidden;
+  }
+  .brand {
+    position: absolute; top: 36px; left: 56px;
+    display: flex; align-items: center; gap: 8px;
+    font-weight: 700; font-size: 14px; color: var(--text-900);
+  }
+  .brand-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); }
+  .page-no {
+    position: absolute; top: 36px; right: 56px;
+    font-size: 12px; color: var(--text-400);
+  }
+  .page-no strong { color: var(--text-900); font-weight: 700; }
+  .dots {
+    position: absolute;
+    width: 92px; height: 92px;
+    background-image: radial-gradient(circle, var(--primary) 1.6px, transparent 1.8px);
+    background-size: 14px 14px;
+    opacity: 0.35;
+    pointer-events: none;
+  }
+  .dots.bl { bottom: 60px; left: 80px; }
+
+  /* 상단 헤더 */
+  .ai-header {
+    position: absolute;
+    left: 56px; top: 90px;
+    width: 1168px;
+  }
+  .label {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--primary);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .ai-title {
+    font-size: 34px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--text-900);
+    margin-bottom: 6px;
+  }
+  .ai-sub {
+    font-size: 13.5px;
+    color: var(--text-500);
+  }
+
+  /* 좌측 — 3개 섹션 */
+  .ai-sections {
+    position: absolute;
+    left: 56px; top: 200px;
+    width: 580px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .ai-section {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .ai-section:last-child { border-bottom: none; padding-bottom: 0; }
+
+  .sec-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 10px;
+  }
+  .sec-logo {
+    height: 22px;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .sec-logo img {
+    height: 100%;
+    width: auto;
+    object-fit: contain;
+  }
+  .sec-divider {
+    width: 1px;
+    height: 14px;
+    background: var(--border);
+    flex-shrink: 0;
+  }
+  .sec-tag {
+    font-size: 10.5px;
+    font-weight: 700;
+    color: var(--text-400);
+    letter-spacing: 0.14em;
+    font-family: 'SF Mono', Consolas, monospace;
+  }
+
+  .sec-title {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--text-900);
+    letter-spacing: -0.01em;
+    margin-bottom: 6px;
+  }
+  .sec-body {
+    font-size: 12px;
+    color: var(--text-500);
+    line-height: 1.55;
+    margin-bottom: 6px;
+  }
+  .sec-body strong { color: var(--text-700); font-weight: 600; }
+  .sec-body code {
+    font-family: 'SF Mono', Consolas, monospace;
+    font-size: 11.5px;
+    color: var(--text-900);
+    background: var(--soft-bg);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+  .sec-meta {
+    font-size: 11px;
+    color: var(--text-400);
+    font-family: 'SF Mono', Consolas, monospace;
+  }
+  .sec-meta .sec-meta-pri { color: var(--gemini-blue); font-weight: 700; }
+  .sec-meta .sec-meta-sec { color: var(--claude-coral); font-weight: 700; }
+
+  /* 좌측 텍스트 영역 폭 조정 */
+  /* 우측 — 모바일 목업 2개 (가로 나란히) */
+  .ai-mockups {
+    position: absolute;
+    right: 56px; top: 218px;
+    width: 460px;
+    height: 380px;
+  }
+  .mockup {
+    position: absolute;
+    border-radius: 24px;
+    overflow: hidden;
+    background: #1E293B;
+    box-shadow:
+      0 16px 36px rgba(15, 23, 42, 0.14),
+      0 4px 10px rgba(15, 23, 42, 0.06);
+    aspect-ratio: 1290 / 2796;
+  }
+  .mockup img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top center;
+    display: block;
+  }
+  .mockup.m1 {
+    /* 상세 페이지 — 좌측, 살짝 회전 */
+    left: 0; top: 0;
+    width: 175px;
+    transform: rotate(-3deg);
+    z-index: 2;
+  }
+  .mockup.m2 {
+    /* 행정처분 페이지 — 우측 */
+    right: 0; top: 10px;
+    width: 175px;
+    transform: rotate(3deg);
+    z-index: 1;
+  }
+  /* 작은 라벨 */
+  .mockup-label {
+    position: absolute;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-400);
+    letter-spacing: 0.04em;
+  }
+  .mockup-label.l1 {
+    top: -22px; left: 14px;
+  }
+  .mockup-label.l2 {
+    bottom: -22px; right: 14px;
+  }
+
+  /* 하단 NOTE */
+  .ai-bottom {
+    position: absolute;
+    left: 56px; right: 56px;
+    bottom: 28px;
+    display: flex;
+    align-items: baseline;
+    gap: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+  .ai-bottom-tag {
+    font-size: 10.5px;
+    font-weight: 700;
+    color: var(--text-400);
+    letter-spacing: 0.14em;
+    flex-shrink: 0;
+  }
+  .ai-bottom-text {
+    font-size: 12.5px;
+    color: var(--text-500);
+    line-height: 1.55;
+    flex: 1;
+  }
+  .ai-bottom-text strong { color: var(--text-900); font-weight: 700; }
+
+  .slide-caption {
+    color: var(--text-500);
+    font-size: 13px;
+    font-weight: 500;
+    margin-top: 4px;
+  }
+</style>
+</head>
+<body>
+<div class="deck">
+
+  <div class="slide">
+    <div class="brand"><span class="brand-dot"></span>식탐정</div>
+    <div class="page-no"><strong>01</strong> / 01</div>
+    <div class="dots bl"></div>
+
+    <div class="ai-header">
+      <span class="label">AI 활용</span>
+      <h1 class="ai-title">텍스트·기후 데이터를 위생 신호로 변환</h1>
+      <p class="ai-sub">3가지 기능 단위로 외부 데이터를 식탐정 점수·메뉴 가이드에 반영했어요</p>
+    </div>
+
+    <div class="ai-sections">
+
+      <!-- 섹션 1: 리뷰 토픽 분석 -->
+      <div class="ai-section">
+        <div class="sec-head">
+          <div class="sec-logo"><img src="image/logos/places.png" alt="Google Maps"></div>
+          <span class="sec-divider"></span>
+          <div class="sec-logo"><img src="image/logos/gemini.png" alt="Gemini"></div>
+          <span class="sec-tag">01 · BUILD</span>
+        </div>
+        <div class="sec-title">리뷰 토픽 분석</div>
+        <p class="sec-body">
+          <code>Google Places API</code>로 수집한 외부 리뷰를 <strong>위생·청결·서비스·맛</strong> 토픽으로 분류,
+          위생 부정 키워드 빈도를 사용자 점수 가중치로 사용합니다.
+        </p>
+        <div class="sec-meta">
+          <span class="sec-meta-pri">gemini-2.5-flash</span> · 대량 리뷰 분류·요약에 특화
+        </div>
+      </div>
+
+      <!-- 섹션 2: 행정처분 위반사유 분류 -->
+      <div class="ai-section">
+        <div class="sec-head">
+          <div class="sec-logo"><img src="image/logos/anthropic_full.png" alt="Anthropic"></div>
+          <span class="sec-divider"></span>
+          <div class="sec-logo"><img src="image/logos/claude.png" alt="Claude"></div>
+          <span class="sec-tag">02 · BUILD</span>
+        </div>
+        <div class="sec-title">행정처분 위반사유 분류</div>
+        <p class="sec-body">
+          식약처 <code>I2630</code>·새올민원의 위반사유 텍스트를 의미 기반으로 분석,
+          <strong>위생 직결 여부 + 심각도</strong>를 라벨링해 트랩 치즈 트리거·점수 페널티(−10 ~ −50)에 반영합니다.
+        </p>
+        <div class="sec-meta">
+          <span class="sec-meta-sec">claude-opus-4-7</span> · 한국어 행정 텍스트 의미 판정에 최고 정확도
+        </div>
+      </div>
+
+      <!-- 섹션 3 (NEW): 오늘의 메뉴 가이드 추천 -->
+      <div class="ai-section">
+        <div class="sec-head">
+          <div class="sec-logo"><img src="image/logos/gemini.png" alt="Gemini"></div>
+          <span class="sec-tag">03 · RUNTIME</span>
+        </div>
+        <div class="sec-title">오늘의 식탐정 메뉴 가이드</div>
+        <p class="sec-body">
+          오늘의 <strong>기후·식중독 지수</strong>를 입력으로, 해당 가게의 메뉴 중
+          <strong>오늘 안전한 메뉴 / 회피 메뉴</strong>를 AI가 즉시 분류·추천합니다.
+        </p>
+        <div class="sec-meta">
+          <span class="sec-meta-pri">gemini-2.5-flash</span> · 자치구별 위험 단계 + 메뉴 텍스트 조합 추천
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 우측 모바일 목업 (계단식) -->
+    <div class="ai-mockups">
+      <div class="mockup-label l1">상세 보고서</div>
+      <div class="mockup m1">
+        <img src="image/rounded/page1_score_detail.png" alt="상세 보고서">
+      </div>
+      <div class="mockup m2">
+        <img src="image/rounded/page2_trap_detail.png" alt="행정처분 위반">
+      </div>
+      <div class="mockup-label l2">행정처분 · 위생 직결 위반</div>
+    </div>
+
+    <div class="ai-bottom">
+      <span class="ai-bottom-tag">NOTE</span>
+      <span class="ai-bottom-text">
+        <strong>BUILD</strong> 단계 분석(01·02)은 결과를 정적 JSON에 캐시,
+        <strong>RUNTIME</strong> 단계(03)는 자치구 위험 단계가 바뀔 때 호출 — 두 단계 모두 백엔드 추론 비용 최소화.
+      </span>
+    </div>
+
+  </div>
+  <div class="slide-caption">AI 활용 — 데이터 구축 + 런타임 분석</div>
+
+</div>
+</body>
+</html>
