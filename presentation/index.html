@@ -672,6 +672,272 @@
   }
 
   /* ════════════════════════════════════════════════
+     Page 8b — 매칭·점수 파이프라인 (Deep Dive)
+     ════════════════════════════════════════════════ */
+  .pipe-flow {
+    position: absolute;
+    left: 56px; right: 56px;
+    top: 210px;
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+  }
+  .pipe-step {
+    flex: 1;
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 18px 16px;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+  }
+  .pipe-step-tag {
+    font-size: 9.5px;
+    font-weight: 800;
+    color: var(--primary);
+    letter-spacing: 0.14em;
+    margin-bottom: 4px;
+  }
+  .pipe-step-name {
+    font-size: 17px;
+    font-weight: 800;
+    color: var(--text-900);
+    letter-spacing: -0.01em;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .pipe-step-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .pipe-arrow {
+    flex: 0 0 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .pipe-arrow svg { width: 44px; height: 28px; }
+
+  /* SOURCES — 5개 데이터 미니 행 (텍스트 위주, 작은 컬러 점 + 하단 구분선) */
+  .data-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 2px;
+    border-bottom: 1px solid var(--border);
+  }
+  .data-row:last-child { border-bottom: none; }
+  .data-row .data-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-900);
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+  .data-row .data-name::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--text-400);
+    flex-shrink: 0;
+  }
+  .data-row[data-color="gold"]   .data-name::before { background: #F1C40F; }
+  .data-row[data-color="orange"] .data-name::before { background: #FB923C; }
+  .data-row[data-color="cyan"]   .data-name::before { background: #06B6D4; }
+  .data-row[data-color="purple"] .data-name::before { background: #A855F7; }
+  .data-row[data-color="red"]    .data-name::before { background: #EF4444; }
+  .data-row .data-score {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-500);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  .data-row[data-color="red"] .data-score { color: #EF4444; }
+
+  /* INTEGRATE */
+  .pipe-stat {
+    text-align: center;
+    padding: 8px 0;
+  }
+  .pipe-stat.sub { border-top: 1px solid var(--border); }
+  .pipe-stat .ps-num {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--primary-deep);
+    letter-spacing: -0.02em;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .pipe-stat.sub .ps-num { font-size: 17px; color: var(--text-700); }
+  .pipe-stat .ps-lbl {
+    font-size: 10.5px;
+    color: var(--text-500);
+  }
+  .pipe-note {
+    margin-top: auto;
+    padding: 8px 10px;
+    background: var(--soft-bg);
+    border-radius: 8px;
+    font-size: 10.5px;
+    color: var(--text-700);
+    line-height: 1.5;
+  }
+  .pipe-note code {
+    font-size: 10.5px;
+    background: var(--primary-soft);
+    color: var(--primary-deep);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-family: 'SF Mono', Consolas, monospace;
+  }
+  .pipe-note .muted { color: var(--text-400); }
+
+  /* SCORING — 공식 */
+  .formula {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    gap: 12px;
+  }
+  .formula .f-line {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .formula .f-component {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 5px 9px;
+    border-radius: 999px;
+    letter-spacing: -0.01em;
+  }
+  .formula .f-component.data { background: var(--primary-soft); color: var(--primary-deep); }
+  .formula .f-component.owner { background: #FEF3C7; color: #92400E; }
+  .formula .f-component.user { background: #DBEAFE; color: #1E3A8A; }
+  .formula .f-plus {
+    font-size: 13px;
+    color: var(--text-400);
+    font-weight: 600;
+  }
+  .formula .f-equal {
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--text-900);
+    letter-spacing: -0.02em;
+  }
+  .formula .f-meta {
+    font-size: 10px;
+    color: var(--text-400);
+    font-family: 'SF Mono', Consolas, monospace;
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+    width: 100%;
+  }
+
+  /* GRADE — 4개 등급 행 (텍스트 위주, 작은 컬러 점 + 하단 구분선) */
+  .grade-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 8px;
+    align-items: center;
+    padding: 9px 2px;
+    border-bottom: 1px solid var(--border);
+  }
+  .grade-row:last-child { border-bottom: none; }
+  .grade-row .g-name {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--text-900);
+    letter-spacing: 0.04em;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+  .grade-row .g-name::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--text-400);
+    flex-shrink: 0;
+  }
+  .grade-row[data-grade="gold"]   .g-name::before { background: #F1C40F; }
+  .grade-row[data-grade="silver"] .g-name::before { background: #94A3B8; }
+  .grade-row[data-grade="bronze"] .g-name::before { background: #CD7F32; }
+  .grade-row[data-grade="rotten"] .g-name::before { background: #EF4444; }
+  .grade-row .g-cond {
+    font-size: 10.5px;
+    color: var(--text-500);
+    font-family: 'SF Mono', Consolas, monospace;
+  }
+  .grade-row .g-pct {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-500);
+    min-width: 36px;
+    text-align: right;
+    letter-spacing: -0.01em;
+  }
+  .grade-row[data-grade="rotten"] .g-pct { color: #EF4444; }
+  .grade-row[data-grade="rotten"] .g-name { color: #B91C1C; }
+
+  /* 하단 기술 디테일 */
+  .pipe-tech {
+    position: absolute;
+    left: 56px; right: 56px;
+    top: 526px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .tech-block {
+    background: var(--soft-bg);
+    border-radius: 12px;
+    padding: 16px 20px;
+    border: 1px solid var(--border);
+  }
+  .tech-title {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--primary);
+    letter-spacing: 0.14em;
+    margin-bottom: 10px;
+  }
+  .tech-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 5px 0;
+  }
+  .tech-row code {
+    font-family: 'SF Mono', Consolas, monospace;
+    font-size: 11px;
+    background: var(--white);
+    padding: 3px 8px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    color: var(--text-900);
+    white-space: nowrap;
+  }
+  .tech-row .tech-note {
+    font-size: 10.5px;
+    color: var(--text-500);
+    line-height: 1.4;
+    flex: 1;
+  }
+
+  /* ════════════════════════════════════════════════
      Page 9 — 개발 툴
      ════════════════════════════════════════════════ */
   .slide-9 .header-area {
@@ -1899,7 +2165,7 @@
        ════════════════════════════════════════════════ -->
   <div class="slide slide-6">
     <div class="brand"><span class="brand-dot"></span>식탐정</div>
-    <div class="page-no"><strong>01</strong> / 03</div>
+    <div class="page-no"><strong>01</strong> / 04</div>
 
     <div class="header-area">
       <span class="label">개발과정 및 방법</span>
@@ -1998,7 +2264,7 @@
        ════════════════════════════════════════════════ -->
   <div class="slide slide-7">
     <div class="brand"><span class="brand-dot"></span>식탐정</div>
-    <div class="page-no"><strong>02</strong> / 03</div>
+    <div class="page-no"><strong>02</strong> / 04</div>
 
     <div class="dots bl"></div>
 
@@ -2061,7 +2327,7 @@
        ════════════════════════════════════════════════ -->
   <div class="slide slide-8">
     <div class="brand"><span class="brand-dot"></span>식탐정</div>
-    <div class="page-no"><strong>03</strong> / 03</div>
+    <div class="page-no"><strong>03</strong> / 04</div>
 
     <div class="dots bl"></div>
 
@@ -2129,7 +2395,116 @@
       </div>
     </div>
   </div>
-  <div class="slide-caption">08. 활용 공공데이터</div>
+  <div class="slide-caption">08. 활용 공공데이터 — 개요</div>
+
+  <!-- ════════════════════════════════════════════════
+       Page 8b — 활용 공공데이터 (Deep Dive: 매칭·점수 파이프라인)
+       ════════════════════════════════════════════════ -->
+  <div class="slide slide-8b">
+    <div class="brand"><span class="brand-dot"></span>식탐정</div>
+    <div class="page-no"><strong>04</strong> / 04</div>
+
+    <div class="dots tr"></div>
+
+    <div class="text-area" style="position:absolute; left:56px; top:90px; width:1168px;">
+      <span class="label">개발과정 및 방법</span>
+      <h1 class="title-sm" style="font-size:30px; font-weight:800; letter-spacing:-0.02em; color:var(--text-900); margin-top:8px; margin-bottom:6px;">데이터 매칭·점수 산출 파이프라인</h1>
+      <p class="subtitle" style="font-size:13.5px; color:var(--text-500);">5개 외부 인증을 어떤 컬럼으로 정합하고, 어떻게 70 + 15 + 15 점수로 변환했는가</p>
+    </div>
+
+    <!-- 4단계 가로 흐름 -->
+    <div class="pipe-flow">
+      <!-- ① SOURCES -->
+      <div class="pipe-step">
+        <div class="pipe-step-tag">01 · SOURCES</div>
+        <div class="pipe-step-name">외부 데이터</div>
+        <div class="pipe-step-body">
+          <div class="data-row" data-color="gold"><span class="data-name">위생등급</span><span class="data-score">+35</span></div>
+          <div class="data-row" data-color="orange"><span class="data-name">모범음식점</span><span class="data-score">+25</span></div>
+          <div class="data-row" data-color="cyan"><span class="data-name">안심식당</span><span class="data-score">+15</span></div>
+          <div class="data-row" data-color="purple"><span class="data-name">착한가격업소</span><span class="data-score">+15</span></div>
+          <div class="data-row" data-color="red"><span class="data-name">행정처분</span><span class="data-score">−10~−50</span></div>
+        </div>
+      </div>
+
+      <div class="pipe-arrow"><svg viewBox="0 0 60 40"><path d="M 5 20 L 50 20 M 42 12 L 50 20 L 42 28" stroke="#94A3B8" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+
+      <!-- ② INTEGRATE -->
+      <div class="pipe-step">
+        <div class="pipe-step-tag">02 · INTEGRATE</div>
+        <div class="pipe-step-name">매칭·통합</div>
+        <div class="pipe-step-body">
+          <div class="pipe-stat"><div class="ps-num">151,592</div><div class="ps-lbl">식당 마스터</div></div>
+          <div class="pipe-stat sub"><div class="ps-num">86~90%</div><div class="ps-lbl">매칭률 (보수적)</div></div>
+          <div class="pipe-note"><code>flags</code> 객체에 8개 시그널 부착<br><span class="muted">false positive 시 skip</span></div>
+        </div>
+      </div>
+
+      <div class="pipe-arrow"><svg viewBox="0 0 60 40"><path d="M 5 20 L 50 20 M 42 12 L 50 20 L 42 28" stroke="#94A3B8" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+
+      <!-- ③ SCORING -->
+      <div class="pipe-step">
+        <div class="pipe-step-tag">03 · SCORING</div>
+        <div class="pipe-step-name">점수 산출</div>
+        <div class="pipe-step-body">
+          <div class="formula">
+            <div class="f-line"><span class="f-component data">데이터 70</span><span class="f-plus">+</span><span class="f-component owner">사장님 15</span><span class="f-plus">+</span><span class="f-component user">사용자 15</span></div>
+            <div class="f-equal">= 종합 100</div>
+            <div class="f-meta">deriveGrade(score, flags, stats)</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pipe-arrow"><svg viewBox="0 0 60 40"><path d="M 5 20 L 50 20 M 42 12 L 50 20 L 42 28" stroke="#94A3B8" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+
+      <!-- ④ GRADE -->
+      <div class="pipe-step">
+        <div class="pipe-step-tag">04 · GRADE</div>
+        <div class="pipe-step-name">치즈 등급</div>
+        <div class="pipe-step-body">
+          <div class="grade-row" data-grade="gold"><span class="g-name">GOLDEN</span><span class="g-cond">≥ 65</span><span class="g-pct">2.6%</span></div>
+          <div class="grade-row" data-grade="silver"><span class="g-name">SILVER</span><span class="g-cond">40~64</span><span class="g-pct">24.1%</span></div>
+          <div class="grade-row" data-grade="bronze"><span class="g-name">BRONZE</span><span class="g-cond">&lt; 40</span><span class="g-pct">73.3%</span></div>
+          <div class="grade-row" data-grade="rotten"><span class="g-name">ROTTEN</span><span class="g-cond">위반</span><span class="g-pct">23건</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 하단 — 기술 디테일 (매칭 키 + 점수 공식) -->
+    <div class="pipe-tech">
+      <div class="tech-block">
+        <div class="tech-title">매칭 키</div>
+        <div class="tech-row">
+          <code>업소명 정규화 + 도로명 주소 prefix</code>
+          <span class="tech-note">위생등급 · 모범 · 안심 · 착한 (4종)</span>
+        </div>
+        <div class="tech-row">
+          <code>사업장명 정규화 + 자치구</code>
+          <span class="tech-note">행정처분 (보수적, 다중 후보 skip)</span>
+        </div>
+        <div class="tech-row">
+          <code>scripts/apply-*.js</code>
+          <span class="tech-note">5개 매칭 스크립트로 flags 부착</span>
+        </div>
+      </div>
+      <div class="tech-block">
+        <div class="tech-title">점수 공식</div>
+        <div class="tech-row">
+          <code>data = 25 + Σ(인증) + Σ(페널티)</code>
+          <span class="tech-note">위생등급 없을 때 (모범+안심+착한) cap 35</span>
+        </div>
+        <div class="tech-row">
+          <code>owner = min(30d 인증 × 1.5, 15)</code>
+          <span class="tech-note">최근 30일 청소 인증 가산</span>
+        </div>
+        <div class="tech-row">
+          <code>user = 별점평균 × 3</code>
+          <span class="tech-note">전체 사용자 평균 (Supabase 도입 효과)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-caption">08-2. 활용 공공데이터 — 매칭·점수 파이프라인</div>
 
   <!-- ════════════════════════════════════════════════
        Page 9 — 개발 툴 및 참고문헌

@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>식탐정 — Information Architecture</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<style>
+  :root {
+    --primary: #22C55E;
+    --primary-soft: #DCFCE7;
+    --primary-deep: #15803D;
+    --accent: #FBBF24;
+    --text-900: #0F172A;
+    --text-700: #334155;
+    --text-500: #64748B;
+    --text-400: #94A3B8;
+    --border: #E2E8F0;
+    --bg: #F1F5F9;
+    --soft-bg: #F8FAFC;
+    --white: #FFFFFF;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    background: var(--bg);
+    font-family: 'Pretendard Variable', Pretendard, -apple-system, system-ui, sans-serif;
+    color: var(--text-900);
+    -webkit-font-smoothing: antialiased;
+  }
+  .deck {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 32px;
+    padding: 48px 24px;
+  }
+  .slide {
+    position: relative;
+    width: 1280px;
+    height: 720px;
+    background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
+    border-radius: 20px;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18), 0 2px 6px rgba(15, 23, 42, 0.08);
+    overflow: hidden;
+  }
+  /* 액센트 글로우 */
+  .slide::before {
+    content: '';
+    position: absolute;
+    top: -120px;
+    right: -120px;
+    width: 380px;
+    height: 380px;
+    background: radial-gradient(circle, rgba(34, 197, 94, 0.18) 0%, transparent 60%);
+    pointer-events: none;
+  }
+  .slide::after {
+    content: '';
+    position: absolute;
+    bottom: -160px;
+    left: -120px;
+    width: 380px;
+    height: 380px;
+    background: radial-gradient(circle, rgba(251, 191, 36, 0.06) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .brand {
+    position: absolute;
+    top: 36px; left: 56px;
+    display: flex; align-items: center; gap: 8px;
+    font-weight: 700; font-size: 14px;
+    color: var(--white);
+    z-index: 10;
+  }
+  .brand-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); }
+  .page-no {
+    position: absolute;
+    top: 36px; right: 56px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.4);
+    z-index: 10;
+  }
+  .page-no strong { color: var(--white); font-weight: 700; }
+
+  /* 상단 헤더 */
+  .ia-header {
+    position: absolute;
+    left: 56px; top: 88px;
+    width: 1168px;
+    z-index: 5;
+  }
+  .label {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--primary);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .ia-title {
+    font-size: 34px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--white);
+    margin-bottom: 6px;
+  }
+  .ia-sub {
+    font-size: 13.5px;
+    color: rgba(255, 255, 255, 0.55);
+  }
+
+  /* 4단계 컬럼 — 페르소나표 스타일 */
+  .ia-columns {
+    position: absolute;
+    left: 56px; right: 56px;
+    top: 218px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+  }
+  .ia-stage {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  /* 단계 헤더 (Discover/Verify/...) */
+  .stage-header {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 14px 18px;
+    text-align: center;
+    margin-bottom: 4px;
+  }
+  .stage-num {
+    font-size: 10.5px;
+    font-weight: 800;
+    color: var(--primary);
+    letter-spacing: 0.16em;
+    margin-bottom: 2px;
+  }
+  .stage-name {
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--white);
+    letter-spacing: -0.01em;
+  }
+  .stage-desc {
+    font-size: 10.5px;
+    color: rgba(255, 255, 255, 0.5);
+    margin-top: 4px;
+  }
+  /* 화면 카드 */
+  .screen-card {
+    background: var(--white);
+    border-radius: 12px;
+    padding: 14px 16px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.04);
+    position: relative;
+  }
+  .screen-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .screen-name {
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--text-900);
+    letter-spacing: -0.01em;
+    flex: 1;
+  }
+  .screen-perm {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 999px;
+    letter-spacing: 0.04em;
+  }
+  .screen-perm.public { background: var(--primary-soft); color: var(--primary-deep); }
+  .screen-perm.auth { background: #DBEAFE; color: #1E3A8A; }
+  .screen-perm.owner { background: #FEF3C7; color: #92400E; }
+  .screen-route {
+    font-size: 10px;
+    color: var(--text-400);
+    font-family: 'SF Mono', Consolas, monospace;
+    margin-bottom: 8px;
+  }
+  .screen-feats {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .screen-feats .feat {
+    font-size: 10.5px;
+    color: var(--text-500);
+    line-height: 1.45;
+    padding-left: 10px;
+    position: relative;
+  }
+  .screen-feats .feat::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 7px;
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: var(--primary);
+    opacity: 0.6;
+  }
+
+  /* 하단 — 사용자 플로우 표시 (다이아몬드 화살표) */
+  .ia-bottom {
+    position: absolute;
+    left: 56px; right: 56px;
+    bottom: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+  }
+  .ia-bottom-tag {
+    color: var(--accent);
+    font-weight: 800;
+    padding: 4px 0;
+  }
+  .ia-bottom-stats {
+    display: flex;
+    gap: 24px;
+  }
+  .ia-bottom-stats span strong {
+    color: var(--white);
+    font-weight: 800;
+    margin-right: 4px;
+  }
+
+  .slide-caption {
+    color: var(--text-500);
+    font-size: 13px;
+    font-weight: 500;
+    margin-top: 4px;
+  }
+
+  /* ════════════════════════════════════════════════
+     Light variant — 화이트 버전
+     ════════════════════════════════════════════════ */
+  .slide-light {
+    background: var(--white);
+    border: 1px solid var(--border);
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06), 0 2px 6px rgba(15, 23, 42, 0.04);
+  }
+  .slide-light::before {
+    background: radial-gradient(circle, rgba(34, 197, 94, 0.10) 0%, transparent 60%);
+  }
+  .slide-light::after {
+    background: radial-gradient(circle, rgba(251, 191, 36, 0.07) 0%, transparent 60%);
+  }
+  .slide-light .brand { color: var(--text-900); }
+  .slide-light .page-no { color: var(--text-400); }
+  .slide-light .page-no strong { color: var(--text-900); }
+  .slide-light .ia-title { color: var(--text-900); }
+  .slide-light .ia-sub { color: var(--text-500); }
+
+  /* 단계 헤더 — 옅은 그린 톤 */
+  .slide-light .stage-header {
+    background: var(--primary-soft);
+    border: 1px solid rgba(34, 197, 94, 0.18);
+  }
+  .slide-light .stage-num { color: var(--primary-deep); }
+  .slide-light .stage-name { color: var(--text-900); }
+  .slide-light .stage-desc { color: var(--text-500); }
+
+  /* 화면 카드 — 흰색 + 보더 + 그림자 */
+  .slide-light .screen-card {
+    background: var(--white);
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06), 0 0 0 1px var(--border);
+  }
+  /* 권한 칩은 동일하게 사용 */
+
+  /* 하단 USER FLOW — 라이트는 옅은 그레이 또는 카드 */
+  .slide-light .ia-bottom {
+    color: var(--text-500);
+  }
+  .slide-light .ia-bottom-tag { color: var(--accent-deep, #D97706); }
+  .slide-light .ia-bottom-stats span strong { color: var(--text-900); }
+</style>
+</head>
+<body>
+<div class="deck">
+
+  <div class="slide">
+    <div class="brand"><span class="brand-dot"></span>식탐정</div>
+    <div class="page-no"><strong>01</strong> / 02</div>
+
+    <div class="ia-header">
+      <span class="label">Information Architecture</span>
+      <h1 class="ia-title">식탐정 정보 구조</h1>
+      <p class="ia-sub">4단계 사용자 여정으로 정리한 화면 구조 — Bottom Tab 4 + Stack 5개 · Soft Wall 권한 정책</p>
+    </div>
+
+    <div class="ia-columns">
+
+      <!-- DISCOVER -->
+      <div class="ia-stage">
+        <div class="stage-header">
+          <div class="stage-num">01 · DISCOVER</div>
+          <div class="stage-name">발견</div>
+          <div class="stage-desc">자치구·식당 탐색</div>
+        </div>
+        <div class="screen-card">
+          <div class="screen-row">
+            <span class="screen-name">홈</span>
+            <span class="screen-perm public">PUBLIC</span>
+          </div>
+          <div class="screen-route">/ &nbsp; (Tab)</div>
+          <div class="screen-feats">
+            <div class="feat">자치구 위험 단계 Hero</div>
+            <div class="feat">환경 카드 (대기·기온·식중독)</div>
+            <div class="feat">메뉴 가이드 추천</div>
+            <div class="feat">검색바 진입</div>
+          </div>
+        </div>
+        <div class="screen-card">
+          <div class="screen-row">
+            <span class="screen-name">지도</span>
+            <span class="screen-perm public">PUBLIC</span>
+          </div>
+          <div class="screen-route">/map &nbsp; (Tab)</div>
+          <div class="screen-feats">
+            <div class="feat">치즈 등급 마커</div>
+            <div class="feat">등급·카테고리 필터</div>
+            <div class="feat">바텀시트 식당 카드</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VERIFY -->
+      <div class="ia-stage">
+        <div class="stage-header">
+          <div class="stage-num">02 · VERIFY</div>
+          <div class="stage-name">검증</div>
+          <div class="stage-desc">위생 신뢰도 확인</div>
+        </div>
+        <div class="screen-card">
+          <div class="screen-row">
+            <span class="screen-name">검색 결과</span>
+            <span class="screen-perm public">PUBLIC</span>
+          </div>
+          <div class="screen-route">/search</div>
+          <div class="screen-feats">
+            <div class="feat">자동완성</div>
+            <div class="feat">카테고리 칩</div>
+            <div class="feat">결과 리스트 + 등급 미리보기</div>
+          </div>
+        </div>
+        <div class="screen-card">
+          <div class="screen-row">
+            <span class="screen-name">상세 보고서</span>
+            <span class="screen-perm public">PUBLIC</span>
+          </div>
+          <div class="screen-route">/restaurant/[id]</div>
+          <div class="screen-feats">
+            <div class="feat">치즈 등급 Hero (70+15+15)</div>
+            <div class="feat">5축 레이더 차트</div>
+            <div class="feat">위생 리뷰 · 답글</div>
+            <div class="feat">메뉴 가이드 모달</div>
+            <div class="feat">외부 앱 바 (배민·요기요)</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ENGAGE -->
+      <div class="ia-stage">
+        <div class="stage-header">
+          <div class="stage-num">03 · ENGAGE</div>
+          <div class="stage-name">참여</div>
+          <div class="stage-desc">리뷰·좋아요 기록</div>
+        </div>
+        <div class="screen-card">
+          <div class="screen-row">
+            <span class="screen-name">위생 리뷰 작성</span>
+            <span class="screen-perm auth">AUTH</span>
+          </div>
+          <div class="screen-route">/review/[id]</div>
+          <div class="screen-feats">
+            <div class="feat">4축 별점 (테이블·음식·직원·화장실)</div>
+            <div class="feat">방문 시점</div>
+            <div class="feat">한줄평 · 사진</div>
+          </div>
+        </div>
+        <div class="screen-card">
+          <div class="screen-row">
+            <span class="screen-name">좋아요</span>
+            <span class="screen-perm auth">AUTH</span>
+          </div>
+          <div class="screen-route">/favorites &nbsp; (Tab)</div>
+          <div class="screen-feats">
+            <div class="feat">등급별 분포</div>
+            <div class="feat">저장 식당 리스트</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MANAGE -->
+      <div class="ia-stage">
+        <div class="stage-header">
+          <div class="stage-num">04 · MANAGE</div>
+          <div class="stage-name">개인화</div>
+          <div class="stage-desc">내정보·사장님 운영</div>
+        </div>
+        <div class="screen-card">
+          <div class="screen-row">
+            <span class="screen-name">내정보</span>
+            <span class="screen-perm auth">AUTH</span>
+          </div>
+          <div class="screen-route">/profile &nbsp; (Tab)</div>
+          <div class="screen-feats">
+            <div class="feat">내 리뷰 · 좋아요</div>
+            <div class="feat">위생 가이드 라이브러리</div>
+            <div class="feat">사장님 모드 진입</div>
+          </div>
+        </div>
+        <div class="screen-card">
+          <div class="screen-row">
+            <span class="screen-name">사장님 인증·운영</span>
+            <span class="screen-perm owner">OWNER</span>
+          </div>
+          <div class="screen-route">/owner/apply · /my-stores</div>
+          <div class="screen-feats">
+            <div class="feat">사업자번호 인증</div>
+            <div class="feat">청소 인증 게시</div>
+            <div class="feat">리뷰 답글</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="ia-bottom">
+      <span class="ia-bottom-tag">USER FLOW</span>
+      <span>홈·지도 <strong>→</strong> 상세 보고서 <strong>→</strong> 리뷰·좋아요 <strong>→</strong> 내정보·사장님</span>
+      <div class="ia-bottom-stats">
+        <span><strong>4</strong>Tabs</span>
+        <span><strong>5</strong>Stack</span>
+        <span><strong>95%</strong>Public</span>
+      </div>
+    </div>
+
+  </div>
+  <div class="slide-caption">Information Architecture — 식탐정 정보 구조 (Dark)</div>
+
+  <!-- ════════════════════════════════════════════════
+       라이트 버전 — 02/02
+       ════════════════════════════════════════════════ -->
+  <div class="slide slide-light">
+    <div class="brand"><span class="brand-dot"></span>식탐정</div>
+    <div class="page-no"><strong>02</strong> / 02</div>
+
+    <div class="ia-header">
+      <span class="label">Information Architecture</span>
+      <h1 class="ia-title">식탐정 정보 구조</h1>
+      <p class="ia-sub">4단계 사용자 여정으로 정리한 화면 구조 — Bottom Tab 4 + Stack 5개 · Soft Wall 권한 정책</p>
+    </div>
+
+    <div class="ia-columns">
+
+      <!-- DISCOVER -->
+      <div class="ia-stage">
+        <div class="stage-header">
+          <div class="stage-num">01 · DISCOVER</div>
+          <div class="stage-name">발견</div>
+          <div class="stage-desc">자치구·식당 탐색</div>
+        </div>
+        <div class="screen-card">
+          <div class="screen-row">
+            <span class="screen-name">홈</span>
+            <span class="screen-perm public">PUBLIC</span>
+          </div>
+          <div class="screen-route">/ &nbsp; (Tab)</div>
+          <div class="screen-feats">
+            <div class="feat">자치구 위험 단계 Hero</div>
+            <div class="feat">환경 카드 (대기·기온·식중독)</div>
+            <div class="feat">메뉴 가이드 추천</div>
+            <div class="feat">검색바 진입</div>
+          </div>
+        </div>
+        <div class="screen-card">
+          <div class="screen-row">
+            <span class="screen-name">지도</span>
+            <span class="screen-perm public">PUBLIC</span>
+          </div>
+          <div class="screen-route">/map &nbsp; (Tab)</div>
+          <div class="screen-feats">
+            <div class="feat">치즈 등급 마커</div>
+            <div class="feat">등급·카테고리 필터</div>
+            <div class="feat">바텀시트 식당 카드</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VERIFY -->
+      <div class="ia-stage">
+        <div class="stage-header">
+          <div class="stage-num">02 · VERIFY</div>
+          <div class="stage-name">검증</div>
+          <div class="stage-desc">위생 신뢰도 확인</div>
+        </div>
+        <div class="screen-card">
+          <div class="screen-row">
+            <span class="screen-name">검색 결과</span>
+            <span class="screen-perm public">PUBLIC</span>
+          </div>
+          <div class="screen-route">/search</div>
+          <div class="screen-feats">
+            <div class="feat">자동완성</div>
+            <div class="feat">카테고리 칩</div>
+            <div class="feat">결과 리스트 + 등급 미리보기</div>
+          </div>
+        </div>
+        <div class="screen-card">
+          <div class="screen-row">
+            <span class="screen-name">상세 보고서</span>
+            <span class="screen-perm public">PUBLIC</span>
+          </div>
+          <div class="screen-route">/restaurant/[id]</div>
+          <div class="screen-feats">
+            <div class="feat">치즈 등급 Hero (70+15+15)</div>
+            <div class="feat">5축 레이더 차트</div>
+            <div class="feat">위생 리뷰 · 답글</div>
+            <div class="feat">메뉴 가이드 모달</div>
+            <div class="feat">외부 앱 바 (배민·요기요)</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ENGAGE -->
+      <div class="ia-stage">
+        <div class="stage-header">
+          <div class="stage-num">03 · ENGAGE</div>
+          <div class="stage-name">참여</div>
+          <div class="stage-desc">리뷰·좋아요 기록</div>
+        </div>
+        <div class="screen-card">
+          <div class="screen-row">
+            <span class="screen-name">위생 리뷰 작성</span>
+            <span class="screen-perm auth">AUTH</span>
+          </div>
+          <div class="screen-route">/review/[id]</div>
+          <div class="screen-feats">
+            <div class="feat">4축 별점 (테이블·음식·직원·화장실)</div>
+            <div class="feat">방문 시점</div>
+            <div class="feat">한줄평 · 사진</div>
+          </div>
+        </div>
+        <div class="screen-card">
+          <div class="screen-row">
+            <span class="screen-name">좋아요</span>
+            <span class="screen-perm auth">AUTH</span>
+          </div>
+          <div class="screen-route">/favorites &nbsp; (Tab)</div>
+          <div class="screen-feats">
+            <div class="feat">등급별 분포</div>
+            <div class="feat">저장 식당 리스트</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MANAGE -->
+      <div class="ia-stage">
+        <div class="stage-header">
+          <div class="stage-num">04 · MANAGE</div>
+          <div class="stage-name">개인화</div>
+          <div class="stage-desc">내정보·사장님 운영</div>
+        </div>
+        <div class="screen-card">
+          <div class="screen-row">
+            <span class="screen-name">내정보</span>
+            <span class="screen-perm auth">AUTH</span>
+          </div>
+          <div class="screen-route">/profile &nbsp; (Tab)</div>
+          <div class="screen-feats">
+            <div class="feat">내 리뷰 · 좋아요</div>
+            <div class="feat">위생 가이드 라이브러리</div>
+            <div class="feat">사장님 모드 진입</div>
+          </div>
+        </div>
+        <div class="screen-card">
+          <div class="screen-row">
+            <span class="screen-name">사장님 인증·운영</span>
+            <span class="screen-perm owner">OWNER</span>
+          </div>
+          <div class="screen-route">/owner/apply · /my-stores</div>
+          <div class="screen-feats">
+            <div class="feat">사업자번호 인증</div>
+            <div class="feat">청소 인증 게시</div>
+            <div class="feat">리뷰 답글</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="ia-bottom">
+      <span class="ia-bottom-tag">USER FLOW</span>
+      <span>홈·지도 <strong>→</strong> 상세 보고서 <strong>→</strong> 리뷰·좋아요 <strong>→</strong> 내정보·사장님</span>
+      <div class="ia-bottom-stats">
+        <span><strong>4</strong>Tabs</span>
+        <span><strong>5</strong>Stack</span>
+        <span><strong>95%</strong>Public</span>
+      </div>
+    </div>
+
+  </div>
+  <div class="slide-caption">Information Architecture — 식탐정 정보 구조 (Light)</div>
+
+</div>
+</body>
+</html>
